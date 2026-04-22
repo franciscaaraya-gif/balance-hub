@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from "react";
 import { useAuth } from "@/lib/firebase/auth-context";
-import { getGroupById, getDebtsForGroup, getGroupMembersDetails, addDebt, updateDebtStatus } from "@/lib/firebase/store";
+import { getGroupById, getDebtsForGroup, getGroupMembersDetails, addDebt, updateDebtStatus, requestLeaveGroup, confirmLeaveGroup } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,13 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
+import { useRouter } from "next/navigation";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
   const { user } = useAuth();
+  const router = useRouter();
   const [group, setGroup] = useState<Group | null>(null);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
@@ -26,6 +28,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [addingDebt, setAddingDebt] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
   
   // New debt form
   const [debtAmount, setDebtAmount] = useState("");
@@ -80,6 +83,31 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     }
   };
 
+  const handleRequestLeave = async () => {
+    if (!group || !user) return;
+    setIsLeaving(true);
+    try {
+      await requestLeaveGroup(group.id, user.uid);
+      toast({ title: "Solicitud Enviada", description: "Tu solicitud de salida está pendiente de aprobación por el administrador." });
+      loadData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsLeaving(false);
+    }
+  };
+
+  const handleConfirmLeave = async (userId: string) => {
+    if (!group) return;
+    try {
+      await confirmLeaveGroup(group.id, userId);
+      toast({ title: "Miembro Eliminado", description: "El miembro ha sido retirado del grupo con éxito." });
+      loadData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    }
+  };
+
   const handleAiSummary = async () => {
     if (!group) return;
     setAiLoading(true);
@@ -115,6 +143,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   if (!group) return <div>Group not found.</div>;
 
   const isAdmin = group.adminId === user?.uid;
+  const myStatus = group.memberStatuses?.[user?.uid || ''];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -130,54 +159,68 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary">{group.name}</h1>
-          <p className="text-muted-foreground">Type: <span className="capitalize">{group.type}</span> • {members.length} Members</p>
+          <p className="text-muted-foreground">Tipo: <span className="capitalize">{group.type === 'variable' ? 'Gastos Variables' : 'Objetivo Fijo'}</span> • {members.length} Miembros</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={copyInvite} className="gap-2">
             <Share2 className="h-4 w-4" />
-            Invite Members
+            Copiar Invitación
           </Button>
-          <Dialog open={addingDebt} onOpenChange={setAddingDebt}>
-            <DialogTrigger asChild>
-              <Button className="bg-accent hover:bg-accent/90 gap-2">
-                <Plus className="h-4 w-4" />
-                Add Debt
+          
+          {isAdmin ? (
+            <Dialog open={addingDebt} onOpenChange={setAddingDebt}>
+              <DialogTrigger asChild>
+                <Button className="bg-accent hover:bg-accent/90 gap-2">
+                  <Plus className="h-4 w-4" />
+                  Agregar Deuda
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Nueva Deuda</DialogTitle>
+                  <DialogDescription>Registra un nuevo gasto asignado a un miembro.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Deudor</Label>
+                    <Select value={debtorId} onValueChange={setDebtorId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccionar miembro" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {members.map(m => (
+                          <SelectItem key={m.uid} value={m.uid}>{m.displayName || m.email}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Monto ($)</Label>
+                    <Input type="number" placeholder="0.00" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Descripción</Label>
+                    <Input placeholder="Comida, transporte, etc." value={debtDescription} onChange={(e) => setDebtDescription(e.target.value)} />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setAddingDebt(false)}>Cancelar</Button>
+                  <Button onClick={handleAddDebt} className="bg-primary">Guardar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            myStatus === 'leave_pending' ? (
+              <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200 gap-1.5 px-4 py-2">
+                <Clock className="h-4 w-4" /> Salida Pendiente
+              </Badge>
+            ) : (
+              <Button variant="destructive" onClick={handleRequestLeave} disabled={isLeaving} className="gap-2">
+                <LogOut className="h-4 w-4" />
+                Salir del Grupo
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Debt</DialogTitle>
-                <DialogDescription>Enter the details of the debt incurred.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label>Debtor (Who owes money?)</Label>
-                  <Select value={debtorId} onValueChange={setDebtorId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {members.map(m => (
-                        <SelectItem key={m.uid} value={m.uid}>{m.displayName || m.email}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Amount</Label>
-                  <Input type="number" placeholder="0.00" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Input placeholder="Lunch, Movie, Gas, etc." value={debtDescription} onChange={(e) => setDebtDescription(e.target.value)} />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setAddingDebt(false)}>Cancel</Button>
-                <Button onClick={handleAddDebt} className="bg-primary">Save Debt</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+            )
+          )}
         </div>
       </div>
 
@@ -185,31 +228,31 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         {/* Main Debt Table */}
         <Card className="lg:col-span-2 border-none shadow-sm overflow-hidden">
           <CardHeader className="bg-white border-b">
-            <CardTitle className="text-lg font-headline">Outstanding Debts</CardTitle>
+            <CardTitle className="text-lg font-headline">Registro de Deudas</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Status</TableHead>
-                  {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                  <TableHead>Miembro</TableHead>
+                  <TableHead>Monto</TableHead>
+                  <TableHead>Descripción</TableHead>
+                  <TableHead>Estado</TableHead>
+                  {isAdmin && <TableHead className="text-right">Acciones</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {debts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-12 text-muted-foreground">
-                      No debts recorded in this group yet.
+                      No hay deudas registradas aún.
                     </TableCell>
                   </TableRow>
                 ) : (
                   debts.map((debt) => (
                     <TableRow key={debt.id}>
                       <TableCell className="font-medium">
-                        {members.find(m => m.uid === debt.debtorId)?.displayName || 'Unknown'}
+                        {members.find(m => m.uid === debt.debtorId)?.displayName || 'Desconocido'}
                       </TableCell>
                       <TableCell className="font-mono text-primary font-bold">
                         ${debt.amount.toFixed(2)}
@@ -230,9 +273,9 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="pending">Pending</SelectItem>
-                              <SelectItem value="under_review">Review</SelectItem>
-                              <SelectItem value="paid">Paid</SelectItem>
+                              <SelectItem value="pending">Pendiente</SelectItem>
+                              <SelectItem value="under_review">Revisión</SelectItem>
+                              <SelectItem value="paid">Pagado</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
@@ -253,10 +296,10 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                 <div className="bg-primary text-white p-1.5 rounded-lg">
                   <Sparkles className="h-4 w-4" />
                 </div>
-                <CardTitle className="text-lg font-headline">AI Summarizer</CardTitle>
+                <CardTitle className="text-lg font-headline">Resumen Inteligente</CardTitle>
               </div>
               <CardDescription>
-                Get a smart overview of who owes what and suggested settlements.
+                Análisis automático de saldos y sugerencias de liquidación.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -266,7 +309,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                     {aiSummary}
                   </div>
                   <Button variant="outline" className="w-full text-xs" onClick={handleAiSummary} disabled={aiLoading}>
-                    Refresh Summary
+                    Actualizar Resumen
                   </Button>
                 </div>
               ) : (
@@ -278,12 +321,12 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                   {aiLoading ? (
                     <>
                       <Clock className="h-4 w-4 mr-2 animate-spin" />
-                      Analyzing Debts...
+                      Analizando...
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Generate Summary
+                      Generar Resumen
                     </>
                   )}
                 </Button>
@@ -293,20 +336,41 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
           <Card className="border-none shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg font-headline">Group Members</CardTitle>
+              <CardTitle className="text-lg font-headline">Miembros del Grupo</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {members.map(member => (
-                <div key={member.uid} className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-secondary/20 text-secondary flex items-center justify-center text-xs font-bold">
-                    {member.displayName?.[0] || 'U'}
+              {members.map(member => {
+                const status = group.memberStatuses?.[member.uid];
+                return (
+                  <div key={member.uid} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-secondary/20 text-secondary flex items-center justify-center text-xs font-bold">
+                        {member.displayName?.[0] || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">
+                          {member.displayName}
+                          {status === 'leave_pending' && (
+                            <span className="ml-2 text-[10px] text-orange-500 font-bold uppercase">Solicita Salir</span>
+                          )}
+                        </p>
+                        {group.adminId === member.uid && <p className="text-[10px] text-accent font-bold uppercase tracking-tighter">Administrador</p>}
+                      </div>
+                    </div>
+                    {isAdmin && status === 'leave_pending' && (
+                      <Button 
+                        size="icon" 
+                        variant="ghost" 
+                        className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                        onClick={() => handleConfirmLeave(member.uid)}
+                        title="Confirmar salida del miembro"
+                      >
+                        <UserMinus className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{member.displayName}</p>
-                    {group.adminId === member.uid && <p className="text-[10px] text-accent font-bold uppercase tracking-tighter">Group Admin</p>}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </CardContent>
           </Card>
         </div>

@@ -9,6 +9,7 @@ export interface UserProfile {
 }
 
 export type GroupType = 'fixed' | 'variable';
+export type MemberStatus = 'active' | 'leave_pending';
 
 export interface Group {
   id: string;
@@ -16,6 +17,7 @@ export interface Group {
   type: GroupType;
   adminId: string;
   members: string[]; // User UIDs
+  memberStatuses?: Record<string, MemberStatus>; // Track member state
   inviteToken: string;
   createdAt: number;
 }

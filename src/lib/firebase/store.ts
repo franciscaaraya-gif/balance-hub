@@ -11,9 +11,11 @@ import {
   updateDoc,
   orderBy,
   arrayUnion,
-  serverTimestamp 
+  arrayRemove,
+  serverTimestamp,
+  deleteField
 } from "firebase/firestore";
-import { Group, Debt, UserProfile, DebtStatus } from "../types";
+import { Group, Debt, UserProfile, DebtStatus, MemberStatus } from "../types";
 
 export const createUserProfile = async (uid: string, email: string, displayName: string) => {
   const userRef = doc(db, "users", uid);
@@ -40,6 +42,9 @@ export const createGroup = async (name: string, type: 'fixed' | 'variable', admi
     type,
     adminId,
     members: [adminId],
+    memberStatuses: {
+      [adminId]: 'active'
+    },
     inviteToken,
     createdAt: Date.now(),
   });
@@ -63,10 +68,30 @@ export const joinGroupByInvite = async (userId: string, inviteToken: string) => 
   const snap = await getDocs(q);
   if (snap.empty) throw new Error("Invalid invite link");
   const groupDoc = snap.docs[0];
+  const groupData = groupDoc.data() as Group;
+  
+  if (groupData.members.includes(userId)) return groupDoc.id;
+
   await updateDoc(groupDoc.ref, {
-    members: arrayUnion(userId)
+    members: arrayUnion(userId),
+    [`memberStatuses.${userId}`]: 'active'
   });
   return groupDoc.id;
+};
+
+export const requestLeaveGroup = async (groupId: string, userId: string) => {
+  const docRef = doc(db, "groups", groupId);
+  await updateDoc(docRef, {
+    [`memberStatuses.${userId}`]: 'leave_pending'
+  });
+};
+
+export const confirmLeaveGroup = async (groupId: string, userId: string) => {
+  const docRef = doc(db, "groups", groupId);
+  await updateDoc(docRef, {
+    members: arrayRemove(userId),
+    [`memberStatuses.${userId}`]: deleteField()
+  });
 };
 
 export const addDebt = async (groupId: string, debtorId: string, amount: number, description: string) => {
