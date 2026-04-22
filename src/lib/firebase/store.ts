@@ -88,6 +88,12 @@ export const getDebtsForGroup = async (groupId: string): Promise<Debt[]> => {
   return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Debt));
 };
 
+export const getDebtsForUser = async (userId: string): Promise<Debt[]> => {
+  const q = query(collection(db, "debts"), where("debtorId", "==", userId));
+  const snap = await getDocs(q);
+  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Debt));
+};
+
 export const updateDebtStatus = async (debtId: string, status: DebtStatus) => {
   const docRef = doc(db, "debts", debtId);
   await updateDoc(docRef, {
