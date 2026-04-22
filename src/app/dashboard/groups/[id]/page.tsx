@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useRef } from "react";
 import { useAuth } from "@/lib/firebase/auth-context";
 import { getGroupById, getDebtsForGroup, getGroupMembersDetails, addDebt, updateDebtStatus, requestLeaveGroup, confirmLeaveGroup } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile } from "@/lib/types";
@@ -12,29 +13,35 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus } from "lucide-react";
+import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus, FileUp, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
 import { useRouter } from "next/navigation";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
   const { user } = useAuth();
-  const router = useRouter();
   const [group, setGroup] = useState<Group | null>(null);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingDebt, setAddingDebt] = useState(false);
+  const [bulkCsvOpen, setBulkCsvOpen] = useState(false);
+  const [fixedAmountOpen, setFixedAmountOpen] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
   
-  // New debt form
+  // Forms
   const [debtAmount, setDebtAmount] = useState("");
   const [debtDescription, setDebtDescription] = useState("");
   const [debtorId, setDebtorId] = useState("");
+  const [csvText, setCsvText] = useState("");
+  const [fixedAmount, setFixedAmount] = useState("");
+  const [fixedDescription, setFixedDescription] = useState("");
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -62,7 +69,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (!debtAmount || !debtorId) return;
     try {
       await addDebt(params.id, debtorId, parseFloat(debtAmount), debtDescription);
-      toast({ title: "Debt Added", description: "Successfully recorded the new debt." });
+      toast({ title: "Deuda Agregada", description: "Se registró la deuda correctamente." });
       setAddingDebt(false);
       setDebtAmount("");
       setDebtDescription("");
@@ -73,10 +80,78 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     }
   };
 
+  const handleBulkCsv = async () => {
+    if (!csvText) return;
+    const lines = csvText.split('\n').filter(l => l.trim());
+    let addedCount = 0;
+    let errorCount = 0;
+
+    for (const line of lines) {
+      const [email, amountStr] = line.split(',').map(s => s.trim());
+      const amount = parseFloat(amountStr);
+      
+      if (email && !isNaN(amount)) {
+        const member = members.find(m => m.email?.toLowerCase() === email.toLowerCase());
+        if (member) {
+          try {
+            await addDebt(params.id, member.uid, amount, "Carga masiva CSV");
+            addedCount++;
+          } catch (e) {
+            errorCount++;
+          }
+        } else {
+          errorCount++;
+        }
+      }
+    }
+
+    toast({ 
+      title: "Proceso CSV completado", 
+      description: `Se agregaron ${addedCount} deudas. ${errorCount} errores o correos no encontrados.` 
+    });
+    setBulkCsvOpen(false);
+    setCsvText("");
+    loadData();
+  };
+
+  const handleFixedQuota = async () => {
+    if (!fixedAmount || !group) return;
+    const amount = parseFloat(fixedAmount);
+    if (isNaN(amount)) return;
+
+    try {
+      // Asignar a todos los miembros excepto al admin (o a todos si se prefiere)
+      // Siguiendo la instrucción: "asígnaselo a todos los miembros automáticamente"
+      for (const memberId of group.members) {
+        if (memberId === user?.uid) continue; // Normalmente el admin no se debe a sí mismo
+        await addDebt(params.id, memberId, amount, fixedDescription || `Cuota fija: ${group.name}`);
+      }
+      toast({ title: "Cuotas Asignadas", description: `Se asignó $${amount} a todos los miembros.` });
+      setFixedAmountOpen(false);
+      setFixedAmount("");
+      setFixedDescription("");
+      loadData();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      setCsvText(text);
+    };
+    reader.readAsText(file);
+  };
+
   const handleUpdateStatus = async (debtId: string, status: any) => {
     try {
       await updateDebtStatus(debtId, status);
-      toast({ title: "Status Updated", description: "Debt status was updated successfully." });
+      toast({ title: "Estado Actualizado", description: "Se actualizó el estado de la deuda." });
       loadData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -88,7 +163,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     setIsLeaving(true);
     try {
       await requestLeaveGroup(group.id, user.uid);
-      toast({ title: "Solicitud Enviada", description: "Tu solicitud de salida está pendiente de aprobación por el administrador." });
+      toast({ title: "Solicitud Enviada", description: "Tu solicitud de salida está pendiente de aprobación." });
       loadData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -101,7 +176,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (!group) return;
     try {
       await confirmLeaveGroup(group.id, userId);
-      toast({ title: "Miembro Eliminado", description: "El miembro ha sido retirado del grupo con éxito." });
+      toast({ title: "Miembro Eliminado", description: "El miembro ha sido retirado del grupo." });
       loadData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -126,7 +201,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       const result = await generateDebtSummary(input);
       setAiSummary(result.summary);
     } catch (error: any) {
-      toast({ variant: "destructive", title: "AI Generation Failed", description: "Could not generate summary at this time." });
+      toast({ variant: "destructive", title: "AI Generation Failed", description: "Could not generate summary." });
     } finally {
       setAiLoading(false);
     }
@@ -136,20 +211,20 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (!group) return;
     const url = `${window.location.origin}/join/${group.inviteToken}`;
     navigator.clipboard.writeText(url);
-    toast({ title: "Invite Link Copied", description: "Share it with your friends!" });
+    toast({ title: "Enlace Copiado", description: "¡Compártelo con tus amigos!" });
   };
 
   if (loading) return <div className="h-full flex items-center justify-center"><Clock className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (!group) return <div>Group not found.</div>;
+  if (!group) return <div>Grupo no encontrado.</div>;
 
   const isAdmin = group.adminId === user?.uid;
   const myStatus = group.memberStatuses?.[user?.uid || ''];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'pending': return <Badge variant="outline" className="text-orange-600 bg-orange-50 border-orange-200"><AlertCircle className="h-3 w-3 mr-1" /> Pending</Badge>;
-      case 'under_review': return <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200"><Clock className="h-3 w-3 mr-1" /> Review</Badge>;
-      case 'paid': return <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200"><CheckCircle2 className="h-3 w-3 mr-1" /> Paid</Badge>;
+      case 'pending': return <Badge variant="outline" className="text-orange-600 bg-orange-50 border-orange-200"><AlertCircle className="h-3 w-3 mr-1" /> Pendiente</Badge>;
+      case 'under_review': return <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200"><Clock className="h-3 w-3 mr-1" /> Revisión</Badge>;
+      case 'paid': return <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200"><CheckCircle2 className="h-3 w-3 mr-1" /> Pagado</Badge>;
       default: return null;
     }
   };
@@ -164,51 +239,121 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={copyInvite} className="gap-2">
             <Share2 className="h-4 w-4" />
-            Copiar Invitación
+            Invitación
           </Button>
           
           {isAdmin ? (
-            <Dialog open={addingDebt} onOpenChange={setAddingDebt}>
-              <DialogTrigger asChild>
-                <Button className="bg-accent hover:bg-accent/90 gap-2">
-                  <Plus className="h-4 w-4" />
-                  Agregar Deuda
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Nueva Deuda</DialogTitle>
-                  <DialogDescription>Registra un nuevo gasto asignado a un miembro.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Deudor</Label>
-                    <Select value={debtorId} onValueChange={setDebtorId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar miembro" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {members.map(m => (
-                          <SelectItem key={m.uid} value={m.uid}>{m.displayName || m.email}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Monto ($)</Label>
-                    <Input type="number" placeholder="0.00" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Descripción</Label>
-                    <Input placeholder="Comida, transporte, etc." value={debtDescription} onChange={(e) => setDebtDescription(e.target.value)} />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setAddingDebt(false)}>Cancelar</Button>
-                  <Button onClick={handleAddDebt} className="bg-primary">Guardar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <>
+              {/* Acciones para Admin */}
+              <div className="flex gap-2">
+                <Dialog open={addingDebt} onOpenChange={setAddingDebt}>
+                  <DialogTrigger asChild>
+                    <Button className="bg-primary hover:bg-primary/90 gap-2">
+                      <Plus className="h-4 w-4" />
+                      Individual
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Nueva Deuda</DialogTitle>
+                      <DialogDescription>Registra un nuevo gasto asignado a un miembro.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="space-y-2">
+                        <Label>Deudor</Label>
+                        <Select value={debtorId} onValueChange={setDebtorId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar miembro" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {members.map(m => (
+                              <SelectItem key={m.uid} value={m.uid}>{m.displayName || m.email}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Monto ($)</Label>
+                        <Input type="number" placeholder="0.00" value={debtAmount} onChange={(e) => setDebtAmount(e.target.value)} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Descripción</Label>
+                        <Input placeholder="Comida, transporte, etc." value={debtDescription} onChange={(e) => setDebtDescription(e.target.value)} />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setAddingDebt(false)}>Cancelar</Button>
+                      <Button onClick={handleAddDebt} className="bg-primary">Guardar</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                {group.type === 'variable' ? (
+                  <Dialog open={bulkCsvOpen} onOpenChange={setBulkCsvOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="secondary" className="gap-2">
+                        <FileUp className="h-4 w-4" />
+                        Cargar CSV
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Carga Masiva vía CSV</DialogTitle>
+                        <DialogDescription>Pega el contenido o sube un archivo con formato: correo,monto (una línea por deuda).</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="grid w-full max-w-sm items-center gap-1.5">
+                          <Label htmlFor="csv-file">Subir Archivo</Label>
+                          <Input id="csv-file" type="file" accept=".csv,.txt" onChange={handleFileUpload} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Contenido del CSV</Label>
+                          <Textarea 
+                            placeholder="usuario@ejemplo.com, 50.00&#10;otro@ejemplo.com, 25.50" 
+                            className="min-h-[150px] font-mono text-xs"
+                            value={csvText}
+                            onChange={(e) => setCsvText(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setBulkCsvOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleBulkCsv} className="bg-primary">Procesar</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                ) : (
+                  <Dialog open={fixedAmountOpen} onOpenChange={setFixedAmountOpen}>
+                    <DialogTrigger asChild>
+                      <Button variant="secondary" className="gap-2">
+                        <Users className="h-4 w-4" />
+                        Cuota Fija
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Asignar Cuota Fija</DialogTitle>
+                        <DialogDescription>El monto ingresado se asignará a TODOS los miembros del grupo automáticamente.</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                          <Label>Monto por Persona ($)</Label>
+                          <Input type="number" placeholder="0.00" value={fixedAmount} onChange={(e) => setFixedAmount(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Descripción del Cobro</Label>
+                          <Input placeholder="Ej: Pago mensual, Cuota inicial" value={fixedDescription} onChange={(e) => setFixedDescription(e.target.value)} />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setFixedAmountOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleFixedQuota} className="bg-primary">Asignar a Todos</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
+              </div>
+            </>
           ) : (
             myStatus === 'leave_pending' ? (
               <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200 gap-1.5 px-4 py-2">
@@ -225,7 +370,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Debt Table */}
         <Card className="lg:col-span-2 border-none shadow-sm overflow-hidden">
           <CardHeader className="bg-white border-b">
             <CardTitle className="text-lg font-headline">Registro de Deudas</CardTitle>
@@ -288,7 +432,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           </CardContent>
         </Card>
 
-        {/* AI Sidepanel */}
         <div className="space-y-6">
           <Card className="border-primary/20 bg-primary/5 shadow-none overflow-hidden">
             <CardHeader className="pb-3">
@@ -299,7 +442,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                 <CardTitle className="text-lg font-headline">Resumen Inteligente</CardTitle>
               </div>
               <CardDescription>
-                Análisis automático de saldos y sugerencias de liquidación.
+                Análisis automático de saldos y sugerencias.
               </CardDescription>
             </CardHeader>
             <CardContent>
