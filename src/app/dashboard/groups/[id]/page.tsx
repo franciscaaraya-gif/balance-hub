@@ -120,10 +120,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (isNaN(amount)) return;
 
     try {
-      // Asignar a todos los miembros excepto al admin (o a todos si se prefiere)
-      // Siguiendo la instrucción: "asígnaselo a todos los miembros automáticamente"
       for (const memberId of group.members) {
-        if (memberId === user?.uid) continue; // Normalmente el admin no se debe a sí mismo
+        if (memberId === user?.uid) continue;
         await addDebt(params.id, memberId, amount, fixedDescription || `Cuota fija: ${group.name}`);
       }
       toast({ title: "Cuotas Asignadas", description: `Se asignó $${amount} a todos los miembros.` });
@@ -223,11 +221,13 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending': return <Badge variant="outline" className="text-orange-600 bg-orange-50 border-orange-200"><AlertCircle className="h-3 w-3 mr-1" /> Pendiente</Badge>;
-      case 'under_review': return <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200"><Clock className="h-3 w-3 mr-1" /> Revisión</Badge>;
+      case 'under_review': return <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200 animate-pulse"><Clock className="h-3 w-3 mr-1" /> Revisión</Badge>;
       case 'paid': return <Badge variant="outline" className="text-emerald-600 bg-emerald-50 border-emerald-200"><CheckCircle2 className="h-3 w-3 mr-1" /> Pagado</Badge>;
       default: return null;
     }
   };
+
+  const reviewCount = debts.filter(d => d.status === 'under_review').length;
 
   return (
     <div className="space-y-6">
@@ -244,7 +244,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           
           {isAdmin ? (
             <>
-              {/* Acciones para Admin */}
               <div className="flex gap-2">
                 <Dialog open={addingDebt} onOpenChange={setAddingDebt}>
                   <DialogTrigger asChild>
@@ -299,7 +298,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Carga Masiva vía CSV</DialogTitle>
-                        <DialogDescription>Pega el contenido o sube un archivo con formato: correo,monto (una línea por deuda).</DialogDescription>
+                        <DialogDescription>Pega el contenido o sube un archivo con formato: correo,monto.</DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
                         <div className="grid w-full max-w-sm items-center gap-1.5">
@@ -309,7 +308,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                         <div className="space-y-2">
                           <Label>Contenido del CSV</Label>
                           <Textarea 
-                            placeholder="usuario@ejemplo.com, 50.00&#10;otro@ejemplo.com, 25.50" 
+                            placeholder="usuario@ejemplo.com, 50.00" 
                             className="min-h-[150px] font-mono text-xs"
                             value={csvText}
                             onChange={(e) => setCsvText(e.target.value)}
@@ -333,7 +332,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Asignar Cuota Fija</DialogTitle>
-                        <DialogDescription>El monto ingresado se asignará a TODOS los miembros del grupo automáticamente.</DialogDescription>
+                        <DialogDescription>El monto se asignará a TODOS los miembros automáticamente.</DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-4 py-4">
                         <div className="space-y-2">
@@ -342,7 +341,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                         </div>
                         <div className="space-y-2">
                           <Label>Descripción del Cobro</Label>
-                          <Input placeholder="Ej: Pago mensual, Cuota inicial" value={fixedDescription} onChange={(e) => setFixedDescription(e.target.value)} />
+                          <Input placeholder="Ej: Pago mensual" value={fixedDescription} onChange={(e) => setFixedDescription(e.target.value)} />
                         </div>
                       </div>
                       <DialogFooter>
@@ -369,6 +368,17 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         </div>
       </div>
 
+      {isAdmin && reviewCount > 0 && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3 text-blue-700">
+              <Clock className="h-5 w-5 animate-pulse" />
+              <p className="font-medium text-sm">Tienes {reviewCount} pagos pendientes de revisión.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-none shadow-sm overflow-hidden">
           <CardHeader className="bg-white border-b">
@@ -394,7 +404,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                   </TableRow>
                 ) : (
                   debts.map((debt) => (
-                    <TableRow key={debt.id}>
+                    <TableRow key={debt.id} className={debt.status === 'under_review' ? 'bg-blue-50/50' : ''}>
                       <TableCell className="font-medium">
                         {members.find(m => m.uid === debt.debtorId)?.displayName || 'Desconocido'}
                       </TableCell>
@@ -409,19 +419,31 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                       </TableCell>
                       {isAdmin && (
                         <TableCell className="text-right">
-                          <Select 
-                            value={debt.status} 
-                            onValueChange={(val: any) => handleUpdateStatus(debt.id, val)}
-                          >
-                            <SelectTrigger className="w-[130px] h-8 text-xs ml-auto">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="pending">Pendiente</SelectItem>
-                              <SelectItem value="under_review">Revisión</SelectItem>
-                              <SelectItem value="paid">Pagado</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <div className="flex items-center justify-end gap-2">
+                            {debt.status === 'under_review' && (
+                              <Button 
+                                size="sm" 
+                                className="h-8 bg-emerald-600 hover:bg-emerald-700 gap-1 px-3"
+                                onClick={() => handleUpdateStatus(debt.id, 'paid')}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                Confirmar
+                              </Button>
+                            )}
+                            <Select 
+                              value={debt.status} 
+                              onValueChange={(val: any) => handleUpdateStatus(debt.id, val)}
+                            >
+                              <SelectTrigger className="w-[110px] h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">Pendiente</SelectItem>
+                                <SelectItem value="under_review">Revisión</SelectItem>
+                                <SelectItem value="paid">Pagado</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -462,15 +484,9 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                   disabled={aiLoading}
                 >
                   {aiLoading ? (
-                    <>
-                      <Clock className="h-4 w-4 mr-2 animate-spin" />
-                      Analizando...
-                    </>
+                    <><Clock className="h-4 w-4 mr-2 animate-spin" />Analizando...</>
                   ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      Generar Resumen
-                    </>
+                    <><Sparkles className="h-4 w-4 mr-2" />Generar Resumen</>
                   )}
                 </Button>
               )}
