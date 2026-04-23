@@ -16,29 +16,33 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /** 
-     * @description Regla para permitir consultas de grupo de colecciones (collectionGroup('debts')).
-     * Esto es vital para que la vista de "Mis Deudas" funcione correctamente.
-     */
+    // --- Collection Group Rules (CRITICAL for Dashboard "My Debts") ---
+    // This allows query(collectionGroup(db, 'debts'), where('debtorId', '==', uid))
     match /{path=**}/debts/{debtId} {
-      allow read: if isSignedIn() && (
-        (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds) ||
+      allow list: if isSignedIn() && (
         (resource.data.debtorId != null && request.auth.uid == resource.data.debtorId) ||
-        (resource.data.groupAdminId != null && request.auth.uid == resource.data.groupAdminId)
+        (resource.data.groupAdminId != null && request.auth.uid == resource.data.groupAdminId) ||
+        (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
+      );
+      allow get: if isSignedIn() && (
+        (resource.data.debtorId != null && request.auth.uid == resource.data.debtorId) ||
+        (resource.data.groupAdminId != null && request.auth.uid == resource.data.groupAdminId) ||
+        (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
       );
     }
 
     // --- Collection Rules ---
 
     match /userProfiles/{userId} {
-      allow get, list: if isOwner(userId);
+      // Allow any signed-in user to see profile names/emails for group collaboration
+      allow get: if isSignedIn();
+      allow list: if isOwner(userId);
       allow create: if isSignedIn() && request.auth.uid == userId;
       allow update: if isOwner(userId);
       allow delete: if isOwner(userId);
     }
 
     match /groups/{groupId} {
-      // Helpers internos del grupo
       function isMember(data) {
         return isSignedIn() && data.memberIds != null && request.auth.uid in data.memberIds;
       }
@@ -52,7 +56,7 @@ service cloud.firestore {
       allow delete: if isAdmin(resource.data);
 
       match /debts/{debtId} {
-        // Helpers de deuda usando campos denormalizados
+        // Internal rules for direct subcollection access
         function isDebtMember(data) {
           return isSignedIn() && data.groupMemberIds != null && request.auth.uid in data.groupMemberIds;
         }
