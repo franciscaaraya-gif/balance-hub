@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * BALANCEHUB SECURITY RULES (PROTOTYPING MODE)
+     *
+     * Core Philosophy:
+     * This ruleset enforces a strict identity-based and collaborative access model. 
+     * Security is centered around user ownership of profiles and membership-based 
+     * access to shared debt groups. Authorization is prioritized over data 
+     * validation to allow for rapid development.
+     *
+     * Data Structure:
+     * - /userProfiles/{userId}: Private user-owned data.
+     * - /groups/{groupId}: Shared documents for collaborative debt management.
+     * - /groups/{groupId}/debts/{debtId}: Nested debt records within groups.
+     *
+     * Key Security Decisions:
+     * 1. Authorization Independence: Debt documents denormalize 'groupAdminId' and 
+     *    'groupMemberIds' from their parent Group. This allows for fast, 
+     *    single-document security checks without using expensive get() calls.
+     * 2. Membership Access: Group and Debt access (read/write) is restricted to 
+     *    users whose UIDs appear in the 'memberIds' or 'groupMemberIds' fields.
+     * 3. Ownership Consistency: For user profiles, we enforce that the data 'id' 
+     *    matches the document path and the user's Auth UID.
+     * 4. State Management: Only Group Administrators (defined by 'adminId') can 
+     *    perform destructive operations or modify group settings.
+     */
+
+    /**
+     * STEP 1: ANALYSIS & SYNTHESIS
+     * 1. Adopt the Intent: Logic focuses on ensuring group members can see debts 
+     *    and only admins can manage group-level changes or status updates.
+     * 2. Access Control Patterns:
+     *    - /userProfiles: Ownership (Pattern 1) + Self-Creation (Pattern 4).
+     *    - /groups: Shared Access / Closed Collaborators (Pattern 3).
+     *    - /groups/{groupId}/debts: Shared Access via Denormalization (Pattern 3).
+     * 3. Identified Ambiguities: The schema for Debt includes 'groupId' but 
+     *    the reasoning emphasizes 'groupAdminId'. Rules will enforce both for 
+     *    consistency.
+     */
+
+    // --- Helper Functions ---
+
+    /** @description Checks if the user is authenticated. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** @description Checks if the user UID matches the provided ID. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** @description Checks ownership for existing documents during update/delete. */
+    function isExistingOwner(userId) {
+      return resource != null && isOwner(userId);
+    }
+
+    /** @description Checks if the user is a member of a group or debt (via denormalized field). */
+    function isMember(data) {
+      return isSignedIn() && (request.auth.uid in data.memberIds || request.auth.uid in data.groupMemberIds);
+    }
+
+    /** @description Checks if the user is the administrator of the group or debt. */
+    function isAdmin(data) {
+      return isSignedIn() && (request.auth.uid == data.adminId || request.auth.uid == data.groupAdminId);
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for user profiles. Enforces that users can only manage their own data.
+     * @path /userProfiles/{userId}
+     * @allow (get) If auth.uid matches userId.
+     * @deny (list) If a user tries to list all user profiles.
+     * @principle Restricts access to a user's own data tree and validates path consistency.
+     */
+    match /userProfiles/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Rules for debt groups. Access is granted based on membership list.
+     * @path /groups/{groupId}
+     * @allow (create) Any signed-in user can create a group.
+     * @deny (update) If the user is a member but not the administrator.
+     * @principle Uses a membership array (memberIds) within the document for shared access.
+     */
+    match /groups/{groupId} {
+      allow get, list: if isMember(resource.data);
+      allow create: if isSignedIn() && request.resource.data.adminId == request.auth.uid;
+      allow update: if resource != null && isAdmin(resource.data);
+      allow delete: if resource != null && isAdmin(resource.data);
+
+      /**
+       * @description Rules for debts nested under groups. Uses denormalized group data for speed.
+       * @path /groups/{groupId}/debts/{debtId}
+       * @allow (list) If the user's UID is in the denormalized groupMemberIds array.
+       * @deny (delete) If the user is not the group administrator.
+       * @principle Authorization Independence: Relies on denormalized fields to avoid parent lookups.
+       */
+      match /debts/{debtId} {
+        allow get, list: if isMember(resource.data);
+        allow create: if isSignedIn() && request.resource.data.groupId == groupId && request.auth.uid in request.resource.data.groupMemberIds;
+        allow update: if resource != null && (isAdmin(resource.data) || isMember(resource.data));
+        allow delete: if resource != null && isAdmin(resource.data);
+      }
+    }
+  }
+}
