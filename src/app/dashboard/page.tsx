@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuth } from "@/lib/firebase/auth-context";
-import { getGroupsForUser, createGroup, getDebtsForUser, getGroupById, getUserProfile, updateDebtStatus } from "@/lib/firebase/store";
+import { useState, useMemo, useEffect } from "react";
+import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { createGroup, updateDebtStatusInGroup, getUserProfile } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,10 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, ArrowRight, Wallet, UserCircle, Briefcase, ChevronRight, ChevronDown, CheckCircle2, Clock } from "lucide-react";
+import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { collection, query, where, collectionGroup } from "firebase/firestore";
 
 type GroupedDebt = {
   adminName: string;
@@ -26,108 +27,106 @@ type GroupedDebt = {
 };
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user } = useUser();
+  const firestore = useFirestore();
   const [isAdminView, setIsAdminView] = useState(true);
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [groupedDebts, setGroupedDebts] = useState<GroupedDebt[]>([]);
-  const [loading, setLoading] = useState(true);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupType, setNewGroupType] = useState<'fixed' | 'variable'>("variable");
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
+  // Queries for real-time data
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
+  }, [firestore, user]);
+  const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
+
+  const debtsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collectionGroup(firestore, 'debts'), where('debtorId', '==', user.uid));
+  }, [firestore, user]);
+  const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
+
+  // Filter groups where I am admin
+  const adminGroups = useMemo(() => {
+    if (!allGroups || !user) return [];
+    return allGroups.filter(g => g.adminId === user.uid);
+  }, [allGroups, user]);
+
+  // Group debts by administrator
+  const [groupedDebts, setGroupedDebts] = useState<GroupedDebt[]>([]);
+  const [resolvingAdmins, setResolvingAdmins] = useState(false);
+
   useEffect(() => {
-    if (user) {
-      loadData();
-    }
-  }, [user, isAdminView]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      if (isAdminView) {
-        const allGroups = await getGroupsForUser(user!.uid);
-        setGroups(allGroups.filter(g => g.adminId === user!.uid));
-      } else {
-        const debts = await getDebtsForUser(user!.uid);
-        const groupsCache: Record<string, Group> = {};
-        const adminsCache: Record<string, UserProfile> = {};
-        const groupsMap: Record<string, GroupedDebt> = {};
-
-        for (const debt of debts) {
-          if (debt.status === 'paid') continue;
-
-          if (!groupsCache[debt.groupId]) {
-            const g = await getGroupById(debt.groupId);
-            if (g) groupsCache[debt.groupId] = g;
-          }
-
-          const group = groupsCache[debt.groupId];
-          if (!group) continue;
-
-          if (!adminsCache[group.adminId]) {
-            const admin = await getUserProfile(group.adminId);
-            if (admin) adminsCache[group.adminId] = admin;
-          }
-
-          const admin = adminsCache[group.adminId];
-          const adminName = admin?.displayName || "Administrador Desconocido";
-
-          if (!groupsMap[group.adminId]) {
-            groupsMap[group.adminId] = {
-              adminName,
-              adminId: group.adminId,
-              totalAmount: 0,
-              debts: []
-            };
-          }
-
-          groupsMap[group.adminId].totalAmount += debt.amount;
-          groupsMap[group.adminId].debts.push({
-            ...debt,
-            groupName: group.name
-          });
-        }
-        setGroupedDebts(Object.values(groupsMap));
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreateGroup = async () => {
-    if (!newGroupName) return;
-    try {
-      await createGroup(newGroupName, newGroupType, user!.uid);
-      toast({ title: "Grupo Creado", description: `"${newGroupName}" ya está listo.` });
-      setNewGroupName("");
-      setOpen(false);
-      loadData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    }
-  };
-
-  const handleSettleTotal = async (adminDebts: Debt[]) => {
-    try {
-      const pendingDebts = adminDebts.filter(d => d.status === 'pending');
-      if (pendingDebts.length === 0) {
-        toast({ title: "Sin cambios", description: "Todas las deudas ya están bajo revisión." });
+    const resolveGroupedDebts = async () => {
+      if (!myDebts || !allGroups || myDebts.length === 0) {
+        setGroupedDebts([]);
         return;
       }
 
-      for (const debt of pendingDebts) {
-        await updateDebtStatus(debt.id, 'under_review');
+      setResolvingAdmins(true);
+      const groupsMap: Record<string, GroupedDebt> = {};
+      const adminsCache: Record<string, string> = {};
+
+      for (const debt of myDebts) {
+        if (debt.status === 'paid') continue;
+
+        const group = allGroups.find(g => g.id === debt.groupId);
+        if (!group) continue;
+
+        let adminName = adminsCache[group.adminId];
+        if (!adminName) {
+          const profile = await getUserProfile(group.adminId);
+          adminName = profile?.displayName || "Admin";
+          adminsCache[group.adminId] = adminName;
+        }
+
+        if (!groupsMap[group.adminId]) {
+          groupsMap[group.adminId] = {
+            adminName,
+            adminId: group.adminId,
+            totalAmount: 0,
+            debts: []
+          };
+        }
+
+        groupsMap[group.adminId].totalAmount += debt.amount;
+        groupsMap[group.adminId].debts.push({
+          ...debt,
+          groupName: group.name
+        });
       }
-      
-      toast({ title: "Solicitud Enviada", description: "El administrador ha sido notificado para revisar los pagos." });
-      loadData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo procesar la liquidación." });
-    }
+      setGroupedDebts(Object.values(groupsMap));
+      setResolvingAdmins(false);
+    };
+
+    resolveGroupedDebts();
+  }, [myDebts, allGroups]);
+
+  const handleCreateGroup = () => {
+    if (!newGroupName || !user) return;
+    createGroup(newGroupName, newGroupType, user.uid);
+    toast({ title: "Grupo Creado", description: `"${newGroupName}" ya está listo.` });
+    setNewGroupName("");
+    setOpen(false);
   };
+
+  const handleSettleTotal = (adminDebts: (Debt & { groupName: string })[]) => {
+    const pendingDebts = adminDebts.filter(d => d.status === 'pending');
+    if (pendingDebts.length === 0) {
+      toast({ title: "Sin cambios", description: "Todas las deudas ya están bajo revisión." });
+      return;
+    }
+
+    pendingDebts.forEach(debt => {
+      updateDebtStatusInGroup(debt.groupId, debt.id, 'under_review');
+    });
+    
+    toast({ title: "Solicitud Enviada", description: "El administrador ha sido notificado para revisar los pagos." });
+  };
+
+  const loading = groupsLoading || debtsLoading || resolvingAdmins;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -207,11 +206,11 @@ export default function Dashboard() {
             </Dialog>
           </div>
 
-          {loading ? (
+          {loading && adminGroups.length === 0 ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map(i => <div key={i} className="h-44 bg-muted animate-pulse rounded-2xl" />)}
             </div>
-          ) : groups.length === 0 ? (
+          ) : adminGroups.length === 0 ? (
             <Card className="border-dashed border-2 flex flex-col items-center justify-center py-20 text-center bg-transparent">
               <div className="bg-white p-6 rounded-3xl shadow-sm mb-4">
                 <Users className="h-10 w-10 text-muted-foreground" />
@@ -226,7 +225,7 @@ export default function Dashboard() {
             </Card>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {groups.map((group) => (
+              {adminGroups.map((group) => (
                 <Link key={group.id} href={`/dashboard/groups/${group.id}`}>
                   <Card className="h-full border-none shadow-sm hover:shadow-md hover:-translate-y-1 transition-all group overflow-hidden">
                     <div className="h-2 bg-primary/20 group-hover:bg-primary transition-colors" />
@@ -237,7 +236,7 @@ export default function Dashboard() {
                         </Badge>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
                           <Users className="h-3 w-3" />
-                          {group.members.length}
+                          {group.memberIds.length}
                         </span>
                       </div>
                       <CardTitle className="font-headline text-xl group-hover:text-primary transition-colors">
@@ -266,7 +265,7 @@ export default function Dashboard() {
             Resumen de Deudas Pendientes
           </h2>
 
-          {loading ? (
+          {loading && groupedDebts.length === 0 ? (
             <div className="space-y-4">
               {[1, 2].map(i => <div key={i} className="h-32 bg-muted animate-pulse rounded-2xl" />)}
             </div>

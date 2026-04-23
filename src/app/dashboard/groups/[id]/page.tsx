@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useEffect, useState, use, useRef } from "react";
-import { useAuth } from "@/lib/firebase/auth-context";
-import { getGroupById, getDebtsForGroup, getGroupMembersDetails, addDebt, updateDebtStatus, requestLeaveGroup, confirmLeaveGroup } from "@/lib/firebase/store";
+import { useEffect, useState, use, useRef, useMemo } from "react";
+import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
+import { getGroupMembersDetails, addDebt, updateDebtStatusInGroup, requestLeaveGroup, confirmLeaveGroup } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,16 +16,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus, FileUp, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
-import { useRouter } from "next/navigation";
 import { Textarea } from "@/components/ui/textarea";
+import { doc, collection, query, orderBy } from "firebase/firestore";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
-  const { user } = useAuth();
-  const [group, setGroup] = useState<Group | null>(null);
-  const [debts, setDebts] = useState<Debt[]>([]);
-  const [members, setMembers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+
   const [addingDebt, setAddingDebt] = useState(false);
   const [bulkCsvOpen, setBulkCsvOpen] = useState(false);
   const [fixedAmountOpen, setFixedAmountOpen] = useState(false);
@@ -41,29 +40,26 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [fixedAmount, setFixedAmount] = useState("");
   const [fixedDescription, setFixedDescription] = useState("");
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { toast } = useToast();
+  const [members, setMembers] = useState<UserProfile[]>([]);
+
+  // Real-time hooks
+  const groupRef = useMemoFirebase(() => {
+    if (!firestore || !params.id) return null;
+    return doc(firestore, 'groups', params.id);
+  }, [firestore, params.id]);
+  const { data: group, isLoading: groupLoading } = useDoc<Group>(groupRef);
+
+  const debtsQuery = useMemoFirebase(() => {
+    if (!firestore || !params.id) return null;
+    return query(collection(firestore, 'groups', params.id, 'debts'), orderBy('createdAt', 'desc'));
+  }, [firestore, params.id]);
+  const { data: debts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
 
   useEffect(() => {
-    loadData();
-  }, [params.id]);
-
-  const loadData = async () => {
-    try {
-      const g = await getGroupById(params.id);
-      if (g) {
-        setGroup(g);
-        const d = await getDebtsForGroup(params.id);
-        setDebts(d);
-        const m = await getGroupMembersDetails(g.members);
-        setMembers(m);
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+    if (group?.memberIds) {
+      getGroupMembersDetails(group.memberIds).then(setMembers);
     }
-  };
+  }, [group?.memberIds]);
 
   const handleAddDebt = async () => {
     if (!debtAmount || !debtorId) return;
@@ -74,7 +70,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       setDebtAmount("");
       setDebtDescription("");
       setDebtorId("");
-      loadData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -111,7 +106,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     });
     setBulkCsvOpen(false);
     setCsvText("");
-    loadData();
   };
 
   const handleFixedQuota = async () => {
@@ -120,7 +114,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (isNaN(amount)) return;
 
     try {
-      for (const memberId of group.members) {
+      for (const memberId of group.memberIds) {
         if (memberId === user?.uid) continue;
         await addDebt(params.id, memberId, amount, fixedDescription || `Cuota fija: ${group.name}`);
       }
@@ -128,7 +122,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       setFixedAmountOpen(false);
       setFixedAmount("");
       setFixedDescription("");
-      loadData();
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     }
@@ -146,43 +139,27 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     reader.readAsText(file);
   };
 
-  const handleUpdateStatus = async (debtId: string, status: any) => {
-    try {
-      await updateDebtStatus(debtId, status);
-      toast({ title: "Estado Actualizado", description: "Se actualizó el estado de la deuda." });
-      loadData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    }
+  const handleUpdateStatus = (debtId: string, status: any) => {
+    updateDebtStatusInGroup(params.id, debtId, status);
+    toast({ title: "Estado Actualizado", description: "Se actualizó el estado de la deuda." });
   };
 
-  const handleRequestLeave = async () => {
+  const handleRequestLeave = () => {
     if (!group || !user) return;
     setIsLeaving(true);
-    try {
-      await requestLeaveGroup(group.id, user.uid);
-      toast({ title: "Solicitud Enviada", description: "Tu solicitud de salida está pendiente de aprobación." });
-      loadData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    } finally {
-      setIsLeaving(false);
-    }
+    requestLeaveGroup(group.id, user.uid);
+    toast({ title: "Solicitud Enviada", description: "Tu solicitud de salida está pendiente de aprobación." });
+    setIsLeaving(false);
   };
 
-  const handleConfirmLeave = async (userId: string) => {
+  const handleConfirmLeave = (userId: string) => {
     if (!group) return;
-    try {
-      await confirmLeaveGroup(group.id, userId);
-      toast({ title: "Miembro Eliminado", description: "El miembro ha sido retirado del grupo." });
-      loadData();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    }
+    confirmLeaveGroup(group.id, userId);
+    toast({ title: "Miembro Eliminado", description: "El miembro ha sido retirado del grupo." });
   };
 
   const handleAiSummary = async () => {
-    if (!group) return;
+    if (!group || !debts) return;
     setAiLoading(true);
     try {
       const input: DebtSummaryInput = {
@@ -212,11 +189,12 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     toast({ title: "Enlace Copiado", description: "¡Compártelo con tus amigos!" });
   };
 
-  if (loading) return <div className="h-full flex items-center justify-center"><Clock className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (!group) return <div>Grupo no encontrado.</div>;
+  if (groupLoading) return <div className="h-full flex items-center justify-center"><Clock className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!group) return <div className="p-8 text-center">Grupo no encontrado.</div>;
 
   const isAdmin = group.adminId === user?.uid;
   const myStatus = group.memberStatuses?.[user?.uid || ''];
+  const groupDebts = debts || [];
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -227,14 +205,14 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     }
   };
 
-  const reviewCount = debts.filter(d => d.status === 'under_review').length;
+  const reviewCount = groupDebts.filter(d => d.status === 'under_review').length;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary">{group.name}</h1>
-          <p className="text-muted-foreground">Tipo: <span className="capitalize">{group.type === 'variable' ? 'Gastos Variables' : 'Objetivo Fijo'}</span> • {members.length} Miembros</p>
+          <p className="text-muted-foreground">Tipo: <span className="capitalize">{group.type === 'variable' ? 'Gastos Variables' : 'Objetivo Fijo'}</span> • {group.memberIds.length} Miembros</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={copyInvite} className="gap-2">
@@ -396,14 +374,14 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {debts.length === 0 ? (
+                {groupDebts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={isAdmin ? 5 : 4} className="text-center py-12 text-muted-foreground">
                       No hay deudas registradas aún.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  debts.map((debt) => (
+                  groupDebts.map((debt) => (
                     <TableRow key={debt.id} className={debt.status === 'under_review' ? 'bg-blue-50/50' : ''}>
                       <TableCell className="font-medium">
                         {members.find(m => m.uid === debt.debtorId)?.displayName || 'Desconocido'}
