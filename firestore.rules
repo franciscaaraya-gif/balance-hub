@@ -49,8 +49,7 @@ service cloud.firestore {
     }
 
     // REGLA CRÍTICA PARA CONSULTAS GLOBALES (collectionGroup)
-    // Permite listar todas las deudas de un usuario a través de todos los grupos.
-    // Esta regla es esencial para evitar el error de permisos en el Dashboard.
+    // Esta regla es esencial para que la vista de "Mis Deudas" funcione.
     match /{path=**}/debts/{debtId} {
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||

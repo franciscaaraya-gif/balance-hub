@@ -36,23 +36,23 @@ export default function Dashboard() {
 
   // Grupos donde soy miembro (Admin o Usuario)
   const groupsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
+    if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'groups'), 
       where('memberIds', 'array-contains', user.uid)
     );
-  }, [firestore, user]);
+  }, [firestore, user?.uid]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
   // Mis deudas (Vista Usuario)
   const debtsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    // IMPORTANTE: El filtro debe coincidir exactamente con lo que permiten las reglas de seguridad
+    if (!firestore || !user?.uid) return null;
+    // IMPORTANTE: Protegemos contra rutas vacías y aseguramos filtros exactos
     return query(
       collectionGroup(firestore, 'debts'), 
       where('debtorId', '==', user.uid)
     );
-  }, [firestore, user]);
+  }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
 
   const adminGroups = useMemo(() => {

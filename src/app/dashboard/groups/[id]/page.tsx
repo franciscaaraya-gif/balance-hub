@@ -49,14 +49,14 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const { data: group, isLoading: groupLoading } = useDoc<Group>(groupRef);
 
   const debtsQuery = useMemoFirebase(() => {
-    if (!firestore || !params.id || !user) return null;
-    // El filtro por groupMemberIds es esencial para cumplir con las reglas de seguridad
+    if (!firestore || !params.id || !user?.uid) return null;
+    // IMPORTANTE: Aseguramos que la ruta esté completa y protegida
     return query(
       collection(firestore, 'groups', params.id, 'debts'), 
       where('groupMemberIds', 'array-contains', user.uid),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, params.id, user]);
+  }, [firestore, params.id, user?.uid]);
   const { data: debts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
 
   useEffect(() => {
