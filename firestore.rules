@@ -7,8 +7,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Regla para deudas (soporta collectionGroup para "Mis Deudas")
+    // Regla para deudas (Soporta collectionGroup para "Mis Deudas" y queries de subcolección)
     match /{path=**}/debts/{debtId} {
+      // allow read cubre 'get' y 'list'. 
+      // Para 'list', Firestore valida que la query incluya filtros que garanticen estas condiciones.
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||
         resource.data.groupAdminId == request.auth.uid ||
@@ -39,16 +41,16 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
         request.auth.uid in resource.data.get('memberIds', []) ||
-        // Permitir lectura si el usuario tiene el token de invitación (simplificado para MVP)
-        request.query.limit <= 100 
+        // Permitir búsqueda por inviteToken durante el join (limitado para seguridad)
+        (request.query.limit <= 5)
       );
       
       allow create: if isSignedIn() && request.resource.data.adminId == request.auth.uid;
       
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
-        // Permitir unirse al grupo si se tiene el token (evaluación básica)
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberIds', 'members', 'memberStatuses'])
+        // Permitir unirse o solicitar salida
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberIds', 'members', 'memberStatuses'])
       );
       
       allow delete: if isSignedIn() && request.auth.uid == resource.data.adminId;

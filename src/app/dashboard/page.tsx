@@ -41,10 +41,9 @@ export default function Dashboard() {
   }, [firestore, user]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
-  // Mis deudas (Vista Usuario)
+  // Mis deudas (Vista Usuario) - collectionGroup requiere reglas recursivas {path=**}
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    // Consulta optimizada para las reglas de seguridad
     return query(collectionGroup(firestore, 'debts'), where('debtorId', '==', user.uid));
   }, [firestore, user]);
   const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
