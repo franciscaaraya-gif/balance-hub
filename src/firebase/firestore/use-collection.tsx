@@ -47,7 +47,6 @@ export function useCollection<T = any>(
     }
 
     // Validación estructural para asegurar que es un Query/CollectionReference de Firestore
-    // Evitamos acceder a propiedades internas de forma insegura
     const isValidFirestoreRef = 'type' in memoizedTargetRefOrQuery;
     if (!isValidFirestoreRef) {
       setData(null);
@@ -71,18 +70,13 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Determinación de ruta para el error contextual sin inventar nombres
-        let path = "unspecified-path";
-        if ('path' in memoizedTargetRefOrQuery) {
-          path = (memoizedTargetRefOrQuery as any).path;
-        } else {
-          // Para collectionGroup o queries complejos, indicamos la naturaleza de la consulta
-          path = "collection-group-query";
-        }
+        // Determinación de ruta para el error contextual
+        // Si no tiene path (collectionGroup), usamos un identificador descriptivo
+        const path = (memoizedTargetRefOrQuery as any).path || "collection-group-query";
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path,
+          path: path,
         });
 
         setError(contextualError);

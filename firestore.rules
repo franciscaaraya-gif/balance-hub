@@ -32,7 +32,11 @@ service cloud.firestore {
 
       // Reglas para Deudas dentro de un grupo específico
       match /debts/{debtId} {
-        allow read: if isSignedIn();
+        // Permitir lectura si el usuario es miembro del grupo (usando campos denormalizados)
+        allow read: if isSignedIn() && (
+          resource.data.groupMemberIds != null && 
+          request.auth.uid in resource.data.groupMemberIds
+        );
         allow create: if isSignedIn();
         allow update: if isSignedIn();
         allow delete: if isSignedIn() && request.auth.uid == resource.data.groupAdminId;
@@ -40,9 +44,12 @@ service cloud.firestore {
     }
 
     // REGLA PARA CONSULTAS GLOBALES (collectionGroup)
-    // Se autoriza el listado global basándose en el debtorId que coincide con el usuario
+    // Se autoriza el listado global basándose en el debtorId o membresía de grupo
     match /{path=**}/debts/{debtId} {
-      allow list: if isSignedIn() && request.auth.uid == resource.data.debtorId;
+      allow list: if isSignedIn() && (
+        (resource.data.debtorId != null && resource.data.debtorId == request.auth.uid) ||
+        (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
+      );
       allow get: if isSignedIn();
     }
   }
