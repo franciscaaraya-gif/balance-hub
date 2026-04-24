@@ -31,7 +31,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
   
-  // Forms
+  // Formularios
   const [debtAmount, setDebtAmount] = useState("");
   const [debtDescription, setDebtDescription] = useState("");
   const [debtorId, setDebtorId] = useState("");
@@ -41,7 +41,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const [members, setMembers] = useState<UserProfile[]>([]);
 
-  // Real-time hooks
+  // Hooks de tiempo real
   const groupRef = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
     return doc(firestore, 'groups', params.id);
@@ -50,7 +50,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !params.id || !user) return null;
-    // Filtering by groupMemberIds ensures the query matches Firestore security rules
+    // El filtro por groupMemberIds es esencial para cumplir con las reglas de seguridad
     return query(
       collection(firestore, 'groups', params.id, 'debts'), 
       where('groupMemberIds', 'array-contains', user.uid),
@@ -168,7 +168,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     try {
       const input: DebtSummaryInput = {
         groupName: group.name,
-        members: members.map(m => ({ id: m.uid, name: m.displayName || 'Unnamed' })),
+        members: members.map(m => ({ id: m.uid, name: m.displayName || 'Sin nombre' })),
         debts: debts.map(d => ({
           id: d.id,
           debtorId: d.debtorId,
@@ -180,7 +180,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       const result = await generateDebtSummary(input);
       setAiSummary(result.summary);
     } catch (error: any) {
-      toast({ variant: "destructive", title: "AI Generation Failed", description: "Could not generate summary." });
+      toast({ variant: "destructive", title: "Fallo de IA", description: "No se pudo generar el resumen." });
     } finally {
       setAiLoading(false);
     }
