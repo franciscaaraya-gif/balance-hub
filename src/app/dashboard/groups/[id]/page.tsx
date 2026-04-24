@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, use, useRef, useMemo } from "react";
@@ -17,7 +16,7 @@ import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOu
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
 import { Textarea } from "@/components/ui/textarea";
-import { doc, collection, query, orderBy } from "firebase/firestore";
+import { doc, collection, query, orderBy, where } from "firebase/firestore";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -50,9 +49,14 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const { data: group, isLoading: groupLoading } = useDoc<Group>(groupRef);
 
   const debtsQuery = useMemoFirebase(() => {
-    if (!firestore || !params.id) return null;
-    return query(collection(firestore, 'groups', params.id, 'debts'), orderBy('createdAt', 'desc'));
-  }, [firestore, params.id]);
+    if (!firestore || !params.id || !user) return null;
+    // Filtering by groupMemberIds ensures the query matches Firestore security rules
+    return query(
+      collection(firestore, 'groups', params.id, 'debts'), 
+      where('groupMemberIds', 'array-contains', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+  }, [firestore, params.id, user]);
   const { data: debts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
 
   useEffect(() => {
