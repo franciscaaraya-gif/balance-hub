@@ -1,4 +1,3 @@
-
 import { db } from "./config";
 import { 
   collection, 
@@ -10,11 +9,9 @@ import {
   where, 
   addDoc, 
   updateDoc,
-  orderBy,
   arrayUnion,
   arrayRemove,
-  deleteField,
-  serverTimestamp
+  deleteField
 } from "firebase/firestore";
 import { Group, Debt, UserProfile, DebtStatus } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -23,13 +20,12 @@ import { FirestorePermissionError } from '@/firebase/errors';
 export const createUserProfile = async (uid: string, email: string, displayName: string) => {
   const userRef = doc(db, "userProfiles", uid);
   await setDoc(userRef, {
-    id: uid,
     uid,
     email,
     displayName,
     role: 'user',
     createdAt: Date.now(),
-  });
+  }, { merge: true });
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
@@ -40,7 +36,6 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
 
 export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: string) => {
   const inviteToken = Math.random().toString(36).substring(2, 15);
-  // inviteLink is required by backend.json schema
   const inviteLink = `${window.location.origin}/join/${inviteToken}`;
   const groupCollection = collection(db, "groups");
   
@@ -49,7 +44,7 @@ export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: s
     type,
     adminId,
     members: [adminId],
-    memberIds: [adminId], // Must match rule checks
+    memberIds: [adminId],
     memberStatuses: {
       [adminId]: 'active'
     },
@@ -156,9 +151,13 @@ export const updateDebtStatusInGroup = (groupId: string, debtId: string, status:
 export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserProfile[]> => {
   if (!memberIds || memberIds.length === 0) return [];
   const profiles: UserProfile[] = [];
-  for (const id of memberIds) {
-    const p = await getUserProfile(id);
-    if (p) profiles.push(p);
+  try {
+    for (const id of memberIds) {
+      const p = await getUserProfile(id);
+      if (p) profiles.push(p);
+    }
+  } catch (e) {
+    console.error("Error fetching member details", e);
   }
   return profiles;
 };
