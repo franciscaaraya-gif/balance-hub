@@ -39,14 +39,10 @@ service cloud.firestore {
       }
     }
 
-    // REGLA CRÍTICA PARA CONSULTAS GLOBALES (collectionGroup)
-    // Permite buscar deudas en todos los grupos basándose en el debtorId
+    // REGLA PARA CONSULTAS GLOBALES (collectionGroup)
+    // Se autoriza el listado global basándose en el debtorId que coincide con el usuario
     match /{path=**}/debts/{debtId} {
-      allow list: if isSignedIn() && (
-        request.auth.uid == resource.data.debtorId ||
-        request.auth.uid == resource.data.groupAdminId ||
-        (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
-      );
+      allow list: if isSignedIn() && request.auth.uid == resource.data.debtorId;
       allow get: if isSignedIn();
     }
   }

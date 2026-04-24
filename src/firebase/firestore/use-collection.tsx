@@ -46,8 +46,10 @@ export function useCollection<T = any>(
       return;
     }
 
-    // Validación de tipo para asegurar que es un Query/CollectionReference de Firestore
-    if (!('type' in memoizedTargetRefOrQuery)) {
+    // Validación estructural para asegurar que es un Query/CollectionReference de Firestore
+    // Evitamos acceder a propiedades internas de forma insegura
+    const isValidFirestoreRef = 'type' in memoizedTargetRefOrQuery;
+    if (!isValidFirestoreRef) {
       setData(null);
       setIsLoading(false);
       setError(null);
@@ -69,17 +71,13 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Determinación de ruta para el error contextual
-        let path = "query-global";
+        // Determinación de ruta para el error contextual sin inventar nombres
+        let path = "unspecified-path";
         if ('path' in memoizedTargetRefOrQuery) {
           path = (memoizedTargetRefOrQuery as any).path;
         } else {
-          // Intentar obtener el nombre de la colección del query interno si es posible
-          try {
-            path = (memoizedTargetRefOrQuery as any)._query?.path?.canonicalString() || "collection-group";
-          } catch (e) {
-            path = "collection-group";
-          }
+          // Para collectionGroup o queries complejos, indicamos la naturaleza de la consulta
+          path = "collection-group-query";
         }
 
         const contextualError = new FirestorePermissionError({
