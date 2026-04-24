@@ -11,37 +11,35 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Reglas para Deudas (Soporta collectionGroup)
+    // Reglas para Deudas (CRITICAL: Soporta collectionGroup)
     match /{path=**}/debts/{debtId} {
-      // Permitir lectura si el usuario es el deudor, el admin del grupo o un miembro
+      // Permitir lectura si el usuario es el deudor, el admin o miembro
+      // Para queries (list), Firestore verifica que el filtro coincida con la regla
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||
         resource.data.groupAdminId == request.auth.uid ||
         (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
       );
       
-      // Permitir creación si el usuario está logueado
       allow create: if isSignedIn();
       
-      // Solo el admin del grupo puede actualizar (excepto para poner en revisión)
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.groupAdminId ||
         (request.auth.uid == resource.data.debtorId && request.resource.data.status == 'under_review')
       );
 
-      // Solo el admin puede borrar
       allow delete: if isSignedIn() && request.auth.uid == resource.data.groupAdminId;
     }
 
     // Reglas para Perfiles de Usuario
     match /userProfiles/{userId} {
+      // Permitir que cualquier usuario logueado lea perfiles (para ver nombres de miembros)
       allow read: if isSignedIn();
       allow write: if isOwner(userId);
     }
 
     // Reglas para Grupos
     match /groups/{groupId} {
-      // Permitir leer si el usuario está en el grupo
       allow read: if isSignedIn() && (
         resource.data.memberIds == null || 
         request.auth.uid in resource.data.memberIds
@@ -51,7 +49,7 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
-        // Permitir unirse si solo se modifica memberIds o campos relacionados con la membresía
+        // Permitir unirse o solicitar salida
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberIds', 'members', 'memberStatuses'])
       );
       
