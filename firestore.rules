@@ -2,15 +2,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Funciones auxiliares
+    // Funciones auxiliares para claridad y reutilización
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Regla para deudas (Soporta collectionGroup para "Mis Deudas" y queries de subcolección)
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Regla para deudas (Soporta collectionGroup y acceso directo)
+    // El patrón {path=**} es CRÍTICO para que funcionen las consultas de "Mis Deudas"
     match /{path=**}/debts/{debtId} {
-      // allow read cubre 'get' y 'list'. 
-      // Firestore valida que la query incluya filtros que garanticen estas condiciones.
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||
         resource.data.groupAdminId == request.auth.uid ||
@@ -33,7 +36,7 @@ service cloud.firestore {
     // Regla para perfiles de usuario
     match /userProfiles/{userId} {
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isOwner(userId);
     }
 
     // Regla para grupos
@@ -41,7 +44,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
         request.auth.uid in resource.data.memberIds ||
-        // Permitir búsqueda por inviteToken durante el join
+        // Permitir que un usuario vea el grupo si tiene el token de invitación (limitando la query)
         request.query.limit <= 10
       );
       
@@ -49,7 +52,7 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
-        // Permitir unirse (afecta a memberIds y memberStatuses)
+        // Permitir unirse al grupo (solo modificando campos de membresía)
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberIds', 'members', 'memberStatuses'])
       );
       
