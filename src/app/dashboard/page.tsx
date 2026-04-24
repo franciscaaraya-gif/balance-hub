@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Clock } from "lucide-react";
+import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Clock, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -41,7 +41,7 @@ export default function Dashboard() {
   }, [firestore, user]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
-  // Mis deudas (Vista Usuario) - collectionGroup requiere reglas recursivas {path=**}
+  // Mis deudas (Vista Usuario)
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'debts'), where('debtorId', '==', user.uid));
@@ -202,8 +202,8 @@ export default function Dashboard() {
           </div>
 
           {loading ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map(i => <div key={i} className="h-44 bg-muted animate-pulse rounded-2xl" />)}
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : adminGroups.length === 0 ? (
             <Card className="border-dashed border-2 flex flex-col items-center justify-center py-20 text-center bg-transparent">
@@ -253,8 +253,8 @@ export default function Dashboard() {
           </h2>
 
           {loading ? (
-            <div className="space-y-4">
-              {[1, 2].map(i => <div key={i} className="h-32 bg-muted animate-pulse rounded-2xl" />)}
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : groupedDebts.length === 0 ? (
             <Card className="border-dashed border-2 flex flex-col items-center justify-center py-20 text-center bg-transparent">

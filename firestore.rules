@@ -2,7 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Funciones auxiliares para claridad y reutilización
     function isSignedIn() {
       return request.auth != null;
     }
@@ -11,20 +10,22 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Regla para deudas (Soporta collectionGroup y acceso directo)
-    // El patrón {path=**} es CRÍTICO para que funcionen las consultas de "Mis Deudas"
+    // Reglas para Deudas (Soporta collectionGroup)
     match /{path=**}/debts/{debtId} {
+      // Permitir lectura si eres el deudor, el admin del grupo o un miembro del grupo
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||
         resource.data.groupAdminId == request.auth.uid ||
-        request.auth.uid in resource.data.groupMemberIds
+        (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
       );
       
+      // Permitir creación si eres admin o miembro (validando datos de entrada)
       allow create: if isSignedIn() && (
-        request.auth.uid == request.resource.data.groupAdminId ||
+        request.resource.data.groupAdminId == request.auth.uid ||
         request.auth.uid in request.resource.data.groupMemberIds
       );
 
+      // Permitir actualización si eres el admin o si el deudor marca para revisión
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.groupAdminId ||
         (request.auth.uid == resource.data.debtorId && request.resource.data.status == 'under_review')
@@ -33,26 +34,26 @@ service cloud.firestore {
       allow delete: if isSignedIn() && request.auth.uid == resource.data.groupAdminId;
     }
 
-    // Regla para perfiles de usuario
+    // Reglas para Perfiles de Usuario
     match /userProfiles/{userId} {
       allow read: if isSignedIn();
       allow write: if isOwner(userId);
     }
 
-    // Regla para grupos
+    // Reglas para Grupos
     match /groups/{groupId} {
       allow read: if isSignedIn() && (
-        request.auth.uid == resource.data.adminId ||
+        resource.data.adminId == request.auth.uid ||
         request.auth.uid in resource.data.memberIds ||
-        // Permitir que un usuario vea el grupo si tiene el token de invitación (limitando la query)
-        request.query.limit <= 10
+        // Permitir ver el grupo temporalmente para unirse vía token
+        request.query.limit <= 1
       );
       
       allow create: if isSignedIn() && request.resource.data.adminId == request.auth.uid;
       
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
-        // Permitir unirse al grupo (solo modificando campos de membresía)
+        // Permitir unirse al grupo añadiendo el ID a memberIds
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberIds', 'members', 'memberStatuses'])
       );
       
