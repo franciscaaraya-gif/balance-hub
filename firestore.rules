@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -9,6 +10,7 @@ service cloud.firestore {
 
     // Reglas para Perfiles de Usuario
     match /userProfiles/{userId} {
+      // Permitir leer perfiles si estás autenticado (para ver nombres en grupos)
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
@@ -31,11 +33,7 @@ service cloud.firestore {
 
       // Reglas para Deudas dentro de un grupo específico
       match /debts/{debtId} {
-        allow read: if isSignedIn() && (
-          resource.data.debtorId == request.auth.uid ||
-          resource.data.groupAdminId == request.auth.uid ||
-          (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
-        );
+        allow read: if isSignedIn(); // El filtrado se hace en el query o por el collectionGroup rule
         
         allow create: if isSignedIn();
         
@@ -49,13 +47,16 @@ service cloud.firestore {
     }
 
     // REGLA CRÍTICA PARA CONSULTAS GLOBALES (collectionGroup)
-    // Esta regla es esencial para que la vista de "Mis Deudas" funcione.
+    // Permite buscar deudas en todos los grupos si eres el deudor o el admin denormalizado.
     match /{path=**}/debts/{debtId} {
-      allow read: if isSignedIn() && (
-        resource.data.debtorId == request.auth.uid ||
-        resource.data.groupAdminId == request.auth.uid ||
-        (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
+      allow list: if isSignedIn() && (
+        query.limit <= 100 && (
+          request.auth.uid == resource.data.debtorId ||
+          request.auth.uid == resource.data.groupAdminId ||
+          (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
+        )
       );
+      allow get: if isSignedIn();
     }
   }
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -47,7 +48,7 @@ export default function Dashboard() {
   // Mis deudas (Vista Usuario)
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
-    // IMPORTANTE: Protegemos contra rutas vacías y aseguramos filtros exactos
+    // IMPORTANTE: Aseguramos filtros exactos para que las Security Rules aprueben la consulta global
     return query(
       collectionGroup(firestore, 'debts'), 
       where('debtorId', '==', user.uid)
