@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -35,28 +34,27 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // Queries for real-time data
+  // Grupos donde soy miembro (Admin o Usuario)
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
+  // Mis deudas (Vista Usuario)
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
+    // Consulta optimizada para las reglas de seguridad
     return query(collectionGroup(firestore, 'debts'), where('debtorId', '==', user.uid));
   }, [firestore, user]);
   const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
 
-  // Filter groups where I am admin
   const adminGroups = useMemo(() => {
     if (!allGroups || !user) return [];
     return allGroups.filter(g => g.adminId === user.uid);
   }, [allGroups, user]);
 
-  // Group debts by administrator
   const [groupedDebts, setGroupedDebts] = useState<GroupedDebt[]>([]);
-  const [resolvingAdmins, setResolvingAdmins] = useState(false);
 
   useEffect(() => {
     const resolveGroupedDebts = async () => {
@@ -65,7 +63,6 @@ export default function Dashboard() {
         return;
       }
 
-      setResolvingAdmins(true);
       const groupsMap: Record<string, GroupedDebt> = {};
       const adminsCache: Record<string, string> = {};
 
@@ -78,7 +75,7 @@ export default function Dashboard() {
         let adminName = adminsCache[group.adminId];
         if (!adminName) {
           const profile = await getUserProfile(group.adminId);
-          adminName = profile?.displayName || "Admin";
+          adminName = profile?.displayName || "Administrador";
           adminsCache[group.adminId] = adminName;
         }
 
@@ -98,7 +95,6 @@ export default function Dashboard() {
         });
       }
       setGroupedDebts(Object.values(groupsMap));
-      setResolvingAdmins(false);
     };
 
     resolveGroupedDebts();
@@ -107,7 +103,7 @@ export default function Dashboard() {
   const handleCreateGroup = () => {
     if (!newGroupName || !user) return;
     createGroup(newGroupName, newGroupType, user.uid);
-    toast({ title: "Grupo Creado", description: `"${newGroupName}" ya está listo.` });
+    toast({ title: "¡Éxito!", description: `El grupo "${newGroupName}" ha sido creado.` });
     setNewGroupName("");
     setOpen(false);
   };
@@ -115,7 +111,7 @@ export default function Dashboard() {
   const handleSettleTotal = (adminDebts: (Debt & { groupName: string })[]) => {
     const pendingDebts = adminDebts.filter(d => d.status === 'pending');
     if (pendingDebts.length === 0) {
-      toast({ title: "Sin cambios", description: "Todas las deudas ya están bajo revisión." });
+      toast({ title: "Sin cambios", description: "Estas deudas ya están en revisión." });
       return;
     }
 
@@ -123,10 +119,10 @@ export default function Dashboard() {
       updateDebtStatusInGroup(debt.groupId, debt.id, 'under_review');
     });
     
-    toast({ title: "Solicitud Enviada", description: "El administrador ha sido notificado para revisar los pagos." });
+    toast({ title: "Solicitud enviada", description: "El administrador revisará tus pagos pronto." });
   };
 
-  const loading = groupsLoading || debtsLoading || resolvingAdmins;
+  const loading = groupsLoading || debtsLoading;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -177,8 +173,8 @@ export default function Dashboard() {
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Crear Grupo de Deuda</DialogTitle>
-                  <DialogDescription>Configura un nuevo espacio para gestionar gastos compartidos.</DialogDescription>
+                  <DialogTitle>Nuevo Grupo de Deuda</DialogTitle>
+                  <DialogDescription>Configura un espacio para gestionar gastos compartidos.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="space-y-2">
@@ -186,7 +182,7 @@ export default function Dashboard() {
                     <Input id="name" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="Ej: Viaje a la playa" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="type">Tipo de Grupo</Label>
+                    <Label htmlFor="type">Tipo de Gestión</Label>
                     <Select value={newGroupType} onValueChange={(val: any) => setNewGroupType(val)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona tipo" />
@@ -206,32 +202,27 @@ export default function Dashboard() {
             </Dialog>
           </div>
 
-          {loading && adminGroups.length === 0 ? (
+          {loading ? (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map(i => <div key={i} className="h-44 bg-muted animate-pulse rounded-2xl" />)}
             </div>
           ) : adminGroups.length === 0 ? (
             <Card className="border-dashed border-2 flex flex-col items-center justify-center py-20 text-center bg-transparent">
-              <div className="bg-white p-6 rounded-3xl shadow-sm mb-4">
-                <Users className="h-10 w-10 text-muted-foreground" />
-              </div>
+              <Users className="h-10 w-10 text-muted-foreground mb-4" />
               <CardTitle className="text-xl">Aún no tienes grupos</CardTitle>
               <CardDescription className="max-w-[300px] mt-2">
-                Empieza creando tu primer grupo para invitar a tus amigos y gestionar deudas.
+                Crea tu primer grupo para empezar a gestionar deudas con tus amigos.
               </CardDescription>
-              <Button variant="outline" className="mt-8 border-primary text-primary" onClick={() => setOpen(true)}>
-                Crear mi primer grupo
-              </Button>
             </Card>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {adminGroups.map((group) => (
                 <Link key={group.id} href={`/dashboard/groups/${group.id}`}>
-                  <Card className="h-full border-none shadow-sm hover:shadow-md hover:-translate-y-1 transition-all group overflow-hidden">
+                  <Card className="h-full border-none shadow-sm hover:shadow-md transition-all group overflow-hidden">
                     <div className="h-2 bg-primary/20 group-hover:bg-primary transition-colors" />
-                    <CardHeader className="pb-4">
+                    <CardHeader>
                       <div className="flex justify-between items-start mb-2">
-                        <Badge variant="outline" className="capitalize bg-muted/30 border-none font-bold text-[10px] tracking-widest px-2">
+                        <Badge variant="outline" className="capitalize text-[10px] tracking-widest px-2">
                           {group.type}
                         </Badge>
                         <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -242,9 +233,6 @@ export default function Dashboard() {
                       <CardTitle className="font-headline text-xl group-hover:text-primary transition-colors">
                         {group.name}
                       </CardTitle>
-                      <CardDescription className="line-clamp-1">
-                        Creado el {new Date(group.createdAt).toLocaleDateString()}
-                      </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="flex items-center justify-between text-sm font-medium text-primary">
@@ -265,19 +253,15 @@ export default function Dashboard() {
             Resumen de Deudas Pendientes
           </h2>
 
-          {loading && groupedDebts.length === 0 ? (
+          {loading ? (
             <div className="space-y-4">
               {[1, 2].map(i => <div key={i} className="h-32 bg-muted animate-pulse rounded-2xl" />)}
             </div>
           ) : groupedDebts.length === 0 ? (
             <Card className="border-dashed border-2 flex flex-col items-center justify-center py-20 text-center bg-transparent">
-              <div className="bg-white p-6 rounded-3xl shadow-sm mb-4">
-                <Wallet className="h-10 w-10 text-emerald-500" />
-              </div>
+              <Wallet className="h-10 w-10 text-emerald-500 mb-4" />
               <CardTitle className="text-xl">¡Estás al día!</CardTitle>
-              <CardDescription className="max-w-[300px] mt-2">
-                No tienes deudas pendientes registradas a tu nombre.
-              </CardDescription>
+              <CardDescription>No tienes deudas pendientes registradas.</CardDescription>
             </Card>
           ) : (
             <div className="space-y-6">
@@ -293,11 +277,11 @@ export default function Dashboard() {
                             </div>
                             <div>
                               <CardTitle className="text-lg font-headline">{item.adminName}</CardTitle>
-                              <CardDescription>Administrador • {item.debts.length} deudas</CardDescription>
+                              <CardDescription>{item.debts.length} deudas individuales</CardDescription>
                             </div>
                           </div>
                           <div className="text-right mr-4">
-                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Pendiente</p>
+                            <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total</p>
                             <p className="text-2xl font-headline font-bold text-accent">${item.totalAmount.toFixed(2)}</p>
                           </div>
                         </div>
@@ -306,13 +290,12 @@ export default function Dashboard() {
                         <div className="divide-y divide-muted/50">
                           {item.debts.map((debt) => (
                             <div key={debt.id} className="flex items-center justify-between p-4 px-6 hover:bg-muted/10 transition-colors">
-                              <div className="space-y-1">
-                                <p className="font-medium text-sm">{debt.description || "Sin descripción"}</p>
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="secondary" className="text-[10px] bg-secondary/10 text-secondary border-none px-1.5 h-5">
+                              <div>
+                                <p className="font-medium text-sm">{debt.description || "Gasto sin descripción"}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 h-5">
                                     {debt.groupName}
                                   </Badge>
-                                  <span className="text-[10px] text-muted-foreground">{new Date(debt.createdAt).toLocaleDateString()}</span>
                                   {debt.status === 'under_review' && (
                                     <Badge variant="outline" className="text-[10px] text-blue-600 bg-blue-50 border-blue-200 h-5">
                                       En revisión
@@ -323,7 +306,7 @@ export default function Dashboard() {
                               <div className="flex items-center gap-4">
                                 <span className="font-bold text-primary font-mono">${debt.amount.toFixed(2)}</span>
                                 <Link href={`/dashboard/groups/${debt.groupId}`}>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary">
+                                  <Button size="icon" variant="ghost" className="h-8 w-8">
                                     <ChevronRight className="h-4 w-4" />
                                   </Button>
                                 </Link>
@@ -333,7 +316,7 @@ export default function Dashboard() {
                         </div>
                         <div className="p-4 bg-white border-t flex justify-end">
                           <Button 
-                            className="bg-accent hover:bg-accent/90 gap-2 shadow-sm"
+                            className="bg-accent hover:bg-accent/90 gap-2"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleSettleTotal(item.debts);
