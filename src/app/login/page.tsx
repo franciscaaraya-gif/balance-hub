@@ -45,7 +45,6 @@ export default function Login() {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
       
-      // Verificar si el perfil ya existe, si no, crearlo
       const profile = await getUserProfile(user.uid);
       if (!profile) {
         await createUserProfile(user.uid, user.email || "", user.displayName || "Usuario de Google");
@@ -119,7 +118,7 @@ export default function Login() {
           <Button 
             variant="outline" 
             type="button" 
-            className="w-full py-6 flex gap-2" 
+            className="w-full py-6 flex gap-2 border-primary/20 hover:bg-primary/5" 
             onClick={handleGoogleLogin}
             disabled={loading}
           >
@@ -141,7 +140,7 @@ export default function Login() {
                 fill="#EA4335"
               />
             </svg>
-            Google
+            Entrar con Google
           </Button>
         </CardContent>
         <CardFooter className="flex justify-center flex-col space-y-2">

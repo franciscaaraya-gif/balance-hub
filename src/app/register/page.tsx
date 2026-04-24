@@ -132,7 +132,7 @@ export default function Register() {
           <Button 
             variant="outline" 
             type="button" 
-            className="w-full py-6 flex gap-2" 
+            className="w-full py-6 flex gap-2 border-primary/20 hover:bg-primary/5" 
             onClick={handleGoogleLogin}
             disabled={loading}
           >
@@ -154,7 +154,7 @@ export default function Register() {
                 fill="#EA4335"
               />
             </svg>
-            Google
+            Registrarse con Google
           </Button>
         </CardContent>
         <CardFooter className="flex justify-center">

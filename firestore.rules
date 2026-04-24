@@ -7,14 +7,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    // Reglas para Deudas (CRITICAL: Soporta collectionGroup)
+    // Reglas para Deudas (Soporta consultas collectionGroup)
+    // El uso de {path=**} es crítico para que collectionGroup('debts') funcione
     match /{path=**}/debts/{debtId} {
-      // Permitir lectura si el usuario es el deudor, el admin o miembro
-      // Para queries (list), Firestore verifica que el filtro coincida con la regla
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||
         resource.data.groupAdminId == request.auth.uid ||
@@ -33,9 +28,9 @@ service cloud.firestore {
 
     // Reglas para Perfiles de Usuario
     match /userProfiles/{userId} {
-      // Permitir que cualquier usuario logueado lea perfiles (para ver nombres de miembros)
+      // Permitir lectura a cualquier usuario logueado para ver nombres de miembros
       allow read: if isSignedIn();
-      allow write: if isOwner(userId);
+      allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Reglas para Grupos
@@ -49,7 +44,7 @@ service cloud.firestore {
       
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
-        // Permitir unirse o solicitar salida
+        // Permitir unirse mediante actualización de miembros
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberIds', 'members', 'memberStatuses'])
       );
       
