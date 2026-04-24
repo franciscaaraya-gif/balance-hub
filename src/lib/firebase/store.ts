@@ -157,7 +157,7 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
       if (p) profiles.push(p);
     }
   } catch (e) {
-    console.error("Error fetching member details", e);
+    // Silently fail as per rules
   }
   return profiles;
 };

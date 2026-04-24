@@ -37,14 +37,21 @@ export default function Dashboard() {
   // Grupos donde soy miembro (Admin o Usuario)
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
+    return query(
+      collection(firestore, 'groups'), 
+      where('memberIds', 'array-contains', user.uid)
+    );
   }, [firestore, user]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
   // Mis deudas (Vista Usuario)
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return query(collectionGroup(firestore, 'debts'), where('debtorId', '==', user.uid));
+    // IMPORTANTE: El filtro debe coincidir exactamente con lo que permiten las reglas de seguridad
+    return query(
+      collectionGroup(firestore, 'debts'), 
+      where('debtorId', '==', user.uid)
+    );
   }, [firestore, user]);
   const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
 
@@ -73,9 +80,13 @@ export default function Dashboard() {
 
         let adminName = adminsCache[group.adminId];
         if (!adminName) {
-          const profile = await getUserProfile(group.adminId);
-          adminName = profile?.displayName || "Administrador";
-          adminsCache[group.adminId] = adminName;
+          try {
+            const profile = await getUserProfile(group.adminId);
+            adminName = profile?.displayName || "Administrador";
+            adminsCache[group.adminId] = adminName;
+          } catch (e) {
+            adminName = "Administrador";
+          }
         }
 
         if (!groupsMap[group.adminId]) {

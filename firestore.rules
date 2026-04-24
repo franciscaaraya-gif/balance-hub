@@ -2,46 +2,56 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Funciones de utilidad
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Regla para Deudas (Crucial para collectionGroup)
-    // El patrón {path=**} permite que las consultas de grupo de colecciones funcionen
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Reglas para Deudas (Soporta collectionGroup)
     match /{path=**}/debts/{debtId} {
+      // Permitir lectura si el usuario es el deudor, el admin del grupo o un miembro
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||
         resource.data.groupAdminId == request.auth.uid ||
         (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
       );
       
+      // Permitir creación si el usuario está logueado
       allow create: if isSignedIn();
       
+      // Solo el admin del grupo puede actualizar (excepto para poner en revisión)
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.groupAdminId ||
         (request.auth.uid == resource.data.debtorId && request.resource.data.status == 'under_review')
       );
 
+      // Solo el admin puede borrar
       allow delete: if isSignedIn() && request.auth.uid == resource.data.groupAdminId;
     }
 
     // Reglas para Perfiles de Usuario
     match /userProfiles/{userId} {
-      // Permitir leer cualquier perfil si estás logueado (necesario para ver nombres en grupos)
       allow read: if isSignedIn();
-      // Solo el dueño puede escribir su perfil
-      allow write: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isOwner(userId);
     }
 
     // Reglas para Grupos
     match /groups/{groupId} {
-      allow read: if isSignedIn();
+      // Permitir leer si el usuario está en el grupo
+      allow read: if isSignedIn() && (
+        resource.data.memberIds == null || 
+        request.auth.uid in resource.data.memberIds
+      );
       
       allow create: if isSignedIn() && request.resource.data.adminId == request.auth.uid;
       
       allow update: if isSignedIn() && (
         request.auth.uid == resource.data.adminId ||
-        // Permitir unirse al grupo si se conoce el token o se añade el ID
+        // Permitir unirse si solo se modifica memberIds o campos relacionados con la membresía
         request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberIds', 'members', 'memberStatuses'])
       );
       
