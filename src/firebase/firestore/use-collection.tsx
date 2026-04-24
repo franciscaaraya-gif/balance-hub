@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -53,7 +52,7 @@ export function useCollection<T = any>(
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
-    // 1. Strict null check
+    // 1. Strict null/undefined check before touching anything
     if (!memoizedTargetRefOrQuery) {
       setData(null);
       setIsLoading(false);
@@ -61,12 +60,12 @@ export function useCollection<T = any>(
       return;
     }
 
-    // 2. Basic validation to avoid root /documents/ subscription
+    // 2. Structural validation to ensure it's a valid Firestore object
     const isRef = 'path' in memoizedTargetRefOrQuery;
     const isQuery = 'type' in memoizedTargetRefOrQuery;
 
     if (!isRef && !isQuery) {
-      console.warn("🚫 useCollection: Invalid Firestore reference provided", memoizedTargetRefOrQuery);
+      console.warn("🚫 useCollection: Invalid Firestore reference/query provided", memoizedTargetRefOrQuery);
       return;
     }
 
@@ -85,17 +84,18 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Safe path extraction
-        let path = "root";
+        // Safe path extraction for reporting
+        let path = "unknown";
         try {
           if ('path' in memoizedTargetRefOrQuery) {
             path = (memoizedTargetRefOrQuery as CollectionReference).path;
           } else {
+            // Internal access to path for collectionGroup queries
             const internal = memoizedTargetRefOrQuery as unknown as InternalQuery;
             path = internal._query?.path?.canonicalString() || "collection-group";
           }
         } catch (e) {
-          path = "invalid-path";
+          path = "invalid-path-extraction";
         }
 
         const contextualError = new FirestorePermissionError({
@@ -116,7 +116,7 @@ export function useCollection<T = any>(
   }, [memoizedTargetRefOrQuery]);
 
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error(memoizedTargetRefOrQuery + ' was not properly memoized using useMemoFirebase');
+    throw new Error('useCollection: Target was not properly memoized using useMemoFirebase. This will cause infinite loops.');
   }
   return { data, isLoading, error };
 }

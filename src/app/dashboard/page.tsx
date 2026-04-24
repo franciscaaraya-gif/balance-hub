@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -13,11 +12,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Clock, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { collection, query, where, collectionGroup } from "firebase/firestore";
+import { collection, query, where, collectionGroup, limit } from "firebase/firestore";
 
 type GroupedDebt = {
   adminName: string;
@@ -48,10 +47,12 @@ export default function Dashboard() {
   // Mis deudas (Vista Usuario)
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
-    // IMPORTANTE: Aseguramos filtros exactos para que las Security Rules aprueben la consulta global
+    // IMPORTANTE: Aseguramos filtros que coincidan con las Security Rules
+    // El motor de reglas de Firestore requiere que las consultas globales coincidan con los permisos de listado.
     return query(
       collectionGroup(firestore, 'debts'), 
-      where('debtorId', '==', user.uid)
+      where('debtorId', '==', user.uid),
+      limit(50) // Añadimos un límite para optimizar y asegurar el cumplimiento de reglas si fuera necesario
     );
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);

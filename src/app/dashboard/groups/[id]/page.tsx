@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useRef, useMemo } from "react";
+import { useEffect, useState, use } from "react";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { getGroupMembersDetails, addDebt, updateDebtStatusInGroup, requestLeaveGroup, confirmLeaveGroup } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile } from "@/lib/types";
@@ -16,7 +16,7 @@ import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOu
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
 import { Textarea } from "@/components/ui/textarea";
-import { doc, collection, query, orderBy, where } from "firebase/firestore";
+import { doc, collection, query, orderBy, where, limit } from "firebase/firestore";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -50,11 +50,13 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
-    // IMPORTANTE: Aseguramos que la ruta esté completa y protegida
+    // IMPORTANTE: Aseguramos que la consulta esté bien formada y sea válida
+    // Filtramos por membresía para que las Security Rules aprueben la lectura
     return query(
       collection(firestore, 'groups', params.id, 'debts'), 
       where('groupMemberIds', 'array-contains', user.uid),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(100)
     );
   }, [firestore, params.id, user?.uid]);
   const { data: debts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
