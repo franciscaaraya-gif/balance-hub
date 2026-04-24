@@ -7,7 +7,6 @@ import {
   DocumentData,
   FirestoreError,
   QuerySnapshot,
-  CollectionReference,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -20,37 +19,38 @@ export type WithId<T> = T & { id: string };
  * @template T Type of the document data.
  */
 export interface UseCollectionResult<T> {
-  data: WithId<T>[] | null; // Document data with ID, or null.
-  isLoading: boolean;       // True if loading.
-  error: FirestoreError | Error | null; // Error object, or null.
+  data: WithId<T>[] | null;
+  isLoading: boolean;
+  error: FirestoreError | Error | null;
 }
 
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
- * Handles nullable references/queries.
+ * Handles nullable references/queries and prevents subscription to root.
  */
 export function useCollection<T = any>(
     memoizedTargetRefOrQuery: (Query<DocumentData> & {__memo?: boolean}) | null | undefined,
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
-  type StateDataType = ResultItemType[] | null;
-
-  const [data, setData] = useState<StateDataType>(null);
+  
+  const [data, setData] = useState<ResultItemType[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
-    // 1. Guard estrictas para evitar suscripciones a la raíz o nulas
-    if (!memoizedTargetRefOrQuery) {
+    // Guard estricta: No suscribirse si el target es nulo o no es un objeto válido
+    if (!memoizedTargetRefOrQuery || typeof memoizedTargetRefOrQuery !== 'object') {
       setData(null);
       setIsLoading(false);
       setError(null);
       return;
     }
 
-    // 2. Validación básica del objeto de consulta
-    if (typeof memoizedTargetRefOrQuery !== 'object' || !('type' in memoizedTargetRefOrQuery)) {
-      console.warn("🚫 useCollection: Referencia o consulta de Firestore inválida", memoizedTargetRefOrQuery);
+    // Validación de tipo para asegurar que es un Query/CollectionReference de Firestore
+    if (!('type' in memoizedTargetRefOrQuery)) {
+      setData(null);
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
@@ -69,10 +69,17 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Extracción de ruta segura para depuración
+        // Determinación de ruta para el error contextual
         let path = "query-global";
         if ('path' in memoizedTargetRefOrQuery) {
           path = (memoizedTargetRefOrQuery as any).path;
+        } else {
+          // Intentar obtener el nombre de la colección del query interno si es posible
+          try {
+            path = (memoizedTargetRefOrQuery as any)._query?.path?.canonicalString() || "collection-group";
+          } catch (e) {
+            path = "collection-group";
+          }
         }
 
         const contextualError = new FirestorePermissionError({
@@ -84,7 +91,7 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
 
-        // Emitir error global para el listener
+        // Emitir error global para el listener de Firebase Studio
         errorEmitter.emit('permission-error', contextualError);
       }
     );
@@ -95,5 +102,6 @@ export function useCollection<T = any>(
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error('useCollection: Target was not properly memoized using useMemoFirebase. This will cause infinite loops.');
   }
+
   return { data, isLoading, error };
 }

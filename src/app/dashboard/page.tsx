@@ -26,7 +26,7 @@ type GroupedDebt = {
 };
 
 export default function Dashboard() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const [isAdminView, setIsAdminView] = useState(true);
   const [newGroupName, setNewGroupName] = useState("");
@@ -34,7 +34,7 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // 1. Grupos filtrados por membresía (Protegido contra undefined)
+  // 1. Grupos filtrados por membresía (Solo si el usuario está cargado)
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -44,7 +44,7 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
-  // 2. Mis deudas globales (Protegido contra undefined)
+  // 2. Mis deudas globales (Protegido contra renders sin UID)
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -115,7 +115,8 @@ export default function Dashboard() {
     toast({ title: "Enviado", description: "El administrador revisará tus pagos." });
   };
 
-  const loading = groupsLoading || debtsLoading;
+  // Estado de carga global basado en usuario y datos
+  const isGlobalLoading = isUserLoading || groupsLoading || debtsLoading;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -159,45 +160,55 @@ export default function Dashboard() {
               </DialogContent>
             </Dialog>
           </div>
-          {loading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div> : (
+          {isGlobalLoading ? (
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>
+          ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {adminGroups.map(g => (
-                <Link key={g.id} href={`/dashboard/groups/${g.id}`}>
-                  <Card className="hover:shadow-md transition-all">
-                    <CardHeader><Badge variant="outline" className="w-fit">{g.type}</Badge><CardTitle>{g.name}</CardTitle></CardHeader>
-                    <CardContent className="flex justify-between items-center text-sm"><span>{g.memberIds.length} Miembros</span><ChevronRight className="h-4 w-4" /></CardContent>
-                  </Card>
-                </Link>
-              ))}
+              {adminGroups.length === 0 ? (
+                <div className="col-span-full py-20 text-center border-dashed border-2 rounded-xl">
+                  <p className="text-muted-foreground">No eres administrador de ningún grupo.</p>
+                </div>
+              ) : (
+                adminGroups.map(g => (
+                  <Link key={g.id} href={`/dashboard/groups/${g.id}`}>
+                    <Card className="hover:shadow-md transition-all cursor-pointer">
+                      <CardHeader><Badge variant="outline" className="w-fit">{g.type}</Badge><CardTitle className="mt-2">{g.name}</CardTitle></CardHeader>
+                      <CardContent className="flex justify-between items-center text-sm"><span>{g.memberIds.length} Miembros</span><ChevronRight className="h-4 w-4" /></CardContent>
+                    </Card>
+                  </Link>
+                ))
+              )}
             </div>
           )}
         </div>
       ) : (
         <div className="space-y-6">
           <h2 className="text-xl font-headline font-semibold flex items-center gap-2"><Wallet className="h-5 w-5" /> Deudas Pendientes</h2>
-          {loading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div> : groupedDebts.length === 0 ? (
-            <Card className="p-20 text-center border-dashed border-2 bg-transparent"><CardTitle>¡Estás al día!</CardTitle></Card>
+          {isGlobalLoading ? (
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>
+          ) : groupedDebts.length === 0 ? (
+            <Card className="p-20 text-center border-dashed border-2 bg-transparent"><CardTitle className="text-muted-foreground font-headline">¡Estás al día!</CardTitle></Card>
           ) : (
             <Accordion type="single" collapsible className="space-y-4">
               {groupedDebts.map(item => (
-                <AccordionItem key={item.adminId} value={item.adminId}>
+                <AccordionItem key={item.adminId} value={item.adminId} className="border-none">
                   <Card className="overflow-hidden">
                     <AccordionTrigger className="px-6 hover:no-underline">
                       <div className="flex items-center gap-4 text-left w-full">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">{item.adminName[0]}</div>
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">{item.adminName[0]}</div>
                         <div className="flex-1"><p className="font-bold">{item.adminName}</p><p className="text-xs text-muted-foreground">{item.debts.length} deudas</p></div>
                         <p className="text-xl font-bold text-accent pr-4">${item.totalAmount.toFixed(2)}</p>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="bg-muted/5 p-0">
                       {item.debts.map(d => (
-                        <div key={d.id} className="flex justify-between p-4 px-8 border-t">
+                        <div key={d.id} className="flex justify-between p-4 px-8 border-t bg-white/50">
                           <div><p className="font-medium text-sm">{d.description}</p><Badge variant="secondary" className="text-[10px]">{d.groupName}</Badge></div>
                           <p className="font-bold">${d.amount.toFixed(2)}</p>
                         </div>
                       ))}
                       <div className="p-4 bg-white border-t flex justify-end">
-                        <Button className="bg-accent" onClick={() => handleSettleTotal(item.debts)}>Liquidar Total</Button>
+                        <Button className="bg-accent hover:bg-accent/90" onClick={() => handleSettleTotal(item.debts)}>Liquidar Total</Button>
                       </div>
                     </AccordionContent>
                   </Card>
