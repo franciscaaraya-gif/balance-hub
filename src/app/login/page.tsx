@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet } from "lucide-react";
+import { Wallet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -25,14 +25,10 @@ export default function Login() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: "¡Bienvenido de nuevo!", description: "Has iniciado sesión correctamente." });
+      toast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
       router.push("/dashboard");
     } catch (error: any) {
-      toast({ 
-        variant: "destructive", 
-        title: "Error de acceso", 
-        description: error.message 
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setLoading(false);
     }
@@ -50,14 +46,10 @@ export default function Login() {
         await createUserProfile(user.uid, user.email || "", user.displayName || "Usuario de Google");
       }
       
-      toast({ title: "¡Acceso exitoso!", description: `Bienvenido, ${user.displayName}` });
+      toast({ title: "Acceso con Google", description: `Hola, ${user.displayName}` });
       router.push("/dashboard");
     } catch (error: any) {
-      toast({ 
-        variant: "destructive", 
-        title: "Error con Google", 
-        description: error.message 
-      });
+      toast({ variant: "destructive", title: "Error con Google", description: error.message });
     } finally {
       setLoading(false);
     }
@@ -73,18 +65,22 @@ export default function Login() {
             </div>
           </div>
           <CardTitle className="text-3xl font-headline tracking-tight text-primary">Iniciar Sesión</CardTitle>
-          <CardDescription className="text-muted-foreground font-body">Gestiona tus deudas grupales de forma segura</CardDescription>
+          <CardDescription className="text-muted-foreground font-body">Accede a tu cuenta de BalanceHub</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Button 
             variant="outline" 
             type="button" 
-            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium shadow-sm" 
+            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium" 
             onClick={handleGoogleLogin}
             disabled={loading}
           >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="h-5 w-5" alt="Google" />
-            Continuar con Google
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+              <>
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="h-5 w-5" alt="Google" />
+                Continuar con Google
+              </>
+            )}
           </Button>
 
           <div className="relative">
@@ -92,48 +88,29 @@ export default function Login() {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">O usa tu correo</span>
+              <span className="bg-background px-2 text-muted-foreground">O con tu correo</span>
             </div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Correo Electrónico</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="juan@ejemplo.com" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                required 
-                className="bg-muted/30 border-none focus-visible:ring-primary"
-              />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                placeholder="••••••••" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-                className="bg-muted/30 border-none focus-visible:ring-primary"
-              />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 py-6 text-lg" disabled={loading}>
-              {loading ? "Autenticando..." : "Entrar"}
+            <Button type="submit" className="w-full bg-primary py-6 text-lg" disabled={loading}>
+              {loading ? "Entrando..." : "Entrar"}
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center flex-col space-y-2">
+        <CardFooter className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">
-            ¿No tienes cuenta?{" "}
-            <Link href="/register" className="text-accent font-semibold hover:underline">
-              Regístrate aquí
-            </Link>
+            ¿No tienes cuenta? <Link href="/register" className="text-accent font-semibold hover:underline">Regístrate</Link>
           </p>
-          <Link href="/" className="text-xs text-muted-foreground hover:underline">Volver al inicio</Link>
+          <Link href="/" className="text-xs text-muted-foreground hover:underline">Volver</Link>
         </CardFooter>
       </Card>
     </div>

@@ -25,24 +25,12 @@ export interface UseCollectionResult<T> {
   error: FirestoreError | Error | null; // Error object, or null.
 }
 
-/* Internal implementation of Query:
-  https://github.com/firebase/firebase-js-sdk/blob/c5f08a9bc5da0d2b0207802c972d53724ccef055/packages/firestore/src/lite-api/reference.ts#L143
-*/
-export interface InternalQuery extends Query<DocumentData> {
-  _query: {
-    path: {
-      canonicalString(): string;
-      toString(): string;
-    }
-  }
-}
-
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
  * Handles nullable references/queries.
  */
 export function useCollection<T = any>(
-    memoizedTargetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>) & {__memo?: boolean})  | null | undefined,
+    memoizedTargetRefOrQuery: (Query<DocumentData> & {__memo?: boolean}) | null | undefined,
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -52,7 +40,7 @@ export function useCollection<T = any>(
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
-    // 1. Strict null/undefined check before touching anything
+    // 1. Guard estrictas para evitar suscripciones a la raíz o nulas
     if (!memoizedTargetRefOrQuery) {
       setData(null);
       setIsLoading(false);
@@ -60,12 +48,9 @@ export function useCollection<T = any>(
       return;
     }
 
-    // 2. Structural validation to ensure it's a valid Firestore object
-    const isRef = 'path' in memoizedTargetRefOrQuery;
-    const isQuery = 'type' in memoizedTargetRefOrQuery;
-
-    if (!isRef && !isQuery) {
-      console.warn("🚫 useCollection: Invalid Firestore reference/query provided", memoizedTargetRefOrQuery);
+    // 2. Validación básica del objeto de consulta
+    if (typeof memoizedTargetRefOrQuery !== 'object' || !('type' in memoizedTargetRefOrQuery)) {
+      console.warn("🚫 useCollection: Referencia o consulta de Firestore inválida", memoizedTargetRefOrQuery);
       return;
     }
 
@@ -76,26 +61,18 @@ export function useCollection<T = any>(
       memoizedTargetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
         const results: ResultItemType[] = [];
-        for (const doc of snapshot.docs) {
+        snapshot.forEach((doc) => {
           results.push({ ...(doc.data() as T), id: doc.id });
-        }
+        });
         setData(results);
         setError(null);
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Safe path extraction for reporting
-        let path = "unknown";
-        try {
-          if ('path' in memoizedTargetRefOrQuery) {
-            path = (memoizedTargetRefOrQuery as CollectionReference).path;
-          } else {
-            // Internal access to path for collectionGroup queries
-            const internal = memoizedTargetRefOrQuery as unknown as InternalQuery;
-            path = internal._query?.path?.canonicalString() || "collection-group";
-          }
-        } catch (e) {
-          path = "invalid-path-extraction";
+        // Extracción de ruta segura para depuración
+        let path = "query-global";
+        if ('path' in memoizedTargetRefOrQuery) {
+          path = (memoizedTargetRefOrQuery as any).path;
         }
 
         const contextualError = new FirestorePermissionError({
@@ -107,7 +84,7 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
 
-        // trigger global error propagation
+        // Emitir error global para el listener
         errorEmitter.emit('permission-error', contextualError);
       }
     );

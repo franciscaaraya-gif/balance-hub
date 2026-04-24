@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet } from "lucide-react";
+import { Wallet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
@@ -28,14 +28,10 @@ export default function Register() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: name });
       await createUserProfile(userCredential.user.uid, email, name);
-      toast({ title: "¡Bienvenido a BalanceHub!", description: "Cuenta creada exitosamente." });
+      toast({ title: "¡Bienvenido!", description: "Cuenta creada con éxito." });
       router.push("/dashboard");
     } catch (error: any) {
-      toast({ 
-        variant: "destructive", 
-        title: "Error al registrar", 
-        description: error.message 
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setLoading(false);
     }
@@ -47,20 +43,14 @@ export default function Register() {
     try {
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
-      
       const profile = await getUserProfile(user.uid);
       if (!profile) {
         await createUserProfile(user.uid, user.email || "", user.displayName || "Usuario de Google");
       }
-      
-      toast({ title: "¡Bienvenido!", description: `Cuenta vinculada con éxito: ${user.displayName}` });
+      toast({ title: "Bienvenido", description: `Cuenta vinculada: ${user.displayName}` });
       router.push("/dashboard");
     } catch (error: any) {
-      toast({ 
-        variant: "destructive", 
-        title: "Error con Google", 
-        description: error.message 
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setLoading(false);
     }
@@ -76,18 +66,22 @@ export default function Register() {
             </div>
           </div>
           <CardTitle className="text-3xl font-headline tracking-tight text-primary">Crear Cuenta</CardTitle>
-          <CardDescription className="text-muted-foreground font-body">Únete a BalanceHub y empieza a gestionar deudas</CardDescription>
+          <CardDescription className="text-muted-foreground font-body">Únete a BalanceHub hoy mismo</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Button 
             variant="outline" 
             type="button" 
-            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium shadow-sm" 
+            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium" 
             onClick={handleGoogleLogin}
             disabled={loading}
           >
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="h-5 w-5" alt="Google" />
-            Registrarse con Google
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (
+              <>
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="h-5 w-5" alt="Google" />
+                Registrarse con Google
+              </>
+            )}
           </Button>
 
           <div className="relative">
@@ -102,50 +96,24 @@ export default function Register() {
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nombre Completo</Label>
-              <Input 
-                id="name" 
-                placeholder="Juan Pérez" 
-                value={name} 
-                onChange={(e) => setName(e.target.value)} 
-                required 
-                className="bg-muted/30 border-none focus-visible:ring-primary"
-              />
+              <Input id="name" placeholder="Juan Pérez" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Correo Electrónico</Label>
-              <Input 
-                id="email" 
-                type="email" 
-                placeholder="juan@ejemplo.com" 
-                value={email} 
-                onChange={(e) => setEmail(e.target.value)} 
-                required 
-                className="bg-muted/30 border-none focus-visible:ring-primary"
-              />
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Contraseña</Label>
-              <Input 
-                id="password" 
-                type="password" 
-                placeholder="••••••••" 
-                value={password} 
-                onChange={(e) => setPassword(e.target.value)} 
-                required 
-                className="bg-muted/30 border-none focus-visible:ring-primary"
-              />
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full bg-accent hover:bg-accent/90 py-6 text-lg" disabled={loading}>
-              {loading ? "Creando Cuenta..." : "Registrarse"}
+            <Button type="submit" className="w-full bg-accent py-6 text-lg" disabled={loading}>
+              {loading ? "Creando..." : "Registrarse"}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-muted-foreground">
-            ¿Ya tienes una cuenta?{" "}
-            <Link href="/login" className="text-primary font-semibold hover:underline">
-              Inicia sesión aquí
-            </Link>
+            ¿Ya tienes cuenta? <Link href="/login" className="text-primary font-semibold hover:underline">Inicia sesión</Link>
           </p>
         </CardFooter>
       </Card>
