@@ -2,42 +2,31 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Funciones de utilidad
+    // Función básica de autenticación
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Reglas para Perfiles de Usuario
+    // Perfiles de Usuario: El dueño puede escribir, cualquiera autenticado puede leer para ver nombres
     match /userProfiles/{userId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // Reglas para Grupos
+    // Grupos: Acceso si eres miembro. Admin puede todo.
     match /groups/{groupId} {
-      allow read: if isSignedIn() && (
-        resource.data.memberIds != null && 
+      allow read: if isSignedIn() && request.auth.uid in resource.data.memberIds;
+      allow create: if isSignedIn() && request.resource.data.adminId == request.auth.uid;
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.adminId || 
         request.auth.uid in resource.data.memberIds
       );
-      
-      allow create: if isSignedIn() && request.resource.data.adminId == request.auth.uid;
-      
-      allow update: if isSignedIn() && (
-        request.auth.uid == resource.data.adminId ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasAny(['memberIds', 'members', 'memberStatuses']))
-      );
-      
       allow delete: if isSignedIn() && request.auth.uid == resource.data.adminId;
     }
 
-    // REGLA GLOBAL PARA DEUDAS (Soporta collectionGroup y consultas anidadas)
-    // Para que una consulta de collectionGroup funcione, la regla debe ser simple
-    // y coincidir exactamente con los filtros aplicados en el cliente.
+    // REGLA GLOBAL PARA DEUDAS (Soporta collectionGroup)
+    // Esta regla debe ser simple para que el motor de Firestore pueda validarla en consultas globales.
     match /{path=**}/debts/{debtId} {
-      
-      // Permitir lectura si el usuario es el deudor O es miembro del grupo.
-      // Firestore validará la consulta si se filtra por debtorId == auth.uid
-      // o si se consulta dentro de un grupo donde el usuario es miembro.
       allow read: if isSignedIn() && (
         resource.data.debtorId == request.auth.uid ||
         request.auth.uid in resource.data.groupMemberIds

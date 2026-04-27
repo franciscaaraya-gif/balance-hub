@@ -21,12 +21,11 @@ export type WithId<T> = T & { id: string };
 export interface UseCollectionResult<T> {
   data: WithId<T>[] | null;
   isLoading: boolean;
-  error: FirestoreError | Error | null;
+  error: Error | null;
 }
 
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
- * Handles nullable references/queries and prevents subscription to root.
  */
 export function useCollection<T = any>(
     memoizedTargetRefOrQuery: (Query<DocumentData> & {__memo?: boolean}) | null | undefined,
@@ -35,23 +34,20 @@ export function useCollection<T = any>(
   
   const [data, setData] = useState<ResultItemType[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<FirestoreError | Error | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Guard estricta: No suscribirse si el target es nulo o no es un objeto válido
-    if (!memoizedTargetRefOrQuery || typeof memoizedTargetRefOrQuery !== 'object') {
+    // 1. Guard contra valores nulos o inválidos
+    if (!memoizedTargetRefOrQuery) {
       setData(null);
       setIsLoading(false);
       setError(null);
       return;
     }
 
-    // Validación estructural mínima
-    const hasQueryType = 'type' in memoizedTargetRefOrQuery;
-    if (!hasQueryType) {
-      setData(null);
-      setIsLoading(false);
-      setError(null);
+    // 2. Validación mínima de objeto Query de Firebase
+    if (typeof memoizedTargetRefOrQuery !== 'object' || !('type' in memoizedTargetRefOrQuery)) {
+      console.warn("🚫 useCollection: El objeto proporcionado no parece ser una consulta válida de Firestore.");
       return;
     }
 
@@ -70,15 +66,8 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Intentar obtener una ruta descriptiva para el error
-        let path = "collection-group-query";
-        try {
-          if ('path' in memoizedTargetRefOrQuery) {
-            path = (memoizedTargetRefOrQuery as any).path;
-          }
-        } catch (e) {
-          // Fallback silencioso
-        }
+        // Extraemos la ruta real si existe, o indicamos que es una consulta de grupo
+        const path = (memoizedTargetRefOrQuery as any).path || "collection-group";
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
@@ -89,7 +78,7 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
 
-        // Emitir error global para el listener
+        // Emitir error para el listener global
         errorEmitter.emit('permission-error', contextualError);
       }
     );
@@ -97,8 +86,9 @@ export function useCollection<T = any>(
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]);
 
+  // Verificación de memoización para evitar bucles infinitos
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
-    throw new Error('useCollection: Target was not properly memoized using useMemoFirebase. This will cause infinite loops.');
+    throw new Error('useCollection: Target was not properly memoized using useMemoFirebase.');
   }
 
   return { data, isLoading, error };
