@@ -9,7 +9,6 @@ service cloud.firestore {
 
     // Reglas para Perfiles de Usuario
     match /userProfiles/{userId} {
-      // Permitir leer perfiles si estás autenticado para ver nombres en listas
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
@@ -29,28 +28,26 @@ service cloud.firestore {
       );
       
       allow delete: if isSignedIn() && request.auth.uid == resource.data.adminId;
-
-      // Reglas para Deudas dentro de un grupo específico
-      match /debts/{debtId} {
-        // Permitir lectura si el usuario es miembro del grupo (usando campos denormalizados)
-        allow read: if isSignedIn() && (
-          resource.data.groupMemberIds != null && 
-          request.auth.uid in resource.data.groupMemberIds
-        );
-        allow create: if isSignedIn();
-        allow update: if isSignedIn();
-        allow delete: if isSignedIn() && request.auth.uid == resource.data.groupAdminId;
-      }
     }
 
-    // REGLA PARA CONSULTAS GLOBALES (collectionGroup)
-    // Se autoriza el listado global basándose en el debtorId o membresía de grupo
+    // REGLA GLOBAL PARA DEUDAS (Soporta collectionGroup y consultas anidadas)
+    // Usamos una única regla global para deudas para evitar conflictos de prioridad
     match /{path=**}/debts/{debtId} {
-      allow list: if isSignedIn() && (
-        (resource.data.debtorId != null && resource.data.debtorId == request.auth.uid) ||
+      // Permitir lectura si el usuario es el deudor O es miembro del grupo (denormalizado)
+      // Firestore permite la consulta si los filtros coinciden con alguna de estas condiciones
+      allow read: if isSignedIn() && (
+        resource.data.debtorId == request.auth.uid ||
         (resource.data.groupMemberIds != null && request.auth.uid in resource.data.groupMemberIds)
       );
-      allow get: if isSignedIn();
+      
+      allow create: if isSignedIn();
+      
+      allow update: if isSignedIn() && (
+        request.auth.uid == resource.data.groupAdminId ||
+        (resource.data.debtorId == request.auth.uid && request.resource.data.status == 'under_review')
+      );
+      
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.groupAdminId;
     }
   }
 }

@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Loader2 } from "lucide-react";
+import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -34,7 +34,7 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // 1. Grupos filtrados por membresía (Solo si el usuario está cargado)
+  // 1. Grupos del usuario
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -44,7 +44,8 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
-  // 2. Mis deudas globales (Protegido contra renders sin UID)
+  // 2. Mis deudas globales (collectionGroup)
+  // IMPORTANTE: El filtro coincide exactamente con la regla de seguridad simplificada
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -64,6 +65,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const resolveGroupedDebts = async () => {
+      // Solo procedemos si tenemos deudas y grupos cargados
       if (!myDebts || !allGroups || myDebts.length === 0) {
         setGroupedDebts([]);
         return;
@@ -115,7 +117,6 @@ export default function Dashboard() {
     toast({ title: "Enviado", description: "El administrador revisará tus pagos." });
   };
 
-  // Estado de carga global basado en usuario y datos
   const isGlobalLoading = isUserLoading || groupsLoading || debtsLoading;
 
   return (
