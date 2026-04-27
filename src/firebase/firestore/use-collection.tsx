@@ -46,9 +46,9 @@ export function useCollection<T = any>(
       return;
     }
 
-    // Validación estructural para asegurar que es un Query/CollectionReference de Firestore
-    const isValidFirestoreRef = 'type' in memoizedTargetRefOrQuery;
-    if (!isValidFirestoreRef) {
+    // Validación estructural mínima
+    const hasQueryType = 'type' in memoizedTargetRefOrQuery;
+    if (!hasQueryType) {
       setData(null);
       setIsLoading(false);
       setError(null);
@@ -70,9 +70,15 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Determinación de ruta para el error contextual
-        // Si no tiene path (collectionGroup), usamos un identificador descriptivo
-        const path = (memoizedTargetRefOrQuery as any).path || "collection-group-query";
+        // Intentar obtener una ruta descriptiva para el error
+        let path = "collection-group-query";
+        try {
+          if ('path' in memoizedTargetRefOrQuery) {
+            path = (memoizedTargetRefOrQuery as any).path;
+          }
+        } catch (e) {
+          // Fallback silencioso
+        }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
@@ -83,7 +89,7 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
 
-        // Emitir error global para el listener de Firebase Studio
+        // Emitir error global para el listener
         errorEmitter.emit('permission-error', contextualError);
       }
     );
