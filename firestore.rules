@@ -1,10 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // PASO 1: Permitimos todo a usuarios autenticados para limpiar el error de permisos
-    // Esto incluye colecciones raíz y cualquier nivel de subcolecciones (collectionGroup)
+    // MODO DESARROLLO: Permitimos todo para diagnosticar si el problema es de reglas o de estructura
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
   }
 }

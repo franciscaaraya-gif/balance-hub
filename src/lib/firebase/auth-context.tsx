@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
@@ -22,12 +21,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // Establecemos el usuario inmediatamente para desbloquear el estado 'loading'
+      setUser(currentUser);
+      
       if (currentUser) {
+        // La carga del perfil no debe bloquear el estado inicial de la app
         try {
-          // Intentar obtener el perfil
           let p = await getUserProfile(currentUser.uid);
-          
-          // Si no existe (primer login con Google por ejemplo), crearlo
           if (!p) {
             await createUserProfile(
               currentUser.uid, 
@@ -36,17 +36,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             );
             p = await getUserProfile(currentUser.uid);
           }
-          
           setProfile(p);
-          setUser(currentUser);
         } catch (error) {
           console.error("Error al sincronizar perfil:", error);
-          setUser(currentUser); // Al menos mantenemos la sesión de auth
         }
       } else {
-        setUser(null);
         setProfile(null);
       }
+      
+      // Una vez que Firebase Auth nos dice si hay alguien o no, dejamos de cargar
       setLoading(false);
     });
 

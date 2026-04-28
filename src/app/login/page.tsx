@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -22,7 +21,7 @@ export default function Login() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Si ya está logueado, redirigir al dashboard
+  // Redirigir si ya está logueado
   useEffect(() => {
     if (user && !authLoading) {
       router.push("/dashboard");
@@ -45,7 +44,6 @@ export default function Login() {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
     try {
-      // Usamos redirect para evitar bloqueos de popups
       await signInWithRedirect(auth, provider);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
@@ -53,10 +51,23 @@ export default function Login() {
     }
   };
 
-  if (authLoading || (user && !authLoading)) {
+  // Solo mostramos el spinner si estamos cargando el estado inicial de auth
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Si ya hay un usuario, evitamos renderizar el formulario mientras ocurre la redirección del useEffect
+  if (user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="text-muted-foreground animate-pulse">Redirigiendo al panel...</p>
+        </div>
       </div>
     );
   }
