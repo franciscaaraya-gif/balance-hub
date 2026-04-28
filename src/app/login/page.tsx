@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -11,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet, Loader2 } from "lucide-react";
+import { Wallet, Loader2, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
@@ -19,8 +18,17 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showReset, setShowReset] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  // Si después de 5 segundos sigue cargando, mostramos un botón de reset
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (isUserLoading) setShowReset(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [isUserLoading]);
 
   useEffect(() => {
     if (user && !isUserLoading) {
@@ -51,21 +59,21 @@ export default function Login() {
     }
   };
 
-  if (isUserLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const forceReset = () => {
+    window.location.reload();
+  };
 
-  if (user) {
+  if (isUserLoading && !user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground animate-pulse">Redirigiendo al panel...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground animate-pulse">Cargando BalanceHub...</p>
+        {showReset && (
+          <Button variant="outline" onClick={forceReset} className="gap-2 mt-4">
+            <RefreshCcw className="h-4 w-4" />
+            Recargar página
+          </Button>
+        )}
       </div>
     );
   }
@@ -121,11 +129,11 @@ export default function Login() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col gap-2">
+        <CardFooter className="flex flex-col gap-2 text-center">
           <p className="text-sm text-muted-foreground">
             ¿No tienes cuenta? <Link href="/register" className="text-accent font-semibold hover:underline">Regístrate</Link>
           </p>
-          <Link href="/" className="text-xs text-muted-foreground hover:underline">Volver</Link>
+          <Link href="/" className="text-xs text-muted-foreground hover:underline">Volver al inicio</Link>
         </CardFooter>
       </Card>
     </div>

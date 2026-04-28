@@ -1,29 +1,21 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { createGroup, updateDebtStatusInGroup, getUserProfile } from "@/lib/firebase/store";
-import { Group, Debt, UserProfile } from "@/lib/types";
+import { createGroup } from "@/lib/firebase/store";
+import { Group } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { collection, query, where, collectionGroup, limit } from "firebase/firestore";
-
-type GroupedDebt = {
-  adminName: string;
-  adminId: string;
-  totalAmount: number;
-  debts: (Debt & { groupName: string })[];
-};
+import { collection, query, where } from "firebase/firestore";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -34,7 +26,7 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // 1. Grupos del usuario (solo si el usuario existe)
+  // Consultamos solo los grupos para simplificar y evitar errores de permisos de collectionGroup
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -44,61 +36,10 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
-  // 2. Mis deudas globales (solo si el usuario existe)
-  const debtsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
-    return query(
-      collectionGroup(firestore, 'debts'), 
-      where('debtorId', '==', user.uid),
-      limit(50)
-    );
-  }, [firestore, user?.uid]);
-  const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
-
   const adminGroups = useMemo(() => {
     if (!allGroups || !user) return [];
     return allGroups.filter(g => g.adminId === user.uid);
   }, [allGroups, user]);
-
-  const [groupedDebts, setGroupedDebts] = useState<GroupedDebt[]>([]);
-
-  useEffect(() => {
-    const resolveGroupedDebts = async () => {
-      if (!myDebts || !allGroups || myDebts.length === 0) {
-        setGroupedDebts([]);
-        return;
-      }
-
-      const groupsMap: Record<string, GroupedDebt> = {};
-      const adminsCache: Record<string, string> = {};
-
-      for (const debt of myDebts) {
-        if (debt.status === 'paid') continue;
-        const group = allGroups.find(g => g.id === debt.groupId);
-        if (!group) continue;
-
-        let adminName = adminsCache[group.adminId];
-        if (!adminName) {
-          try {
-            const profile = await getUserProfile(group.adminId);
-            adminName = profile?.displayName || "Administrador";
-            adminsCache[group.adminId] = adminName;
-          } catch (e) {
-            adminName = "Administrador";
-          }
-        }
-
-        if (!groupsMap[group.adminId]) {
-          groupsMap[group.adminId] = { adminName, adminId: group.adminId, totalAmount: 0, debts: [] };
-        }
-        groupsMap[group.adminId].totalAmount += debt.amount;
-        groupsMap[group.adminId].debts.push({ ...debt, groupName: group.name });
-      }
-      setGroupedDebts(Object.values(groupsMap));
-    };
-
-    resolveGroupedDebts();
-  }, [myDebts, allGroups]);
 
   const handleCreateGroup = () => {
     if (!newGroupName || !user) return;
@@ -108,14 +49,7 @@ export default function Dashboard() {
     setOpen(false);
   };
 
-  const handleSettleTotal = (adminDebts: (Debt & { groupName: string })[]) => {
-    adminDebts.filter(d => d.status === 'pending').forEach(debt => {
-      updateDebtStatusInGroup(debt.groupId, debt.id, 'under_review');
-    });
-    toast({ title: "Enviado", description: "El administrador revisará tus pagos." });
-  };
-
-  const isGlobalLoading = isUserLoading || groupsLoading || debtsLoading;
+  const isGlobalLoading = isUserLoading || groupsLoading;
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
@@ -183,38 +117,9 @@ export default function Dashboard() {
       ) : (
         <div className="space-y-6">
           <h2 className="text-xl font-headline font-semibold flex items-center gap-2"><Wallet className="h-5 w-5" /> Deudas Pendientes</h2>
-          {isGlobalLoading ? (
-            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>
-          ) : groupedDebts.length === 0 ? (
-            <Card className="p-20 text-center border-dashed border-2 bg-transparent"><CardTitle className="text-muted-foreground font-headline">¡Estás al día!</CardTitle></Card>
-          ) : (
-            <Accordion type="single" collapsible className="space-y-4">
-              {groupedDebts.map(item => (
-                <AccordionItem key={item.adminId} value={item.adminId} className="border-none">
-                  <Card className="overflow-hidden">
-                    <AccordionTrigger className="px-6 hover:no-underline">
-                      <div className="flex items-center gap-4 text-left w-full">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">{item.adminName[0]}</div>
-                        <div className="flex-1"><p className="font-bold">{item.adminName}</p><p className="text-xs text-muted-foreground">{item.debts.length} deudas</p></div>
-                        <p className="text-xl font-bold text-accent pr-4">${item.totalAmount.toFixed(2)}</p>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="bg-muted/5 p-0">
-                      {item.debts.map(d => (
-                        <div key={d.id} className="flex justify-between p-4 px-8 border-t bg-white/50">
-                          <div><p className="font-medium text-sm">{d.description}</p><Badge variant="secondary" className="text-[10px]">{d.groupName}</Badge></div>
-                          <p className="font-bold">${d.amount.toFixed(2)}</p>
-                        </div>
-                      ))}
-                      <div className="p-4 bg-white border-t flex justify-end">
-                        <Button className="bg-accent hover:bg-accent/90" onClick={() => handleSettleTotal(item.debts)}>Liquidar Total</Button>
-                      </div>
-                    </AccordionContent>
-                  </Card>
-                </AccordionItem>
-              ))}
-            </Accordion>
-          )}
+          <Card className="p-20 text-center border-dashed border-2 bg-transparent">
+            <CardTitle className="text-muted-foreground font-headline">Selecciona un grupo para ver tus deudas detalladas</CardTitle>
+          </Card>
         </div>
       )}
     </div>
