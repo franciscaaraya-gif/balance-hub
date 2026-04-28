@@ -1,7 +1,8 @@
+
 "use client";
 
-import { useState } from "react";
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import { useState, useEffect } from "react";
+import { signInWithEmailAndPassword, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { createUserProfile, getUserProfile } from "@/lib/firebase/store";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,29 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          setLoading(true);
+          const user = result.user;
+          const profile = await getUserProfile(user.uid);
+          if (!profile) {
+            await createUserProfile(user.uid, user.email || "", user.displayName || "Usuario de Google");
+          }
+          toast({ title: "Acceso con Google", description: `Hola, ${user.displayName}` });
+          router.push("/dashboard");
+        }
+      } catch (error: any) {
+        toast({ variant: "destructive", title: "Error con Google", description: error.message });
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkRedirectResult();
+  }, [router, toast]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,19 +62,9 @@ export default function Login() {
     setLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      const profile = await getUserProfile(user.uid);
-      if (!profile) {
-        await createUserProfile(user.uid, user.email || "", user.displayName || "Usuario de Google");
-      }
-      
-      toast({ title: "Acceso con Google", description: `Hola, ${user.displayName}` });
-      router.push("/dashboard");
+      await signInWithRedirect(auth, provider);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
-    } finally {
       setLoading(false);
     }
   };
