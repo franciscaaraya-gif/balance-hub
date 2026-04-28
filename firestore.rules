@@ -1,8 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // REGLA NUCLEAR: Permitimos lectura y escritura a cualquier usuario autenticado
-    // en cualquier parte de la base de datos, incluyendo subcolecciones (collectionGroup).
+    // PASO 1: Permitimos todo a usuarios autenticados para limpiar el error de permisos
+    // Esto incluye colecciones raíz y cualquier nivel de subcolecciones (collectionGroup)
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

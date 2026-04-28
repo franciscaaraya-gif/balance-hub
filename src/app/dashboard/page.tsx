@@ -34,7 +34,7 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // 1. Grupos del usuario
+  // 1. Grupos del usuario (solo si el usuario existe)
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -44,14 +44,13 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: allGroups, isLoading: groupsLoading } = useCollection<Group>(groupsQuery);
 
-  // 2. Mis deudas globales (collectionGroup)
-  // IMPORTANTE: El filtro coincide exactamente con la regla de seguridad simplificada
+  // 2. Mis deudas globales (solo si el usuario existe)
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collectionGroup(firestore, 'debts'), 
       where('debtorId', '==', user.uid),
-      limit(100)
+      limit(50)
     );
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
@@ -65,7 +64,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     const resolveGroupedDebts = async () => {
-      // Solo procedemos si tenemos deudas y grupos cargados
       if (!myDebts || !allGroups || myDebts.length === 0) {
         setGroupedDebts([]);
         return;
