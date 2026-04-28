@@ -1,9 +1,10 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
-import { useAuth } from "@/lib/firebase/auth-context";
+import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -14,19 +15,18 @@ import { Wallet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isUserLoading } = useUser();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
 
-  // Redirigir si ya está logueado
   useEffect(() => {
-    if (user && !authLoading) {
+    if (user && !isUserLoading) {
       router.push("/dashboard");
     }
-  }, [user, authLoading, router]);
+  }, [user, isUserLoading, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,8 +51,7 @@ export default function Login() {
     }
   };
 
-  // Solo mostramos el spinner si estamos cargando el estado inicial de auth
-  if (authLoading) {
+  if (isUserLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -60,7 +59,6 @@ export default function Login() {
     );
   }
 
-  // Si ya hay un usuario, evitamos renderizar el formulario mientras ocurre la redirección del useEffect
   if (user) {
     return (
       <div className="flex items-center justify-center min-h-screen">

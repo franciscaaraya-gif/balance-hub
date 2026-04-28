@@ -1,29 +1,30 @@
+
 "use client";
 
-import { AuthProvider, useAuth } from "@/lib/firebase/auth-context";
+import { useUser } from "@/firebase";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { Wallet, LayoutDashboard, PlusCircle, LogOut, Settings } from "lucide-react";
+import { Wallet, LayoutDashboard, LogOut, Settings, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase/config";
 import { signOut } from "firebase/auth";
 
-function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const { user, isUserLoading } = useUser();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!isUserLoading && !user) {
       router.push("/login");
     }
-  }, [user, loading, router]);
+  }, [user, isUserLoading, router]);
 
-  if (loading || !user) {
+  if (isUserLoading || !user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -34,8 +35,8 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
   };
 
   const navItems = [
-    { name: 'Groups', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+    { name: 'Grupos', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Ajustes', href: '/dashboard/settings', icon: Settings },
   ];
 
   return (
@@ -80,7 +81,7 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
             onClick={handleLogout}
           >
             <LogOut className="h-5 w-5" />
-            Logout
+            Cerrar Sesión
           </Button>
         </div>
       </aside>
@@ -101,13 +102,5 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
         </div>
       </main>
     </div>
-  );
-}
-
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <DashboardLayoutContent>{children}</DashboardLayoutContent>
-    </AuthProvider>
   );
 }

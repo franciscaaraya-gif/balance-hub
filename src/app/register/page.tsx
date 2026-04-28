@@ -4,8 +4,9 @@
 import { useState, useEffect } from "react";
 import { createUserWithEmailAndPassword, updateProfile, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
-import { useAuth } from "@/lib/firebase/auth-context";
+import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
+import { createUserProfile } from "@/lib/firebase/store";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { Wallet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Register() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, isUserLoading } = useUser();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -23,12 +24,11 @@ export default function Register() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Redirigir si ya está logueado
   useEffect(() => {
-    if (user && !authLoading) {
+    if (user && !isUserLoading) {
       router.push("/dashboard");
     }
-  }, [user, authLoading, router]);
+  }, [user, isUserLoading, router]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +36,7 @@ export default function Register() {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await updateProfile(userCredential.user, { displayName: name });
+      await createUserProfile(userCredential.user.uid, email, name);
       toast({ title: "¡Bienvenido!", description: "Cuenta creada con éxito." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -54,7 +55,7 @@ export default function Register() {
     }
   };
 
-  if (authLoading || (user && !authLoading)) {
+  if (isUserLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
