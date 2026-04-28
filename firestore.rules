@@ -1,15 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // REGLA CRÍTICA PARA collectionGroup("debts")
-    // Firestore requiere que el nombre de la colección esté explícito en un patrón recursivo
-    match /{path=**}/debts/{debtId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Regla para el resto de la base de datos (perfiles, grupos, etc.)
-    match /{document=**} {
+    // REGLA NUCLEAR: Permite cualquier operación a usuarios autenticados.
+    // El comodín {path=**} es fundamental para que collectionGroup funcione.
+    match /{path=**} {
       allow read, write: if request.auth != null;
     }
   }

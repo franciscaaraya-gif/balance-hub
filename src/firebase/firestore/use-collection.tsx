@@ -54,19 +54,29 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Obtenemos la ruta si existe (consultas estándar) o una etiqueta para consultas de grupo
-        const path = (memoizedTargetRefOrQuery as any).path || "collection-group";
+        // En consultas de collectionGroup, la ruta no es accesible directamente.
+        // Intentamos obtener una descripción útil para el reporte de error.
+        let pathLabel = 'query';
+        try {
+          if ('path' in memoizedTargetRefOrQuery) {
+            pathLabel = (memoizedTargetRefOrQuery as any).path;
+          } else {
+            // Para objetos Query, intentamos identificar si es un collectionGroup
+            pathLabel = (memoizedTargetRefOrQuery as any)._query?.path?.canonicalString() || 'collection-group';
+          }
+        } catch (e) {
+          pathLabel = 'collection-group';
+        }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: path,
+          path: pathLabel,
         });
 
         setError(contextualError);
         setData(null);
         setIsLoading(false);
         
-        // Emitimos el error para que el listener global lo capture y lo muestre
         errorEmitter.emit('permission-error', contextualError);
       }
     );
