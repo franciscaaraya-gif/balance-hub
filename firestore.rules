@@ -1,8 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // REGLAS DE DEPURACIÓN: Acceso total para cualquier usuario autenticado
-    // Esto nos permitirá confirmar si el error es de permisos o estructural
+    
+    // REGLA CRÍTICA PARA collectionGroup("debts")
+    // Firestore requiere que el nombre de la colección esté explícito en un patrón recursivo
+    match /{path=**}/debts/{debtId} {
+      allow read, write: if request.auth != null;
+    }
+
+    // Regla para el resto de la base de datos (perfiles, grupos, etc.)
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

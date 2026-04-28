@@ -19,6 +19,9 @@ export interface UseCollectionResult<T> {
   error: Error | null;
 }
 
+/**
+ * Hook to subscribe to a Firestore collection or query in real-time.
+ */
 export function useCollection<T = any>(
     memoizedTargetRefOrQuery: (Query<DocumentData> & {__memo?: boolean}) | null | undefined,
 ): UseCollectionResult<T> {
@@ -51,7 +54,7 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Obtenemos la ruta real si existe, o indicamos que es una consulta de grupo
+        // Obtenemos la ruta si existe (consultas estándar) o una etiqueta para consultas de grupo
         const path = (memoizedTargetRefOrQuery as any).path || "collection-group";
 
         const contextualError = new FirestorePermissionError({
@@ -62,6 +65,8 @@ export function useCollection<T = any>(
         setError(contextualError);
         setData(null);
         setIsLoading(false);
+        
+        // Emitimos el error para que el listener global lo capture y lo muestre
         errorEmitter.emit('permission-error', contextualError);
       }
     );
