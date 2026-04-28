@@ -16,7 +16,7 @@ import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOu
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
 import { Textarea } from "@/components/ui/textarea";
-import { doc, collection, query, orderBy, where, limit } from "firebase/firestore";
+import { doc, collection, query, where } from "firebase/firestore";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -31,7 +31,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isLeaving, setIsLeaving] = useState(false);
   
-  // Formularios
   const [debtAmount, setDebtAmount] = useState("");
   const [debtDescription, setDebtDescription] = useState("");
   const [debtorId, setDebtorId] = useState("");
@@ -41,22 +40,18 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const [members, setMembers] = useState<UserProfile[]>([]);
 
-  // Hooks de tiempo real
   const groupRef = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
     return doc(firestore, 'groups', params.id);
   }, [firestore, params.id]);
   const { data: group, isLoading: groupLoading } = useDoc<Group>(groupRef);
 
+  // Simplificamos la consulta eliminando orderBy para evitar problemas de índices compuestos inicialmente
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
-    // IMPORTANTE: Aseguramos que la consulta esté bien formada y sea válida
-    // Filtramos por membresía para que las Security Rules aprueben la lectura
     return query(
       collection(firestore, 'groups', params.id, 'debts'), 
-      where('groupMemberIds', 'array-contains', user.uid),
-      orderBy('createdAt', 'desc'),
-      limit(100)
+      where('groupMemberIds', 'array-contains', user.uid)
     );
   }, [firestore, params.id, user?.uid]);
   const { data: debts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);

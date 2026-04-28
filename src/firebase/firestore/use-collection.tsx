@@ -32,7 +32,6 @@ export function useCollection<T = any>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // Si no hay query, reseteamos y salimos. No intentamos suscribirnos.
     if (!memoizedTargetRefOrQuery) {
       setData(null);
       setIsLoading(false);
@@ -55,8 +54,8 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Diagnosticamos la ruta real si es posible, o indicamos que es una Query anónima
-        const path = (memoizedTargetRefOrQuery as any).path || "dynamic-query";
+        // Intentamos obtener información de la ruta para el diagnóstico
+        const path = (memoizedTargetRefOrQuery as any).path || "query-result";
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
@@ -67,7 +66,6 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
         
-        // Emitimos el error para que el listener global lo capture
         errorEmitter.emit('permission-error', contextualError);
       }
     );
@@ -75,7 +73,6 @@ export function useCollection<T = any>(
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]);
 
-  // Validación de memoización obligatoria
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error('useCollection: Target was not properly memoized using useMemoFirebase.');
   }

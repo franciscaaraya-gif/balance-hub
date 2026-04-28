@@ -1,8 +1,22 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regla nuclear: permitir todo a cualquier usuario autenticado
-    // Esto descarta problemas de permisos mientras depuramos el flujo
+    // Reglas para perfiles de usuario
+    match /userProfiles/{userId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Reglas para grupos
+    match /groups/{groupId} {
+      allow read, write: if request.auth != null;
+      
+      // Reglas para deudas (subcolección)
+      match /debts/{debtId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Regla de respaldo para cualquier otra ruta (incluyendo consultas globales)
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
