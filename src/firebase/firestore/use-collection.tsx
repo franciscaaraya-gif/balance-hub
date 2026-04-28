@@ -37,17 +37,11 @@ export function useCollection<T = any>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // 1. Guard contra valores nulos o inválidos
+    // 1. Guard contra valores nulos
     if (!memoizedTargetRefOrQuery) {
       setData(null);
       setIsLoading(false);
       setError(null);
-      return;
-    }
-
-    // 2. Validación mínima de objeto Query de Firebase
-    if (typeof memoizedTargetRefOrQuery !== 'object' || !('type' in memoizedTargetRefOrQuery)) {
-      console.warn("🚫 useCollection: El objeto proporcionado no parece ser una consulta válida de Firestore.");
       return;
     }
 
@@ -66,8 +60,8 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Extraemos la ruta real si existe, o indicamos que es una consulta de grupo
-        const path = (memoizedTargetRefOrQuery as any).path || "collection-group";
+        // Intentamos obtener la ruta si está disponible en el objeto
+        const path = (memoizedTargetRefOrQuery as any).path || "collection-group-query";
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',

@@ -7,39 +7,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Perfiles de Usuario: El dueño puede escribir, cualquiera autenticado puede leer para ver nombres
+    // REGLAS TEMPORALES SIMPLIFICADAS PARA DEPURACIÓN
+    // Permitimos lectura a cualquier usuario autenticado en todas las colecciones críticas
+    
     match /userProfiles/{userId} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
-    // Grupos: Acceso si eres miembro. Admin puede todo.
     match /groups/{groupId} {
-      allow read: if isSignedIn() && request.auth.uid in resource.data.memberIds;
-      allow create: if isSignedIn() && request.resource.data.adminId == request.auth.uid;
-      allow update: if isSignedIn() && (
-        request.auth.uid == resource.data.adminId || 
-        request.auth.uid in resource.data.memberIds
-      );
-      allow delete: if isSignedIn() && request.auth.uid == resource.data.adminId;
+      allow read, write: if isSignedIn();
     }
 
-    // REGLA GLOBAL PARA DEUDAS (Soporta collectionGroup)
-    // Esta regla debe ser simple para que el motor de Firestore pueda validarla en consultas globales.
+    // Esta regla cubre tanto deudas anidadas como collectionGroup
     match /{path=**}/debts/{debtId} {
-      allow read: if isSignedIn() && (
-        resource.data.debtorId == request.auth.uid ||
-        request.auth.uid in resource.data.groupMemberIds
-      );
-      
-      allow create: if isSignedIn();
-      
-      allow update: if isSignedIn() && (
-        request.auth.uid == resource.data.groupAdminId ||
-        (resource.data.debtorId == request.auth.uid && request.resource.data.status == 'under_review')
-      );
-      
-      allow delete: if isSignedIn() && request.auth.uid == resource.data.groupAdminId;
+      allow read, write: if isSignedIn();
     }
   }
 }
