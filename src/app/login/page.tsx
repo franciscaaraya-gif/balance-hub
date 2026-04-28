@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signInWithEmailAndPassword, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wallet, Loader2, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { createUserProfile } from "@/lib/firebase/store";
 
 export default function Login() {
   const { user, isUserLoading } = useUser();
@@ -22,7 +23,6 @@ export default function Login() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Si después de 5 segundos sigue cargando, mostramos un botón de reset
   useEffect(() => {
     const timer = setTimeout(() => {
       if (isUserLoading) setShowReset(true);
@@ -52,9 +52,27 @@ export default function Login() {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      // Aseguramos que el perfil exista en Firestore al entrar por Google
+      if (result.user) {
+        await createUserProfile(
+          result.user.uid, 
+          result.user.email || "", 
+          result.user.displayName || "Usuario de Google"
+        );
+      }
+      toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error con Google", description: error.message });
+      console.error(error);
+      if (error.code === 'auth/popup-blocked') {
+        toast({ 
+          variant: "destructive", 
+          title: "Popup Bloqueado", 
+          description: "Por favor, permite las ventanas emergentes para este sitio." 
+        });
+      } else {
+        toast({ variant: "destructive", title: "Error con Google", description: error.message });
+      }
       setIsSubmitting(false);
     }
   };

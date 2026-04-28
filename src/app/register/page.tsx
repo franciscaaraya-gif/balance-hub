@@ -1,8 +1,7 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
-import { createUserWithEmailAndPassword, updateProfile, signInWithRedirect, GoogleAuthProvider } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -48,8 +47,17 @@ export default function Register() {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
     try {
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      if (result.user) {
+        await createUserProfile(
+          result.user.uid, 
+          result.user.email || "", 
+          result.user.displayName || "Usuario de Google"
+        );
+      }
+      toast({ title: "¡Bienvenido!", description: "Cuenta creada con Google." });
     } catch (error: any) {
+      console.error(error);
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
       setIsSubmitting(false);
     }
