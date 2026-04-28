@@ -1,27 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Función básica de autenticación
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    // REGLAS TEMPORALES SIMPLIFICADAS PARA DEPURACIÓN
-    // Permitimos lectura a cualquier usuario autenticado en todas las colecciones críticas
-    
-    match /userProfiles/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && request.auth.uid == userId;
-    }
-
-    match /groups/{groupId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // Esta regla cubre tanto deudas anidadas como collectionGroup
-    match /{path=**}/debts/{debtId} {
-      allow read, write: if isSignedIn();
+    // REGLAS DE DEPURACIÓN: Acceso total para cualquier usuario autenticado
+    // Esto nos permitirá confirmar si el error es de permisos o estructural
+    match /{document=**} {
+      allow read, write: if request.auth != null;
     }
   }
 }

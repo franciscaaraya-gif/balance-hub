@@ -11,22 +11,14 @@ import {
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-/** Utility type to add an 'id' field to a given type T. */
 export type WithId<T> = T & { id: string };
 
-/**
- * Interface for the return value of the useCollection hook.
- * @template T Type of the document data.
- */
 export interface UseCollectionResult<T> {
   data: WithId<T>[] | null;
   isLoading: boolean;
   error: Error | null;
 }
 
-/**
- * React hook to subscribe to a Firestore collection or query in real-time.
- */
 export function useCollection<T = any>(
     memoizedTargetRefOrQuery: (Query<DocumentData> & {__memo?: boolean}) | null | undefined,
 ): UseCollectionResult<T> {
@@ -37,7 +29,6 @@ export function useCollection<T = any>(
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // 1. Guard contra valores nulos
     if (!memoizedTargetRefOrQuery) {
       setData(null);
       setIsLoading(false);
@@ -60,8 +51,8 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Intentamos obtener la ruta si está disponible en el objeto
-        const path = (memoizedTargetRefOrQuery as any).path || "collection-group-query";
+        // Obtenemos la ruta real si existe, o indicamos que es una consulta de grupo
+        const path = (memoizedTargetRefOrQuery as any).path || "collection-group";
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
@@ -71,8 +62,6 @@ export function useCollection<T = any>(
         setError(contextualError);
         setData(null);
         setIsLoading(false);
-
-        // Emitir error para el listener global
         errorEmitter.emit('permission-error', contextualError);
       }
     );
@@ -80,7 +69,6 @@ export function useCollection<T = any>(
     return () => unsubscribe();
   }, [memoizedTargetRefOrQuery]);
 
-  // Verificación de memoización para evitar bucles infinitos
   if(memoizedTargetRefOrQuery && !memoizedTargetRefOrQuery.__memo) {
     throw new Error('useCollection: Target was not properly memoized using useMemoFirebase.');
   }
