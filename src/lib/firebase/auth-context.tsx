@@ -1,9 +1,10 @@
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "./config";
-import { getUserProfile } from "./store";
+import { getUserProfile, createUserProfile } from "./store";
 import { UserProfile } from "../types";
 
 interface AuthContextType {
@@ -20,12 +21,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
-      if (user) {
-        const p = await getUserProfile(user.uid);
-        setProfile(p);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        try {
+          // Intentar obtener el perfil
+          let p = await getUserProfile(currentUser.uid);
+          
+          // Si no existe (primer login con Google por ejemplo), crearlo
+          if (!p) {
+            await createUserProfile(
+              currentUser.uid, 
+              currentUser.email || "", 
+              currentUser.displayName || "Usuario"
+            );
+            p = await getUserProfile(currentUser.uid);
+          }
+          
+          setProfile(p);
+          setUser(currentUser);
+        } catch (error) {
+          console.error("Error al sincronizar perfil:", error);
+          setUser(currentUser); // Al menos mantenemos la sesión de auth
+        }
       } else {
+        setUser(null);
         setProfile(null);
       }
       setLoading(false);
@@ -36,7 +55,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };
