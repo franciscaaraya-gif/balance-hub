@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus, FileUp, Users, DollarSign, Settings, TrendingUp, HandCoins } from "lucide-react";
+import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus, FileUp, Users, DollarSign, Settings, TrendingUp, HandCoins, ReceiptText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
 import { Textarea } from "@/components/ui/textarea";
