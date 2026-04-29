@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useMemo } from "react";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { getGroupMembersDetails, addDebt, updateDebtStatusInGroup, requestLeaveGroup, confirmLeaveGroup, updateGroupAmount } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile } from "@/lib/types";
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus, FileUp, Users, DollarSign, Settings } from "lucide-react";
+import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, Clock, LogOut, UserMinus, FileUp, Users, DollarSign, Settings, TrendingUp, HandCoins } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generateDebtSummary, DebtSummaryInput } from "@/ai/flows/ai-debt-summary-generation";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,13 +49,20 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const { data: group, isLoading: groupLoading } = useDoc<Group>(groupRef);
 
   const debtsQuery = useMemoFirebase(() => {
-    if (!firestore || !params.id || !user?.uid) return null;
-    return query(
-      collection(firestore, 'groups', params.id, 'debts'), 
-      where('groupMemberIds', 'array-contains', user.uid)
-    );
-  }, [firestore, params.id, user?.uid]);
+    if (!firestore || !params.id) return null;
+    return query(collection(firestore, 'groups', params.id, 'debts'));
+  }, [firestore, params.id]);
   const { data: debts, isLoading: debtsLoading } = useCollection<Debt>(debtsQuery);
+
+  const stats = useMemo(() => {
+    if (!debts) return { total: 0, paid: 0, pending: 0 };
+    return debts.reduce((acc, debt) => {
+      acc.total += debt.amount;
+      if (debt.status === 'paid') acc.paid += debt.amount;
+      else acc.pending += debt.amount;
+      return acc;
+    }, { total: 0, paid: 0, pending: 0 });
+  }, [debts]);
 
   useEffect(() => {
     if (group?.memberIds) {
@@ -119,8 +126,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     
     try {
       for (const memberId of group.memberIds) {
-        if (memberId === user?.uid) continue;
-        // Evitar duplicados simples (esto es manual, en prod usaría lógica más robusta)
+        if (memberId === group.adminId) continue;
         await addDebt(params.id, memberId, group.fixedAmount, fixedDescription || `Cobro: ${group.name}`);
       }
       toast({ title: "Cobros Asignados", description: `Se asignó $${group.fixedAmount} a todos los miembros.` });
@@ -204,8 +210,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       default: return null;
     }
   };
-
-  const reviewCount = groupDebts.filter(d => d.status === 'under_review').length;
 
   return (
     <div className="space-y-6">
@@ -336,6 +340,48 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
             )
           )}
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-emerald-100 bg-emerald-50/30">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider">Total Recaudado</p>
+                <h3 className="text-2xl font-headline font-bold text-emerald-700">${stats.paid.toFixed(2)}</h3>
+              </div>
+              <div className="p-3 bg-emerald-100 rounded-xl text-emerald-600">
+                <TrendingUp className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-orange-100 bg-orange-50/30">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-orange-600 uppercase tracking-wider">Por Recaudar</p>
+                <h3 className="text-2xl font-headline font-bold text-orange-700">${stats.pending.toFixed(2)}</h3>
+              </div>
+              <div className="p-3 bg-orange-100 rounded-xl text-orange-600">
+                <HandCoins className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-primary/10 bg-primary/5">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-primary uppercase tracking-wider">Total de Deuda</p>
+                <h3 className="text-2xl font-headline font-bold text-primary">${stats.total.toFixed(2)}</h3>
+              </div>
+              <div className="p-3 bg-primary/10 rounded-xl text-primary">
+                <ReceiptText className="h-6 w-6" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">

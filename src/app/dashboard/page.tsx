@@ -1,10 +1,10 @@
 
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { createGroup } from "@/lib/firebase/store";
-import { Group } from "@/lib/types";
+import { Group, Debt } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,10 +13,53 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, Loader2, DollarSign } from "lucide-react";
+import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, Loader2, DollarSign, PiggyBank, ReceiptText } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where } from "firebase/firestore";
+import { Progress } from "@/components/ui/progress";
+
+// Sub-componente para calcular y mostrar estadísticas de cada grupo en su tarjeta
+function GroupCardStats({ groupId }: { groupId: string }) {
+  const firestore = useFirestore();
+  const debtsQuery = useMemoFirebase(() => {
+    if (!firestore || !groupId) return null;
+    return collection(firestore, 'groups', groupId, 'debts');
+  }, [firestore, groupId]);
+  
+  const { data: debts } = useCollection<Debt>(debtsQuery);
+
+  const stats = useMemo(() => {
+    if (!debts) return { total: 0, paid: 0 };
+    return debts.reduce((acc, debt) => {
+      acc.total += debt.amount;
+      if (debt.status === 'paid') acc.paid += debt.amount;
+      return acc;
+    }, { total: 0, paid: 0 });
+  }, [debts]);
+
+  const progress = stats.total > 0 ? (stats.paid / stats.total) * 100 : 0;
+
+  return (
+    <div className="space-y-3 mt-4">
+      <div className="flex justify-between items-end">
+        <div className="space-y-1">
+          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Total Recaudado</p>
+          <p className="text-sm font-bold text-emerald-600 flex items-center gap-1">
+            <PiggyBank className="h-3 w-3" /> ${stats.paid.toFixed(2)}
+          </p>
+        </div>
+        <div className="text-right space-y-1">
+          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Objetivo Total</p>
+          <p className="text-sm font-bold text-primary flex items-center gap-1 justify-end">
+            ${stats.total.toFixed(2)} <ReceiptText className="h-3 w-3" />
+          </p>
+        </div>
+      </div>
+      <Progress value={progress} className="h-1.5 bg-muted" />
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -96,13 +139,24 @@ export default function Dashboard() {
                   </div>
                   <div className="space-y-2">
                     <Label>Tipo de Cobro</Label>
-                    <Select value={newGroupType} onValueChange={(v: any) => setNewGroupType(v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="variable">Variables (Montos distintos)</SelectItem>
-                        <SelectItem value="fixed">Fijo (Todos pagan lo mismo)</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Button 
+                        type="button"
+                        variant={newGroupType === 'variable' ? 'default' : 'outline'}
+                        onClick={() => setNewGroupType('variable')}
+                        className="w-full"
+                      >
+                        Variable
+                      </Button>
+                      <Button 
+                        type="button"
+                        variant={newGroupType === 'fixed' ? 'default' : 'outline'}
+                        onClick={() => setNewGroupType('fixed')}
+                        className="w-full"
+                      >
+                        Fijo
+                      </Button>
+                    </div>
                   </div>
                   {newGroupType === 'fixed' && (
                     <div className="space-y-2">
@@ -132,7 +186,7 @@ export default function Dashboard() {
               ) : (
                 adminGroups.map(g => (
                   <Link key={g.id} href={`/dashboard/groups/${g.id}`}>
-                    <Card className="hover:shadow-md transition-all cursor-pointer overflow-hidden border-l-4 border-l-primary">
+                    <Card className="hover:shadow-md transition-all cursor-pointer overflow-hidden border-l-4 border-l-primary group">
                       <CardHeader className="pb-2">
                         <div className="flex justify-between items-start">
                           <Badge variant={g.type === 'fixed' ? 'default' : 'secondary'} className="text-[10px]">
@@ -140,11 +194,14 @@ export default function Dashboard() {
                           </Badge>
                           {g.fixedAmount && <span className="text-xs font-bold text-primary">${g.fixedAmount}</span>}
                         </div>
-                        <CardTitle className="mt-2 text-lg">{g.name}</CardTitle>
+                        <CardTitle className="mt-2 text-lg group-hover:text-primary transition-colors">{g.name}</CardTitle>
                       </CardHeader>
-                      <CardContent className="flex justify-between items-center text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {g.memberIds.length}</span>
-                        <ChevronRight className="h-4 w-4" />
+                      <CardContent className="space-y-1">
+                        <GroupCardStats groupId={g.id} />
+                        <div className="flex justify-between items-center text-xs text-muted-foreground mt-4 pt-4 border-t">
+                          <span className="flex items-center gap-1 font-medium"><Users className="h-3 w-3" /> {g.memberIds.length} Miembros</span>
+                          <span className="flex items-center gap-1 text-primary font-bold">Gestionar <ChevronRight className="h-3 w-3" /></span>
+                        </div>
                       </CardContent>
                     </Card>
                   </Link>
