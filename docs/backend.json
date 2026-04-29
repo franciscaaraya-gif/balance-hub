@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "UserProfile": {
@@ -43,15 +44,19 @@
         },
         "name": {
           "type": "string",
-          "description": "The descriptive name of the debt group."
+          "description": "The descriptive name of the debt group (e.g., 'Pago Agua Mayo')."
         },
         "type": {
           "type": "string",
-          "description": "The type of the group, indicating how debts are structured and managed (e.g., 'fixed', 'variable')."
+          "description": "The type of the group, indicating how debts are structured (e.g., 'fixed', 'variable')."
+        },
+        "fixedAmount": {
+          "type": "number",
+          "description": "The default amount to be charged to all members in a 'fixed' type group."
         },
         "adminId": {
           "type": "string",
-          "description": "Reference to the UserProfile who is designated as the administrator of this group. (Relationship: UserProfile 1:N Group)"
+          "description": "Reference to the UserProfile who is designated as the administrator of this group."
         },
         "inviteLink": {
           "type": "string",
@@ -60,7 +65,7 @@
         },
         "memberIds": {
           "type": "array",
-          "description": "An array of UserProfile IDs representing all members participating in this group. (Relationship: UserProfile N:N Group)",
+          "description": "An array of UserProfile IDs representing all members participating in this group.",
           "items": {
             "type": "string"
           }
@@ -78,7 +83,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Debt",
       "type": "object",
-      "description": "Represents an individual debt record within a specific group, detailing the amount owed, the debtor, and its current settlement status.",
+      "description": "Represents an individual debt record within a specific group.",
       "properties": {
         "id": {
           "type": "string",
@@ -86,11 +91,11 @@
         },
         "groupId": {
           "type": "string",
-          "description": "Reference to the Group this debt belongs to. (Relationship: Group 1:N Debt)"
+          "description": "Reference to the Group this debt belongs to."
         },
         "debtorId": {
           "type": "string",
-          "description": "Reference to the UserProfile who is responsible for incurring or owing this debt. (Relationship: UserProfile 1:N Debt)"
+          "description": "Reference to the UserProfile who owes this debt."
         },
         "amount": {
           "type": "number",
@@ -98,20 +103,18 @@
         },
         "status": {
           "type": "string",
-          "description": "The current status of the debt (e.g., 'pending', 'under_review', 'paid'), indicating its stage in the settlement process."
+          "description": "The current status of the debt (e.g., 'pending', 'under_review', 'paid')."
         },
         "description": {
           "type": "string",
-          "description": "An optional detailed description providing context or specific information about the debt."
+          "description": "Optional details about the debt."
         },
         "createdAt": {
           "type": "string",
-          "description": "The timestamp indicating when this debt record was created.",
           "format": "date-time"
         },
         "updatedAt": {
           "type": "string",
-          "description": "The timestamp indicating when this debt record was last updated, for example, when its status changed.",
           "format": "date-time"
         }
       },
@@ -140,11 +143,11 @@
           "schema": {
             "$ref": "#/backend/entities/UserProfile"
           },
-          "description": "Stores individual user profile information. The `id` field within the document MUST match the `userId` in the path, which in turn MUST match the Firebase Authentication UID (`request.auth.uid`) for ownership and access control.",
+          "description": "Stores individual user profile information.",
           "params": [
             {
               "name": "userId",
-              "description": "The unique identifier of the user, corresponding to their Firebase Authentication UID."
+              "description": "The unique identifier of the user."
             }
           ]
         }
@@ -156,7 +159,7 @@
           "schema": {
             "$ref": "#/backend/entities/Group"
           },
-          "description": "Stores information about debt groups. Each group includes an `adminId` and a `memberIds` array for direct authorization checks, enabling simple role-based and membership-based access without `get()` calls to other collections. Supports QAPs for listing groups a user belongs to.",
+          "description": "Stores information about debt groups.",
           "params": [
             {
               "name": "groupId",
@@ -172,7 +175,7 @@
           "schema": {
             "$ref": "#/backend/entities/Debt"
           },
-          "description": "Stores individual debt records, nested under their respective group. To ensure **Authorization Independence**, each debt document includes denormalized fields: `groupAdminId` (copied from the parent Group's `adminId`) and `groupMemberIds` (copied from the parent Group's `memberIds`). This allows security rules to evaluate access and update permissions (e.g., for group administrators) without performing `get()` operations on the parent Group document. `Debt.status` is used for explicit state modeling.",
+          "description": "Stores individual debt records nested under their group.",
           "params": [
             {
               "name": "groupId",
@@ -185,7 +188,6 @@
           ]
         }
       }
-    ],
-    "reasoning": "The Firestore structure for BalanceHub prioritizes security, scalability, and debuggability by strictly adhering to the core design principles. This design avoids common pitfalls like hierarchical authorization dependencies by proactively denormalizing critical access control information.\n\n**Authorization Independence (CRITICAL for Rules Debuggability and Atomicity):**\n\n1.  **UserProfile:** User profiles are stored in `/userProfiles/{userId}`. Ownership is inherent in the path, where `userId` matches `request.auth.uid`. This allows for simple, direct rules like `allow read, write: if request.auth.uid == userId;`, completely eliminating the need for `get()` calls to other documents to determine user identity or basic permissions.\n2.  **Group:** Group documents are stored in `/groups/{groupId}`. Each Group document contains an `adminId` and a `memberIds` array. These fields are directly used in security rules to determine who can access or modify the group. For instance, `allow read: if request.auth.uid in resource.data.memberIds;` or `allow write: if request.auth.uid == resource.data.adminId;`. There are no `get()` calls to parent documents (as Group is top-level) or other collections for basic group access.\n3.  **Debt (CRITICAL Denormalization):** Debts are nested as a subcollection under their respective groups: `/groups/{groupId}/debts/{debtId}`. To achieve Authorization Independence for Debt documents, we apply **Mandate A (Denormalization)**. Each `Debt` document will explicitly store `groupAdminId` (denormalized from the parent `Group.adminId`) and `groupMemberIds` (denormalized from the parent `Group.memberIds`). This is crucial because the app requires 'Group administrators can update the status of individual debts.' Without denormalization, a rule for updating a debt would require `get(/groups/{groupId}).data.adminId == request.auth.uid`, which violates Authorization Independence and complicates atomic operations. By denormalizing these fields, security rules for Debt documents can be evaluated solely based on the `Debt` document's own fields, e.g., `allow update: if request.auth.uid == resource.data.groupAdminId;` and `allow read: if request.auth.uid in resource.data.groupMemberIds;`.\n\n**QAPs (Query As Permissions) Support:**\n\n*   **UserProfile:** Listing user profiles is not a typical use case for most users, but an admin could potentially list all. For a regular user, they only interact with their own profile, which is retrieved directly via `/userProfiles/{request.auth.uid}`.\n*   **Group:** Listing groups for a user is directly supported. The application can query `db.collection('groups').where('memberIds', 'array-contains', request.auth.uid)`. Because `memberIds` is a field on the `Group` document, security rules can perfectly match this query: `allow list: if request.resource.data.memberIds.hasAny([request.auth.uid]);`. This ensures users only see groups they are a part of, without requiring complex server-side filtering or multiple `get()` calls in rules.\n*   **Debt:** Listing debts for a specific group (`/groups/{groupId}/debts`) is also supported by the denormalized `groupMemberIds`. Users can query `db.collection('groups/{groupId}/debts')`, and the rule `allow list: if request.auth.uid in resource.data.groupMemberIds;` will validate that the user has permission to list debts within that group, provided `groupId` in the path corresponds to a group they belong to. For `list` operations, the client must query within a specific `groupId` that the user is authorized to access.\n\n**Structural Segregation and Access Modeling:**\n\n*   **Private Data:** `UserProfile` uses path-based ownership (`/userProfiles/{userId}`).\n*   **Collaborative Data:** `Group` uses a membership map (`adminId`, `memberIds`) directly in the document.\n*   **Nested Collaborative Data:** `Debt` is nested under `Group` (`/groups/{groupId}/debts/{debtId}`) and inherits its collaborative access model through denormalized `groupAdminId` and `groupMemberIds`.\n\nThis structure ensures clear, explicit, and auditable security rules, minimizing the surface area for vulnerabilities and making the system easier to debug and scale."
+    ]
   }
 }

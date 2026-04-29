@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -12,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, Loader2 } from "lucide-react";
+import { PlusCircle, Users, Wallet, UserCircle, Briefcase, ChevronRight, Loader2, DollarSign } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where } from "firebase/firestore";
@@ -23,10 +24,10 @@ export default function Dashboard() {
   const [isAdminView, setIsAdminView] = useState(true);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupType, setNewGroupType] = useState<'fixed' | 'variable'>("variable");
+  const [newGroupAmount, setNewGroupAmount] = useState("");
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // Consultamos solo los grupos para simplificar y evitar errores de permisos de collectionGroup
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -43,9 +44,17 @@ export default function Dashboard() {
 
   const handleCreateGroup = () => {
     if (!newGroupName || !user) return;
-    createGroup(newGroupName, newGroupType, user.uid);
-    toast({ title: "¡Éxito!", description: "Grupo creado." });
+    const amount = newGroupType === 'fixed' ? parseFloat(newGroupAmount) : undefined;
+    
+    if (newGroupType === 'fixed' && (isNaN(amount!) || amount! <= 0)) {
+      toast({ variant: "destructive", title: "Monto inválido", description: "Por favor ingresa un monto válido para el grupo fijo." });
+      return;
+    }
+
+    createGroup(newGroupName, newGroupType, user.uid, amount);
+    toast({ title: "¡Éxito!", description: "Grupo creado correctamente." });
     setNewGroupName("");
+    setNewGroupAmount("");
     setOpen(false);
   };
 
@@ -77,19 +86,38 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-headline font-semibold flex items-center gap-2"><Users className="h-5 w-5" /> Tus Grupos</h2>
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild><Button className="bg-accent gap-2"><PlusCircle className="h-4 w-4" /> Crear Grupo</Button></DialogTrigger>
+              <DialogTrigger asChild><Button className="bg-accent gap-2"><PlusCircle className="h-4 w-4" /> Crear Cobro</Button></DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Nuevo Grupo</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>Nuevo Grupo de Cobro</DialogTitle><DialogDescription>Crea un grupo para gestionar una deuda específica.</DialogDescription></DialogHeader>
                 <div className="space-y-4 py-4">
-                  <div className="space-y-2"><Label>Nombre</Label><Input value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} /></div>
-                  <div className="space-y-2"><Label>Tipo</Label>
+                  <div className="space-y-2">
+                    <Label>Nombre de la Deuda</Label>
+                    <Input placeholder="Ej: Pago de Agua Mayo" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipo de Cobro</Label>
                     <Select value={newGroupType} onValueChange={(v: any) => setNewGroupType(v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent><SelectItem value="variable">Variable</SelectItem><SelectItem value="fixed">Fijo</SelectItem></SelectContent>
+                      <SelectContent>
+                        <SelectItem value="variable">Variables (Montos distintos)</SelectItem>
+                        <SelectItem value="fixed">Fijo (Todos pagan lo mismo)</SelectItem>
+                      </SelectContent>
                     </Select>
                   </div>
+                  {newGroupType === 'fixed' && (
+                    <div className="space-y-2">
+                      <Label>Monto por Persona ($)</Label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input type="number" className="pl-9" placeholder="0.00" value={newGroupAmount} onChange={(e) => setNewGroupAmount(e.target.value)} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <DialogFooter><Button onClick={handleCreateGroup}>Crear</Button></DialogFooter>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
+                  <Button onClick={handleCreateGroup} className="bg-primary">Crear Grupo</Button>
+                </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
@@ -104,9 +132,20 @@ export default function Dashboard() {
               ) : (
                 adminGroups.map(g => (
                   <Link key={g.id} href={`/dashboard/groups/${g.id}`}>
-                    <Card className="hover:shadow-md transition-all cursor-pointer">
-                      <CardHeader><Badge variant="outline" className="w-fit">{g.type}</Badge><CardTitle className="mt-2">{g.name}</CardTitle></CardHeader>
-                      <CardContent className="flex justify-between items-center text-sm"><span>{g.memberIds.length} Miembros</span><ChevronRight className="h-4 w-4" /></CardContent>
+                    <Card className="hover:shadow-md transition-all cursor-pointer overflow-hidden border-l-4 border-l-primary">
+                      <CardHeader className="pb-2">
+                        <div className="flex justify-between items-start">
+                          <Badge variant={g.type === 'fixed' ? 'default' : 'secondary'} className="text-[10px]">
+                            {g.type === 'fixed' ? 'MONTO FIJO' : 'VARIABLE'}
+                          </Badge>
+                          {g.fixedAmount && <span className="text-xs font-bold text-primary">${g.fixedAmount}</span>}
+                        </div>
+                        <CardTitle className="mt-2 text-lg">{g.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex justify-between items-center text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {g.memberIds.length}</span>
+                        <ChevronRight className="h-4 w-4" />
+                      </CardContent>
                     </Card>
                   </Link>
                 ))
@@ -119,6 +158,7 @@ export default function Dashboard() {
           <h2 className="text-xl font-headline font-semibold flex items-center gap-2"><Wallet className="h-5 w-5" /> Deudas Pendientes</h2>
           <Card className="p-20 text-center border-dashed border-2 bg-transparent">
             <CardTitle className="text-muted-foreground font-headline">Selecciona un grupo para ver tus deudas detalladas</CardTitle>
+            <p className="mt-4 text-sm text-muted-foreground">Aquí aparecerán los cobros que tienes pendientes de pago en tus grupos.</p>
           </Card>
         </div>
       )}

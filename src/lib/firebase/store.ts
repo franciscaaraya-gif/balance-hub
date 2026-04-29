@@ -1,3 +1,4 @@
+
 import { db } from "./config";
 import { 
   collection, 
@@ -35,7 +36,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   return snap.exists() ? (snap.data() as UserProfile) : null;
 };
 
-export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: string) => {
+export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: string, fixedAmount?: number) => {
   const inviteToken = Math.random().toString(36).substring(2, 15);
   const inviteLink = `${window.location.origin}/join/${inviteToken}`;
   const groupCollection = collection(db, "groups");
@@ -43,6 +44,7 @@ export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: s
   const data = {
     name,
     type,
+    fixedAmount: fixedAmount || null,
     adminId,
     members: [adminId],
     memberIds: [adminId],
@@ -59,6 +61,19 @@ export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: s
       path: groupCollection.path,
       operation: 'create',
       requestResourceData: data
+    }));
+  });
+};
+
+export const updateGroupAmount = (groupId: string, amount: number) => {
+  const docRef = doc(db, "groups", groupId);
+  updateDoc(docRef, {
+    fixedAmount: amount
+  }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: docRef.path,
+      operation: 'update',
+      requestResourceData: { fixedAmount: amount }
     }));
   });
 };
@@ -164,7 +179,7 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
       if (p) profiles.push(p);
     }
   } catch (e) {
-    // Silently fail as per rules
+    // Silently fail
   }
   return profiles;
 };
