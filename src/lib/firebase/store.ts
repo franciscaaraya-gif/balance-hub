@@ -11,7 +11,8 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
-  deleteField
+  deleteField,
+  limit
 } from "firebase/firestore";
 import { Group, Debt, UserProfile, DebtStatus } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -62,21 +63,27 @@ export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: s
   });
 };
 
-export const joinGroupByInvite = async (userId: string, inviteToken: string) => {
-  const q = query(collection(db, "groups"), where("inviteToken", "==", inviteToken));
+export const getGroupByToken = async (inviteToken: string): Promise<Group | null> => {
+  const q = query(collection(db, "groups"), where("inviteToken", "==", inviteToken), limit(1));
   const snap = await getDocs(q);
-  if (snap.empty) throw new Error("Enlace de invitación inválido");
-  const groupDoc = snap.docs[0];
-  const groupData = groupDoc.data() as Group;
-  
-  if (groupData.memberIds.includes(userId)) return groupDoc.id;
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { ...doc.data(), id: doc.id } as Group;
+};
 
-  await updateDoc(groupDoc.ref, {
+export const joinGroupByInvite = async (userId: string, inviteToken: string) => {
+  const group = await getGroupByToken(inviteToken);
+  if (!group) throw new Error("Enlace de invitación inválido o expirado");
+  
+  if (group.memberIds.includes(userId)) return group.id;
+
+  const groupRef = doc(db, "groups", group.id);
+  await updateDoc(groupRef, {
     members: arrayUnion(userId),
     memberIds: arrayUnion(userId),
     [`memberStatuses.${userId}`]: 'active'
   });
-  return groupDoc.id;
+  return group.id;
 };
 
 export const requestLeaveGroup = (groupId: string, userId: string) => {
