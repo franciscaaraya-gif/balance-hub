@@ -59,24 +59,18 @@ export function useCollection<T = any>(
         let path = "dynamic-query";
         const queryAny = memoizedTargetRefOrQuery as any;
         
+        // Intentar extraer una ruta útil para el reporte de error
         if (queryAny.path) {
           path = queryAny.path;
         } else if (queryAny._query?.path) {
-          path = queryAny._query.path.toString() || "collection-group-query";
-        }
-        
-        // Identificar si es una consulta de grupo para reporte de error más claro
-        if (!path || path === "/" || path === "") {
-          if (queryAny._query?.collectionGroup) {
-            path = `collectionGroup(${queryAny._query.collectionGroup})`;
-          } else {
-            path = "root-or-unknown-query";
-          }
+          path = queryAny._query.path.toString();
+        } else if (queryAny._query?.collectionGroup) {
+          path = `collectionGroup(${queryAny._query.collectionGroup})`;
         }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: path,
+          path: path || "unknown-collection-path",
         });
 
         setError(contextualError);
