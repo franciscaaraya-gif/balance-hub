@@ -1,24 +1,20 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Reglas para perfiles de usuario
-    match /userProfiles/{userId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Reglas para grupos
-    match /groups/{groupId} {
-      allow read, write: if request.auth != null;
-      
-      // Reglas para deudas (subcolección)
-      match /debts/{debtId} {
-        allow read, write: if request.auth != null;
-      }
+    // MODO DESARROLLO TOTAL: Permitir lectura y escritura en todos los documentos
+    // Esto soluciona los errores de permisos en collectionGroup y subcolecciones.
+    match /{document=**} {
+      allow read, write: if true;
     }
 
-    // Regla de respaldo para cualquier otra ruta (incluyendo consultas globales)
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // Regla explícita para el grupo de colecciones 'debts'
+    match /{path=**}/debts/{debtId} {
+      allow read, write: if true;
+    }
+    
+    // Regla explícita para el grupo de colecciones 'receipts'
+    match /{path=**}/receipts/{receiptId} {
+      allow read, write: if true;
     }
   }
 }

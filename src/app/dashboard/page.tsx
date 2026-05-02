@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -81,12 +80,13 @@ export default function Dashboard() {
   // Deudas personales del usuario (en todos los grupos)
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
+    // Usamos collectionGroup para encontrar deudas del usuario en CUALQUIER grupo
     return query(
       collectionGroup(firestore, 'debts'),
       where('debtorId', '==', user.uid)
     );
   }, [firestore, user?.uid]);
-  const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
+  const { data: myDebts, isLoading: myDebtsLoading, error: debtsError } = useCollection<Debt>(myDebtsQuery);
 
   const pendingDebts = useMemo(() => {
     if (!myDebts) return [];
@@ -249,6 +249,10 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   {[1, 2, 3].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-lg" />)}
                 </div>
+              ) : debtsError ? (
+                <div className="py-6 text-center text-xs text-muted-foreground">
+                  No se pudieron cargar tus deudas. Reintenta más tarde.
+                </div>
               ) : pendingDebts.length === 0 ? (
                 <div className="py-6 text-center space-y-2">
                   <div className="inline-flex p-3 bg-emerald-50 rounded-full text-emerald-600"><CheckCircle2 className="h-6 w-6" /></div>
@@ -274,13 +278,13 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Banner de Invitacion Rapida */}
+          {/* Banner Informativo */}
           <Card className="bg-primary text-primary-foreground border-none shadow-none">
             <CardContent className="pt-6">
               <div className="flex flex-col items-center text-center space-y-3">
                 <PiggyBank className="h-10 w-10 text-accent" />
-                <h3 className="font-headline font-bold">¿Tienes un pago pendiente?</h3>
-                <p className="text-xs text-primary-foreground/70">Selecciona el grupo correspondiente para subir tu comprobante y liquidar tu deuda.</p>
+                <h3 className="font-headline font-bold">Gestión Centralizada</h3>
+                <p className="text-xs text-primary-foreground/70">Aquí ves todo lo que te han cobrado en cualquier grupo de BalanceHub.</p>
               </div>
             </CardContent>
           </Card>
@@ -289,4 +293,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
