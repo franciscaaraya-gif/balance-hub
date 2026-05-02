@@ -13,9 +13,10 @@ import {
   arrayUnion,
   arrayRemove,
   deleteField,
-  limit
+  limit,
+  Timestamp
 } from "firebase/firestore";
-import { Group, Debt, UserProfile, DebtStatus } from "../types";
+import { Group, Debt, UserProfile, DebtStatus, Receipt, ReceiptItem } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -128,7 +129,7 @@ export const confirmLeaveGroup = (groupId: string, userId: string) => {
   });
 };
 
-export const addDebt = async (groupId: string, debtorId: string, amount: number, description: string) => {
+export const addDebt = async (groupId: string, debtorId: string, amount: number, description: string, receiptId?: string) => {
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
   if (!groupSnap.exists()) throw new Error("Grupo no encontrado");
@@ -141,6 +142,7 @@ export const addDebt = async (groupId: string, debtorId: string, amount: number,
     amount,
     description,
     status: 'pending',
+    receiptId: receiptId || null,
     groupAdminId: group.adminId,
     groupMemberIds: group.memberIds,
     createdAt: Date.now(),
@@ -166,6 +168,79 @@ export const updateDebtStatusInGroup = (groupId: string, debtId: string, status:
       path: docRef.path,
       operation: 'update',
       requestResourceData: { status, updatedAt: Date.now() }
+    }));
+  });
+};
+
+export const createReceipt = (groupId: string, items: { name: string, price: number }[]) => {
+  const receiptCollection = collection(db, "groups", groupId, "receipts");
+  const data = {
+    groupId,
+    status: 'open',
+    items: items.map(item => ({
+      id: Math.random().toString(36).substring(7),
+      name: item.name,
+      price: item.price,
+      claims: []
+    })),
+    createdAt: Date.now()
+  };
+
+  addDoc(receiptCollection, data).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: receiptCollection.path,
+      operation: 'create',
+      requestResourceData: data
+    }));
+  });
+};
+
+export const claimReceiptItem = (groupId: string, receiptId: string, itemId: string, userId: string, percentage: number, items: ReceiptItem[]) => {
+  const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
+  const updatedItems = items.map(item => {
+    if (item.id === itemId) {
+      const existingClaimIndex = item.claims.findIndex(c => c.userId === userId);
+      const newClaims = [...item.claims];
+      if (percentage <= 0) {
+        if (existingClaimIndex > -1) newClaims.splice(existingClaimIndex, 1);
+      } else {
+        if (existingClaimIndex > -1) newClaims[existingClaimIndex].percentage = percentage;
+        else newClaims.push({ userId, percentage });
+      }
+      return { ...item, claims: newClaims };
+    }
+    return item;
+  });
+
+  updateDoc(receiptRef, {
+    items: updatedItems
+  }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: receiptRef.path,
+      operation: 'update'
+    }));
+  });
+};
+
+export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[]) => {
+  const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
+  
+  // Create debts for all claims
+  for (const item of items) {
+    for (const claim of item.claims) {
+      const amount = (item.price * claim.percentage) / 100;
+      if (amount > 0) {
+        await addDebt(groupId, claim.userId, amount, `Consumo: ${item.name}`, receiptId);
+      }
+    }
+  }
+
+  updateDoc(receiptRef, {
+    status: 'completed'
+  }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: receiptRef.path,
+      operation: 'update'
     }));
   });
 };

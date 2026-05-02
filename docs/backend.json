@@ -5,134 +5,86 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "UserProfile",
       "type": "object",
-      "description": "Represents a user's profile information and role within the BalanceHub application, separate from authentication credentials managed by an external system (e.g., Firebase Auth).",
+      "description": "Represents a user's profile information and role within the BalanceHub application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the UserProfile entity, typically corresponding to the user's Firebase Authentication UID."
-        },
-        "email": {
-          "type": "string",
-          "description": "The user's email address, primarily used for identification and display.",
-          "format": "email"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "The user's public display name, used for recognition within groups and debts."
-        },
-        "role": {
-          "type": "string",
-          "description": "The user's role within the application (e.g., 'admin', 'user'), used for access control and permissions."
-        }
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" }
       },
-      "required": [
-        "id",
-        "email",
-        "displayName",
-        "role"
-      ]
+      "required": ["id", "email", "displayName", "role"]
     },
     "Group": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Group",
       "type": "object",
-      "description": "Represents a debt group where users can collectively manage and track shared financial obligations.",
+      "description": "Represents a debt group.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Group entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The descriptive name of the debt group (e.g., 'Pago Agua Mayo')."
-        },
-        "type": {
-          "type": "string",
-          "description": "The type of the group, indicating how debts are structured (e.g., 'fixed', 'variable')."
-        },
-        "fixedAmount": {
-          "type": "number",
-          "description": "The default amount to be charged to all members in a 'fixed' type group."
-        },
-        "adminId": {
-          "type": "string",
-          "description": "Reference to the UserProfile who is designated as the administrator of this group."
-        },
-        "inviteLink": {
-          "type": "string",
-          "description": "A unique, shareable URI used to invite new members to join the group.",
-          "format": "uri"
-        },
-        "memberIds": {
-          "type": "array",
-          "description": "An array of UserProfile IDs representing all members participating in this group.",
-          "items": {
-            "type": "string"
-          }
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "fixedAmount": { "type": "number" },
+        "adminId": { "type": "string" },
+        "inviteLink": { "type": "string", "format": "uri" },
+        "memberIds": { "type": "array", "items": { "type": "string" } }
       },
-      "required": [
-        "id",
-        "name",
-        "type",
-        "adminId",
-        "inviteLink"
-      ]
+      "required": ["id", "name", "type", "adminId", "inviteLink"]
     },
     "Debt": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Debt",
       "type": "object",
-      "description": "Represents an individual debt record within a specific group.",
+      "description": "Represents an individual debt record.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Debt entity."
-        },
-        "groupId": {
-          "type": "string",
-          "description": "Reference to the Group this debt belongs to."
-        },
-        "debtorId": {
-          "type": "string",
-          "description": "Reference to the UserProfile who owes this debt."
-        },
-        "amount": {
-          "type": "number",
-          "description": "The monetary amount of the debt."
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the debt (e.g., 'pending', 'under_review', 'paid')."
-        },
-        "description": {
-          "type": "string",
-          "description": "Optional details about the debt."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "id": { "type": "string" },
+        "groupId": { "type": "string" },
+        "debtorId": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "description": { "type": "string" },
+        "receiptId": { "type": "string", "description": "Optional reference to a parsed receipt." },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "id",
-        "groupId",
-        "debtorId",
-        "amount",
-        "status",
-        "createdAt"
-      ]
+      "required": ["id", "groupId", "debtorId", "amount", "status", "createdAt"]
+    },
+    "Receipt": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Receipt",
+      "type": "object",
+      "description": "A scanned bill with items that can be split among members.",
+      "properties": {
+        "id": { "type": "string" },
+        "groupId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "processing", "completed"] },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "price": { "type": "number" },
+              "claims": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "userId": { "type": "string" },
+                    "percentage": { "type": "number" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "groupId", "status", "items", "createdAt"]
     }
   },
   "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+    "providers": ["password", "google.com"]
   },
   "firestore": {
     "structure": [
@@ -140,52 +92,32 @@
         "path": "/userProfiles/{userId}",
         "definition": {
           "entityName": "UserProfile",
-          "schema": {
-            "$ref": "#/backend/entities/UserProfile"
-          },
-          "description": "Stores individual user profile information.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user."
-            }
-          ]
+          "schema": { "$ref": "#/backend/entities/UserProfile" },
+          "description": "Stores individual user profile information."
         }
       },
       {
         "path": "/groups/{groupId}",
         "definition": {
           "entityName": "Group",
-          "schema": {
-            "$ref": "#/backend/entities/Group"
-          },
-          "description": "Stores information about debt groups.",
-          "params": [
-            {
-              "name": "groupId",
-              "description": "The unique identifier for the debt group."
-            }
-          ]
+          "schema": { "$ref": "#/backend/entities/Group" },
+          "description": "Stores information about debt groups."
         }
       },
       {
         "path": "/groups/{groupId}/debts/{debtId}",
         "definition": {
           "entityName": "Debt",
-          "schema": {
-            "$ref": "#/backend/entities/Debt"
-          },
-          "description": "Stores individual debt records nested under their group.",
-          "params": [
-            {
-              "name": "groupId",
-              "description": "The unique identifier of the parent debt group."
-            },
-            {
-              "name": "debtId",
-              "description": "The unique identifier for the specific debt record."
-            }
-          ]
+          "schema": { "$ref": "#/backend/entities/Debt" },
+          "description": "Stores individual debt records."
+        }
+      },
+      {
+        "path": "/groups/{groupId}/receipts/{receiptId}",
+        "definition": {
+          "entityName": "Receipt",
+          "schema": { "$ref": "#/backend/entities/Receipt" },
+          "description": "Stores parsed receipts and their split status."
         }
       }
     ]

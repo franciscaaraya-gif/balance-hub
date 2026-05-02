@@ -16,10 +16,10 @@ export interface Group {
   id: string;
   name: string;
   type: GroupType;
-  fixedAmount?: number; // Monto por defecto para grupos fijos
+  fixedAmount?: number;
   adminId: string;
-  members: string[]; // User UIDs
-  memberIds: string[]; // Duplicate for queries
+  members: string[];
+  memberIds: string[];
   memberStatuses?: Record<string, MemberStatus>;
   inviteToken: string;
   inviteLink: string;
@@ -35,8 +35,30 @@ export interface Debt {
   amount: number;
   description: string;
   status: DebtStatus;
-  groupAdminId: string; // Denormalized for security rules
-  groupMemberIds: string[]; // Denormalized for security rules
+  receiptId?: string;
+  groupAdminId: string;
+  groupMemberIds: string[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface ReceiptItemClaim {
+  userId: string;
+  percentage: number;
+}
+
+export interface ReceiptItem {
+  id: string;
+  name: string;
+  price: number;
+  claims: ReceiptItemClaim[];
+}
+
+export interface Receipt {
+  id: string;
+  groupId: string;
+  imageUrl?: string;
+  status: 'open' | 'processing' | 'completed';
+  items: ReceiptItem[];
+  createdAt: number;
 }
