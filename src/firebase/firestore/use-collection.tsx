@@ -55,12 +55,23 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Intentamos obtener información de la ruta para el diagnóstico de forma más robusta
-        let path = "query-result";
-        if ((memoizedTargetRefOrQuery as any).path) {
-          path = (memoizedTargetRefOrQuery as any).path;
-        } else if ((memoizedTargetRefOrQuery as any)._query?.path) {
-          path = (memoizedTargetRefOrQuery as any)._query.path.toString();
+        // Diagnóstico mejorado para rutas de consulta
+        let path = "dynamic-query";
+        const queryAny = memoizedTargetRefOrQuery as any;
+        
+        if (queryAny.path) {
+          path = queryAny.path;
+        } else if (queryAny._query?.path) {
+          path = queryAny._query.path.toString() || "collection-group-query";
+        }
+        
+        // Identificar si es una consulta de grupo para reporte de error más claro
+        if (!path || path === "/" || path === "") {
+          if (queryAny._query?.collectionGroup) {
+            path = `collectionGroup(${queryAny._query.collectionGroup})`;
+          } else {
+            path = "root-or-unknown-query";
+          }
         }
 
         const contextualError = new FirestorePermissionError({

@@ -2,13 +2,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Regla global de desarrollo
+    // Regla global de desarrollo: permite todo a usuarios autenticados
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
 
-    // Regla necesaria para consultas de grupo de colecciones (collectionGroup)
-    // Firestore requiere que los grupos de colecciones tengan una regla que coincida con su nombre
+    // Reglas explícitas para consultas de grupo de colecciones (collectionGroup)
+    // Firestore requiere que los nombres de las colecciones coincidan exactamente en las reglas
     match /{path=**}/debts/{debtId} {
       allow read, write: if request.auth != null;
     }
