@@ -1,19 +1,42 @@
+
 {
-    "indexes": [],
-    "fieldOverrides": [
-      {
-        "collectionGroup": "debts",
-        "fieldPath": "debtorId",
-        "indexes": [
-          {
-            "order": "ASCENDING",
-            "queryScope": "COLLECTION"
-          },
-          {
-            "order": "ASCENDING",
-            "queryScope": "COLLECTION_GROUP"
-          }
-        ]
-      }
-    ]
-  }
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "debts",
+      "fieldPath": "debtorId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "receipts",
+      "fieldPath": "groupId",
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    }
+  ]
+}

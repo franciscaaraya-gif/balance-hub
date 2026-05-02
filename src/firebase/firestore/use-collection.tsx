@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -54,8 +55,13 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Intentamos obtener información de la ruta para el diagnóstico
-        const path = (memoizedTargetRefOrQuery as any).path || "query-result";
+        // Intentamos obtener información de la ruta para el diagnóstico de forma más robusta
+        let path = "query-result";
+        if ((memoizedTargetRefOrQuery as any).path) {
+          path = (memoizedTargetRefOrQuery as any).path;
+        } else if ((memoizedTargetRefOrQuery as any)._query?.path) {
+          path = (memoizedTargetRefOrQuery as any)._query.path.toString();
+        }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
