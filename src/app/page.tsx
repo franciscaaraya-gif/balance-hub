@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
-import { Wallet, ShieldCheck, Zap, Users } from "lucide-react";
+import { Wallet, ShieldCheck, Zap, Users, CreditCard } from "lucide-react";
 
 export default function Home() {
   return (
@@ -68,6 +68,28 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-headline font-semibold">Secure Tracking</h3>
                 <p className="text-muted-foreground font-body">Role-based access ensures only admins can mark debts as paid. Transparency for everyone.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="w-full py-20 bg-white">
+          <div className="container px-4 md:px-6 mx-auto">
+            <div className="max-w-4xl mx-auto bg-primary/5 border border-primary/10 rounded-3xl p-8 md:p-12">
+              <div className="flex flex-col md:flex-row items-center gap-8">
+                <div className="p-6 bg-primary/10 rounded-2xl text-primary">
+                  <CreditCard className="h-12 w-12" />
+                </div>
+                <div className="space-y-4">
+                  <h2 className="text-2xl font-headline font-bold text-primary">¿Es gratis usar BalanceHub?</h2>
+                  <p className="text-muted-foreground font-body">
+                    BalanceHub ofrece un **nivel gratuito generoso** perfecto para amigos, familias y pequeños grupos. 
+                    Utilizamos la infraestructura de Firebase Spark, lo que significa que puedes gestionar cientos de deudas sin pagar ni un centavo.
+                  </p>
+                  <p className="text-sm text-muted-foreground italic">
+                    * Solo el procesamiento avanzado de IA y el hosting a gran escala pueden requerir planes premium en el futuro.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
