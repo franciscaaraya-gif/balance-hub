@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signInWithRedirect,
+  getRedirectResult,
+  GoogleAuthProvider,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -36,6 +41,25 @@ export default function Login() {
     }
   }, [user, isUserLoading, router]);
 
+  // Maneja el resultado del signInWithRedirect al volver de Google
+  useEffect(() => {
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          await createUserProfile(
+            result.user.uid,
+            result.user.email || "",
+            result.user.displayName || "Usuario de Google"
+          );
+          toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
+        }
+      })
+      .catch((error: any) => {
+        console.error(error);
+        toast({ variant: "destructive", title: "Error con Google", description: error.message });
+      });
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -52,27 +76,11 @@ export default function Login() {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
     try {
-      const result = await signInWithPopup(auth, provider);
-      // Aseguramos que el perfil exista en Firestore al entrar por Google
-      if (result.user) {
-        await createUserProfile(
-          result.user.uid, 
-          result.user.email || "", 
-          result.user.displayName || "Usuario de Google"
-        );
-      }
-      toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
+      await signInWithRedirect(auth, provider);
+      // La página se recarga tras el redirect; getRedirectResult() se encarga del resto
     } catch (error: any) {
       console.error(error);
-      if (error.code === 'auth/popup-blocked') {
-        toast({ 
-          variant: "destructive", 
-          title: "Popup Bloqueado", 
-          description: "Por favor, permite las ventanas emergentes para este sitio." 
-        });
-      } else {
-        toast({ variant: "destructive", title: "Error con Google", description: error.message });
-      }
+      toast({ variant: "destructive", title: "Error con Google", description: error.message });
       setIsSubmitting(false);
     }
   };
@@ -109,10 +117,10 @@ export default function Login() {
           <CardDescription className="text-muted-foreground font-body">Accede a tu cuenta de BalanceHub</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <Button 
-            variant="outline" 
-            type="button" 
-            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium" 
+          <Button
+            variant="outline"
+            type="button"
+            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium"
             onClick={handleGoogleLogin}
             disabled={isSubmitting}
           >
