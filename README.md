@@ -6,13 +6,29 @@ Esta es una aplicación Next.js diseñada para la gestión de deudas grupales, c
 
 Para poner esta aplicación en línea, sigue estos pasos:
 
-### 1. Preparar el Repositorio
-Asegúrate de que tu código esté en un repositorio de **GitHub**. Si no es así:
-- Crea un nuevo repositorio en GitHub.
-- Inicializa git localmente: `git init`.
-- Agrega los archivos: `git add .`.
-- Haz commit: `git commit -m "Initial commit"`.
-- Sube el código: `git push origin main`.
+### 1. Preparar el Repositorio en GitHub
+Primero, crea un repositorio vacío en [GitHub](https://github.com/new). Luego, ejecuta estos comandos en tu terminal desde la carpeta raíz del proyecto:
+
+```bash
+# Inicializar el repositorio local
+git init
+
+# Agregar todos los archivos
+git add .
+
+# Crear el primer commit
+git commit -m "Initial commit - BalanceHub"
+
+# Renombrar la rama a main (opcional pero recomendado)
+git branch -M main
+
+# Conectar con tu repositorio de GitHub (reemplaza con TU URL)
+# Ejemplo: git remote add origin https://github.com/tu-usuario/balance-hub.git
+git remote add origin <TU_URL_DE_GITHUB>
+
+# Subir el código
+git push -u origin main
+```
 
 ### 2. Configurar Firebase App Hosting
 Firebase App Hosting es el servicio ideal para esta app.
@@ -20,7 +36,7 @@ Firebase App Hosting es el servicio ideal para esta app.
 2. Selecciona tu proyecto actual (`studio-469682222-689b2`).
 3. En el menú de la izquierda, busca **Compilación** y luego **App Hosting**.
 4. Haz clic en **Comenzar** y conecta tu cuenta de GitHub.
-5. Selecciona tu repositorio y la rama (usualmente `main` o `master`).
+5. Selecciona el repositorio que acabas de crear y la rama `main`.
 6. Firebase detectará automáticamente la configuración de Next.js.
 7. Haz clic en **Finalizar y desplegar**.
 
