@@ -76,9 +76,13 @@ export default function Login() {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
     try {
+      console.log('🚀 Llamando a signInWithRedirect...');
       await signInWithRedirect(auth, provider);
+      console.log('✅ signInWithRedirect no lanzó excepción (raro si no navegó)');
     } catch (error: any) {
-      console.error(error);
+      console.error('❌ ERROR en signInWithRedirect:', error);
+      console.error('❌ Código de error:', error.code);
+      console.error('❌ Mensaje:', error.message);
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
       setIsSubmitting(false);
     }
