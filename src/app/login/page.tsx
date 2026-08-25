@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  signInWithEmailAndPassword,
-  signInWithRedirect,
-  getRedirectResult,
-  GoogleAuthProvider,
-} from "firebase/auth";
+import { signInWithEmailAndPassword, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -43,19 +38,24 @@ export default function Login() {
 
   // Maneja el resultado del signInWithRedirect al volver de Google
   useEffect(() => {
+    console.log('🔍 Verificando resultado de redirect...');
     getRedirectResult(auth)
       .then(async (result) => {
+        console.log('🔍 Resultado de getRedirectResult:', result);
         if (result?.user) {
+          console.log('✅ Usuario encontrado:', result.user.uid);
           await createUserProfile(
             result.user.uid,
             result.user.email || "",
             result.user.displayName || "Usuario de Google"
           );
           toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
+        } else {
+          console.log('⚠️ No hay resultado de redirect (result es null)');
         }
       })
       .catch((error: any) => {
-        console.error(error);
+        console.error('❌ Error en getRedirectResult:', error);
         toast({ variant: "destructive", title: "Error con Google", description: error.message });
       });
   }, []);
@@ -77,7 +77,6 @@ export default function Login() {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithRedirect(auth, provider);
-      // La página se recarga tras el redirect; getRedirectResult() se encarga del resto
     } catch (error: any) {
       console.error(error);
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
