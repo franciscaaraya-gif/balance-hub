@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signInWithEmailAndPassword, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useUser } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -36,30 +40,6 @@ export default function Login() {
     }
   }, [user, isUserLoading, router]);
 
-  // Maneja el resultado del signInWithRedirect al volver de Google
-  useEffect(() => {
-    console.log('🔍 Verificando resultado de redirect...');
-    getRedirectResult(auth)
-      .then(async (result) => {
-        console.log('🔍 Resultado de getRedirectResult:', result);
-        if (result?.user) {
-          console.log('✅ Usuario encontrado:', result.user.uid);
-          await createUserProfile(
-            result.user.uid,
-            result.user.email || "",
-            result.user.displayName || "Usuario de Google"
-          );
-          toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
-        } else {
-          console.log('⚠️ No hay resultado de redirect (result es null)');
-        }
-      })
-      .catch((error: any) => {
-        console.error('❌ Error en getRedirectResult:', error);
-        toast({ variant: "destructive", title: "Error con Google", description: error.message });
-      });
-  }, []);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -76,13 +56,17 @@ export default function Login() {
     setIsSubmitting(true);
     const provider = new GoogleAuthProvider();
     try {
-      console.log('🚀 Llamando a signInWithRedirect...');
-      await signInWithRedirect(auth, provider);
-      console.log('✅ signInWithRedirect no lanzó excepción (raro si no navegó)');
+      const result = await signInWithPopup(auth, provider);
+      if (result.user) {
+        await createUserProfile(
+          result.user.uid,
+          result.user.email || "",
+          result.user.displayName || "Usuario de Google"
+        );
+      }
+      toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
     } catch (error: any) {
-      console.error('❌ ERROR en signInWithRedirect:', error);
-      console.error('❌ Código de error:', error.code);
-      console.error('❌ Mensaje:', error.message);
+      console.error(error);
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
       setIsSubmitting(false);
     }
