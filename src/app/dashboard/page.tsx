@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { PlusCircle, Users, Wallet, ChevronRight, Loader2, PiggyBank, ReceiptText, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
+import { collection, query, where, collectionGroup } from "firebase/firestore";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -24,16 +24,15 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // Consulta todos los grupos donde el usuario es MIEMBRO
+  // Consulta todos los grupos donde el usuario es MIEMBRO (incluye admin)
   const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'groups'), 
-      where('memberIds', 'array-contains', user.uid),
-      orderBy('createdAt', 'desc')
+      where('memberIds', 'array-contains', user.uid)
     );
   }, [firestore, user?.uid]);
-  const { data: myGroups, isLoading: myGroupsLoading } = useCollection<Group>(myGroupsQuery);
+  const { data: myGroups, isLoading: myGroupsLoading, error: groupsError } = useCollection<Group>(myGroupsQuery);
 
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -49,12 +48,16 @@ export default function Dashboard() {
     return myDebts.filter(d => d.status !== 'paid');
   }, [myDebts]);
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (!newGroupName || !user) return;
-    createGroup(newGroupName, newGroupType, user.uid);
-    toast({ title: "¡Éxito!", description: "Grupo creado correctamente." });
-    setNewGroupName("");
-    setOpen(false);
+    try {
+      await createGroup(newGroupName, newGroupType, user.uid);
+      toast({ title: "¡Éxito!", description: "Grupo creado correctamente." });
+      setNewGroupName("");
+      setOpen(false);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo crear el grupo." });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -88,8 +91,7 @@ export default function Dashboard() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Nombre del Grupo / Deuda</Label>
-                <input 
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                <Input 
                   placeholder="Ej: Asado Familiar, Luz Agosto" 
                   value={newGroupName} 
                   onChange={(e) => setNewGroupName(e.target.value)} 
@@ -128,6 +130,13 @@ export default function Dashboard() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {groupsError && (
+        <div className="p-4 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
+          <AlertCircle className="h-5 w-5" />
+          <span>Error al cargar grupos: {groupsError.message}</span>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
@@ -210,16 +219,6 @@ export default function Dashboard() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-primary text-primary-foreground border-none shadow-none">
-            <CardContent className="pt-6">
-              <div className="flex flex-col items-center text-center space-y-3">
-                <PiggyBank className="h-10 w-10 text-accent" />
-                <h3 className="font-headline font-bold">Gestión Centralizada</h3>
-                <p className="text-xs text-primary-foreground/70">Aquí ves todo lo que te han cobrado en cualquier grupo de BalanceHub.</p>
-              </div>
             </CardContent>
           </Card>
         </div>

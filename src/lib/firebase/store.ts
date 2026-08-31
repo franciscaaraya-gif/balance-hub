@@ -11,13 +11,10 @@ import {
   addDoc, 
   updateDoc,
   arrayUnion,
-  arrayRemove,
-  deleteField,
   limit,
-  writeBatch,
-  orderBy
+  writeBatch
 } from "firebase/firestore";
-import { Group, Debt, UserProfile, DebtStatus, Receipt, ReceiptItem } from "../types";
+import { Group, UserProfile, DebtStatus, ReceiptItem } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -38,7 +35,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   return snap.exists() ? (snap.data() as UserProfile) : null;
 };
 
-export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: string, fixedAmount?: number) => {
+export const createGroup = async (name: string, type: 'fixed' | 'variable', adminId: string, fixedAmount?: number) => {
   const inviteToken = Math.random().toString(36).substring(2, 15);
   const inviteLink = `${window.location.origin}/join/${inviteToken}`;
   const groupCollection = collection(db, "groups");
@@ -58,13 +55,7 @@ export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: s
     createdAt: Date.now(),
   };
 
-  addDoc(groupCollection, data).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: groupCollection.path,
-      operation: 'create',
-      requestResourceData: data
-    }));
-  });
+  return addDoc(groupCollection, data);
 };
 
 export const updateGroupTransferDetails = (groupId: string, transferDetails: string) => {
@@ -95,11 +86,12 @@ export const addDebt = async (groupId: string, debtorId: string, amount: number,
   return addDoc(debtCollection, data);
 };
 
-export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[], creatorId: string) => {
+export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[]) => {
   const batch = writeBatch(db);
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
-  const group = groupSnap?.data() as Group;
+  if (!groupSnap.exists()) return;
+  const group = groupSnap.data() as Group;
 
   memberIds.forEach(uid => {
     const debtRef = doc(collection(db, "groups", groupId, "debts"));
@@ -146,13 +138,7 @@ export const createReceipt = (groupId: string, items: { name: string, price: num
     createdAt: Date.now()
   };
 
-  addDoc(receiptCollection, data).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: receiptCollection.path,
-      operation: 'create',
-      requestResourceData: data
-    }));
-  });
+  addDoc(receiptCollection, data);
 };
 
 export const claimReceiptItem = (groupId: string, receiptId: string, itemId: string, userId: string, percentage: number, items: ReceiptItem[]) => {
@@ -174,15 +160,10 @@ export const claimReceiptItem = (groupId: string, receiptId: string, itemId: str
 
   updateDoc(receiptRef, {
     items: updatedItems
-  }).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: receiptRef.path,
-      operation: 'update'
-    }));
   });
 };
 
-export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[], adminId: string) => {
+export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[]) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   
   for (const item of items) {
@@ -196,11 +177,6 @@ export const finalizeReceipt = async (groupId: string, receiptId: string, items:
 
   updateDoc(receiptRef, {
     status: 'completed'
-  }).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: receiptRef.path,
-      operation: 'update'
-    }));
   });
 };
 
