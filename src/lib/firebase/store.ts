@@ -14,7 +14,7 @@ import {
   arrayRemove,
   deleteField,
   limit,
-  Timestamp
+  writeBatch
 } from "firebase/firestore";
 import { Group, Debt, UserProfile, DebtStatus, Receipt, ReceiptItem } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -66,69 +66,6 @@ export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: s
   });
 };
 
-export const updateGroupAmount = (groupId: string, amount: number) => {
-  const docRef = doc(db, "groups", groupId);
-  updateDoc(docRef, {
-    fixedAmount: amount
-  }).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: docRef.path,
-      operation: 'update',
-      requestResourceData: { fixedAmount: amount }
-    }));
-  });
-};
-
-export const getGroupByToken = async (inviteToken: string): Promise<Group | null> => {
-  const q = query(collection(db, "groups"), where("inviteToken", "==", inviteToken), limit(1));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const doc = snap.docs[0];
-  return { ...doc.data(), id: doc.id } as Group;
-};
-
-export const joinGroupByInvite = async (userId: string, inviteToken: string) => {
-  const group = await getGroupByToken(inviteToken);
-  if (!group) throw new Error("Enlace de invitación inválido o expirado");
-  
-  if (group.memberIds.includes(userId)) return group.id;
-
-  const groupRef = doc(db, "groups", group.id);
-  await updateDoc(groupRef, {
-    members: arrayUnion(userId),
-    memberIds: arrayUnion(userId),
-    [`memberStatuses.${userId}`]: 'active'
-  });
-  return group.id;
-};
-
-export const requestLeaveGroup = (groupId: string, userId: string) => {
-  const docRef = doc(db, "groups", groupId);
-  updateDoc(docRef, {
-    [`memberStatuses.${userId}`]: 'leave_pending'
-  }).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: docRef.path,
-      operation: 'update',
-      requestResourceData: { [`memberStatuses.${userId}`]: 'leave_pending' }
-    }));
-  });
-};
-
-export const confirmLeaveGroup = (groupId: string, userId: string) => {
-  const docRef = doc(db, "groups", groupId);
-  updateDoc(docRef, {
-    members: arrayRemove(userId),
-    memberIds: arrayRemove(userId),
-    [`memberStatuses.${userId}`]: deleteField()
-  }).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: docRef.path,
-      operation: 'update'
-    }));
-  });
-};
-
 export const addDebt = async (groupId: string, debtorId: string, amount: number, description: string, receiptId?: string) => {
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
@@ -149,13 +86,30 @@ export const addDebt = async (groupId: string, debtorId: string, amount: number,
     updatedAt: Date.now(),
   };
 
-  addDoc(debtCollection, data).catch(error => {
-    errorEmitter.emit('permission-error', new FirestorePermissionError({
-      path: debtCollection.path,
-      operation: 'create',
-      requestResourceData: data
-    }));
+  return addDoc(debtCollection, data);
+};
+
+export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[]) => {
+  const batch = writeBatch(db);
+  const groupRef = doc(db, "groups", groupId);
+  const groupSnap = await getDoc(groupRef);
+  const group = groupSnap?.data() as Group;
+
+  memberIds.forEach(uid => {
+    const debtRef = doc(collection(db, "groups", groupId, "debts"));
+    batch.set(debtRef, {
+      groupId,
+      debtorId: uid,
+      amount,
+      description,
+      status: 'pending',
+      groupAdminId: group.adminId,
+      groupMemberIds: group.memberIds,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
   });
+  return batch.commit();
 };
 
 export const updateDebtStatusInGroup = (groupId: string, debtId: string, status: DebtStatus) => {
@@ -225,7 +179,6 @@ export const claimReceiptItem = (groupId: string, receiptId: string, itemId: str
 export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[]) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   
-  // Create debts for all claims
   for (const item of items) {
     for (const claim of item.claims) {
       const amount = (item.price * claim.percentage) / 100;
@@ -245,16 +198,35 @@ export const finalizeReceipt = async (groupId: string, receiptId: string, items:
   });
 };
 
+export const getGroupByToken = async (inviteToken: string): Promise<Group | null> => {
+  const q = query(collection(db, "groups"), where("inviteToken", "==", inviteToken), limit(1));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { ...doc.data(), id: doc.id } as Group;
+};
+
+export const joinGroupByInvite = async (userId: string, inviteToken: string) => {
+  const group = await getGroupByToken(inviteToken);
+  if (!group) throw new Error("Enlace de invitación inválido o expirado");
+  
+  if (group.memberIds.includes(userId)) return group.id;
+
+  const groupRef = doc(db, "groups", group.id);
+  await updateDoc(groupRef, {
+    members: arrayUnion(userId),
+    memberIds: arrayUnion(userId),
+    [`memberStatuses.${userId}`]: 'active'
+  });
+  return group.id;
+};
+
 export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserProfile[]> => {
   if (!memberIds || memberIds.length === 0) return [];
   const profiles: UserProfile[] = [];
-  try {
-    for (const id of memberIds) {
-      const p = await getUserProfile(id);
-      if (p) profiles.push(p);
-    }
-  } catch (e) {
-    // Silently fail
+  for (const id of memberIds) {
+    const p = await getUserProfile(id);
+    if (p) profiles.push(p);
   }
   return profiles;
 };
