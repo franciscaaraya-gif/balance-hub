@@ -96,10 +96,8 @@ export const addFixedDebtToAll = async (groupId: string, amount: number, descrip
   const groupSnap = await getDoc(groupRef);
   const group = groupSnap?.data() as Group;
 
-  // Filtramos al creador para que no se cobre a sí mismo
-  const targets = memberIds.filter(id => id !== creatorId);
-
-  targets.forEach(uid => {
+  // Incluimos a TODOS los miembros, incluyendo al creador/admin
+  memberIds.forEach(uid => {
     const debtRef = doc(collection(db, "groups", groupId, "debts"));
     batch.set(debtRef, {
       groupId,
@@ -185,9 +183,7 @@ export const finalizeReceipt = async (groupId: string, receiptId: string, items:
   
   for (const item of items) {
     for (const claim of item.claims) {
-      // Si el reclamo es del admin, no creamos deuda porque él es quien pagó
-      if (claim.userId === adminId) continue;
-      
+      // Ahora incluimos a todos, incluso si es el admin
       const amount = (item.price * claim.percentage) / 100;
       if (amount > 0) {
         await addDebt(groupId, claim.userId, amount, `Consumo: ${item.name}`, receiptId);

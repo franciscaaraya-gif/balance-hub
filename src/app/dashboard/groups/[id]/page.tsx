@@ -71,7 +71,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     setIsActionLoading(true);
     try {
       await addFixedDebtToAll(params.id, parseFloat(fixedAmount), fixedDescription, group!.memberIds, user.uid);
-      toast({ title: "Deudas Creadas", description: "Se asignó el cobro a los otros miembros." });
+      toast({ title: "Deudas Creadas", description: "Se asignó el cobro a todos los miembros." });
       setAddingFixedDebt(false);
       setFixedAmount("");
       setFixedDescription("");
@@ -144,7 +144,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     setIsActionLoading(true);
     try {
       await finalizeReceipt(params.id, receipt.id, receipt.items, user.uid);
-      toast({ title: "Boleta Finalizada", description: "Se han generado las deudas." });
+      toast({ title: "Boleta Finalizada", description: "Se han generado las deudas para todos." });
     } catch (error) {
       toast({ variant: "destructive", title: "Error al finalizar" });
     } finally {
@@ -351,7 +351,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cobro en Partes Iguales</DialogTitle>
-            <DialogDescription>Se generará una deuda por este monto a cada integrante (tú estás excluido).</DialogDescription>
+            <DialogDescription>Se generará una deuda por este monto a cada integrante (incluyéndote).</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -366,8 +366,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
               </div>
             </div>
             <div className="bg-muted p-3 rounded-lg text-xs flex justify-between">
-              <span>Otros miembros a cobrar:</span>
-              <span className="font-bold">{members.length - 1}</span>
+              <span>Total de miembros a cobrar:</span>
+              <span className="font-bold">{members.length}</span>
             </div>
           </div>
           <DialogFooter>
@@ -392,9 +392,12 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
               <Input placeholder="Ej: Gastos Varios" value={variableDescription} onChange={(e) => setVariableDescription(e.target.value)} />
             </div>
             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-              {members.filter(m => m.uid !== user?.uid).map(m => (
+              {members.map(m => (
                 <div key={m.uid} className="flex items-center gap-3">
-                  <div className="flex-1 text-sm font-medium">{m.displayName}</div>
+                  <div className="flex-1 text-sm font-medium">
+                    {m.displayName}
+                    {m.uid === user?.uid && <span className="ml-2 text-[10px] text-muted-foreground">(Tú)</span>}
+                  </div>
                   <div className="relative w-32">
                     <DollarSign className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                     <Input 
