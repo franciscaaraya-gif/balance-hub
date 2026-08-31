@@ -11,13 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, QrCode, UserPlus, ScanLine, Camera, Loader2, DollarSign, Users, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { parseReceipt } from "@/ai/flows/parse-receipt-flow";
-import { doc, collection, query } from "firebase/firestore";
+import { doc, collection, query, orderBy } from "firebase/firestore";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -29,8 +28,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [addingVariableDebt, setAddingVariableDebt] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
   const [parsingReceipt, setParsingReceipt] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showMembersList, setShowMembersList] = useState(false);
 
   const [fixedAmount, setFixedAmount] = useState("");
   const [fixedDescription, setFixedDescription] = useState("");
@@ -49,13 +48,13 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const debtsQuery = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
-    return query(collection(firestore, 'groups', params.id, 'debts'));
+    return query(collection(firestore, 'groups', params.id, 'debts'), orderBy('createdAt', 'desc'));
   }, [firestore, params.id]);
   const { data: debts } = useCollection<Debt>(debtsQuery);
 
   const receiptsQuery = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
-    return query(collection(firestore, 'groups', params.id, 'receipts'));
+    return query(collection(firestore, 'groups', params.id, 'receipts'), orderBy('createdAt', 'desc'));
   }, [firestore, params.id]);
   const { data: receipts } = useCollection<Receipt>(receiptsQuery);
 
@@ -68,19 +67,23 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const isAdmin = group?.adminId === user?.uid;
 
   const handleAddFixedDebt = async () => {
-    if (!fixedAmount || !fixedDescription) return;
+    if (!fixedAmount || !fixedDescription || !user) return;
+    setIsActionLoading(true);
     try {
-      await addFixedDebtToAll(params.id, parseFloat(fixedAmount), fixedDescription, group!.memberIds);
-      toast({ title: "Deudas Creadas", description: "Se asignó el cobro a todos los miembros." });
+      await addFixedDebtToAll(params.id, parseFloat(fixedAmount), fixedDescription, group!.memberIds, user.uid);
+      toast({ title: "Deudas Creadas", description: "Se asignó el cobro a los otros miembros." });
       setAddingFixedDebt(false);
       setFixedAmount("");
       setFixedDescription("");
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
   const handleAddVariableDebt = async () => {
+    setIsActionLoading(true);
     try {
       for (const uid in variableDebts) {
         const amount = parseFloat(variableDebts[uid]);
@@ -94,6 +97,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       setVariableDescription("");
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -131,6 +136,19 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       toast({ variant: "destructive", title: "Error de IA" });
     } finally {
       setParsingReceipt(false);
+    }
+  };
+
+  const handleFinalizeReceipt = async (receipt: Receipt) => {
+    if (!user) return;
+    setIsActionLoading(true);
+    try {
+      await finalizeReceipt(params.id, receipt.id, receipt.items, user.uid);
+      toast({ title: "Boleta Finalizada", description: "Se han generado las deudas." });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error al finalizar" });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -177,53 +195,62 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg font-headline">Historial de Cobros</CardTitle>
+            <CardDescription>Resumen de todas las deudas del grupo.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Miembro</TableHead>
-                  <TableHead>Cobro</TableHead>
-                  <TableHead>Monto</TableHead>
-                  <TableHead>Estado</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {debts?.map(debt => (
-                  <TableRow key={debt.id}>
-                    <TableCell className="font-medium text-xs">
-                      {members.find(m => m.uid === debt.debtorId)?.displayName || 'Cargando...'}
-                    </TableCell>
-                    <TableCell className="text-xs">{debt.description}</TableCell>
-                    <TableCell className="font-bold text-primary">${debt.amount.toFixed(2)}</TableCell>
-                    <TableCell>
-                      {debt.status === 'paid' ? (
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-600">Pagado</Badge>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="bg-orange-50 text-orange-600">Pendiente</Badge>
-                          {isAdmin && (
-                            <Button size="icon" variant="ghost" className="h-6 w-6 text-emerald-600" onClick={() => updateDebtStatusInGroup(params.id, debt.id, 'paid')}>
-                              <CheckCircle2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Miembro</TableHead>
+                    <TableHead>Concepto</TableHead>
+                    <TableHead>Monto</TableHead>
+                    <TableHead>Estado</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {debts?.map(debt => (
+                    <TableRow key={debt.id} className={cn(debt.debtorId === user?.uid && "bg-primary/5")}>
+                      <TableCell className="font-medium text-xs">
+                        {members.find(m => m.uid === debt.debtorId)?.displayName || 'Cargando...'}
+                        {debt.debtorId === user?.uid && <Badge className="ml-2 text-[8px] bg-accent">Yo</Badge>}
+                      </TableCell>
+                      <TableCell className="text-xs">{debt.description}</TableCell>
+                      <TableCell className="font-bold text-primary">${debt.amount.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {debt.status === 'paid' ? (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-600">Pagado</Badge>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="bg-orange-50 text-orange-600">Pendiente</Badge>
+                            {isAdmin && (
+                              <Button size="icon" variant="ghost" className="h-6 w-6 text-emerald-600" onClick={() => updateDebtStatusInGroup(params.id, debt.id, 'paid')}>
+                                <CheckCircle2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {debts?.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No hay cobros registrados aún.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Panel Derecho: Boletas Activas e IA */}
+        {/* Panel Derecho: Boletas Activas y Miembros */}
         <div className="space-y-6">
           {receipts?.filter(r => r.status === 'open').map(receipt => (
             <Card key={receipt.id} className="border-accent/20">
               <CardHeader className="bg-accent/5 pb-3">
-                <CardTitle className="text-sm font-bold uppercase tracking-widest text-accent">Boleta Pendiente</CardTitle>
-                <CardDescription>Selecciona tus ítems y porcentaje.</CardDescription>
+                <CardTitle className="text-sm font-bold uppercase tracking-widest text-accent">Boleta en Curso</CardTitle>
+                <CardDescription>Marca tus consumos.</CardDescription>
               </CardHeader>
               <CardContent className="p-0 max-h-80 overflow-y-auto">
                 <div className="divide-y">
@@ -261,8 +288,12 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
               </CardContent>
               <CardFooter className="p-3 bg-accent/5">
                 {isAdmin && (
-                  <Button className="w-full bg-accent text-xs h-8" onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items)}>
-                    Finalizar y Cobrar
+                  <Button 
+                    className="w-full bg-accent text-xs h-8" 
+                    onClick={() => handleFinalizeReceipt(receipt)}
+                    disabled={isActionLoading}
+                  >
+                    {isActionLoading ? <Loader2 className="h-3 w-3 animate-spin mr-2" /> : "Finalizar y Cobrar"}
                   </Button>
                 )}
               </CardFooter>
@@ -272,7 +303,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Users className="h-4 w-4" /> Miembros
+                <Users className="h-4 w-4" /> Miembros ({members.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -282,6 +313,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                     <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-bold">{m.displayName?.[0]}</div>
                     <span className="truncate">{m.displayName}</span>
                     {m.uid === group.adminId && <Badge className="text-[8px] h-3 px-1">Admin</Badge>}
+                    {m.uid === user?.uid && <Badge variant="outline" className="text-[8px] h-3 px-1 ml-auto">Tú</Badge>}
                   </div>
                 ))}
               </div>
@@ -319,7 +351,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Cobro en Partes Iguales</DialogTitle>
-            <DialogDescription>Se generará una deuda por este monto a cada integrante.</DialogDescription>
+            <DialogDescription>Se generará una deuda por este monto a cada integrante (tú estás excluido).</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -334,13 +366,15 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
               </div>
             </div>
             <div className="bg-muted p-3 rounded-lg text-xs flex justify-between">
-              <span>Personas en el grupo:</span>
-              <span className="font-bold">{members.length}</span>
+              <span>Otros miembros a cobrar:</span>
+              <span className="font-bold">{members.length - 1}</span>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddingFixedDebt(false)}>Cancelar</Button>
-            <Button onClick={handleAddFixedDebt}>Generar Deudas</Button>
+            <Button onClick={handleAddFixedDebt} disabled={isActionLoading}>
+              {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Generar Deudas"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -358,7 +392,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
               <Input placeholder="Ej: Gastos Varios" value={variableDescription} onChange={(e) => setVariableDescription(e.target.value)} />
             </div>
             <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
-              {members.map(m => (
+              {members.filter(m => m.uid !== user?.uid).map(m => (
                 <div key={m.uid} className="flex items-center gap-3">
                   <div className="flex-1 text-sm font-medium">{m.displayName}</div>
                   <div className="relative w-32">
@@ -377,7 +411,9 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddingVariableDebt(false)}>Cancelar</Button>
-            <Button onClick={handleAddVariableDebt}>Generar Cobros</Button>
+            <Button onClick={handleAddVariableDebt} disabled={isActionLoading}>
+              {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Generar Cobros"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -387,7 +423,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Escáner de Boleta (IA)</DialogTitle>
-            <DialogDescription>Identifica ítems para que cada uno elija lo suyo.</DialogDescription>
+            <DialogDescription>Identifica ítems para repartir gastos.</DialogDescription>
           </DialogHeader>
           <div className="relative aspect-[3/4] bg-black rounded-lg overflow-hidden border">
             <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
@@ -409,4 +445,27 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       </Dialog>
     </div>
   );
+}
+
+function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
+  return (
+    <div className="relative w-full overflow-auto">
+      <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
+    </div>
+  );
+}
+function TableHeader({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return <thead className={cn("[&_tr]:border-b", className)} {...props} />;
+}
+function TableBody({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return <tbody className={cn("[&_tr:last-child]:border-0", className)} {...props} />;
+}
+function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
+  return <tr className={cn("border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted", className)} {...props} />;
+}
+function TableHead({ className, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
+  return <th className={cn("h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0", className)} {...props} />;
+}
+function TableCell({ className, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
+  return <td className={cn("p-4 align-middle [&:has([role=checkbox])]:pr-0", className)} {...props} />;
 }

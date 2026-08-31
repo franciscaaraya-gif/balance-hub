@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { PlusCircle, Users, Wallet, ChevronRight, Loader2, PiggyBank, ReceiptText, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where, collectionGroup } from "firebase/firestore";
+import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -24,14 +24,16 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  const adminGroupsQuery = useMemoFirebase(() => {
+  // Consulta todos los grupos donde el usuario es MIEMBRO
+  const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'groups'), 
-      where('adminId', '==', user.uid)
+      where('memberIds', 'array-contains', user.uid),
+      orderBy('createdAt', 'desc')
     );
   }, [firestore, user?.uid]);
-  const { data: adminGroups, isLoading: adminGroupsLoading } = useCollection<Group>(adminGroupsQuery);
+  const { data: myGroups, isLoading: myGroupsLoading } = useCollection<Group>(myGroupsQuery);
 
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -86,7 +88,12 @@ export default function Dashboard() {
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Nombre del Grupo / Deuda</Label>
-                <Input placeholder="Ej: Asado Familiar, Luz Agosto" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} />
+                <input 
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                  placeholder="Ej: Asado Familiar, Luz Agosto" 
+                  value={newGroupName} 
+                  onChange={(e) => setNewGroupName(e.target.value)} 
+                />
               </div>
               <div className="space-y-2">
                 <Label>Tipo de Cobro</Label>
@@ -125,26 +132,26 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <h2 className="text-xl font-headline font-bold flex items-center gap-2">
-            <ReceiptText className="h-5 w-5 text-primary" /> Grupos que Administro
+            <ReceiptText className="h-5 w-5 text-primary" /> Mis Grupos
           </h2>
           
-          {adminGroupsLoading ? (
+          {myGroupsLoading ? (
             <div className="grid gap-6 sm:grid-cols-2">
               {[1, 2].map(i => <div key={i} className="h-32 rounded-xl bg-muted animate-pulse" />)}
             </div>
-          ) : adminGroups?.length === 0 ? (
+          ) : myGroups?.length === 0 ? (
             <Card className="border-dashed bg-transparent py-10">
               <CardContent className="flex flex-col items-center justify-center text-center space-y-3">
                 <div className="p-3 bg-muted rounded-full"><Users className="h-6 w-6 text-muted-foreground" /></div>
                 <div>
                   <p className="font-medium text-muted-foreground">No tienes grupos activos</p>
-                  <p className="text-xs text-muted-foreground/60">Crea uno para empezar a cobrar deudas.</p>
+                  <p className="text-xs text-muted-foreground/60">Crea uno o únete a través de un enlace.</p>
                 </div>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2">
-              {adminGroups?.map(g => (
+              {myGroups?.map(g => (
                 <Link key={g.id} href={`/dashboard/groups/${g.id}`}>
                   <Card className="hover:shadow-md transition-all cursor-pointer border-l-4 border-l-primary group">
                     <CardHeader className="pb-4">
@@ -152,13 +159,14 @@ export default function Dashboard() {
                         <Badge variant={g.type === 'fixed' ? 'default' : 'secondary'} className="text-[10px]">
                           {g.type === 'fixed' ? 'IGUALES' : 'VARIABLE'}
                         </Badge>
+                        {g.adminId === user?.uid && <Badge variant="outline" className="text-[8px] border-primary text-primary">Admin</Badge>}
                       </div>
                       <CardTitle className="mt-2 text-lg group-hover:text-primary transition-colors">{g.name}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex justify-between items-center text-xs text-muted-foreground pt-4 border-t">
                         <span className="flex items-center gap-1 font-medium"><Users className="h-3 w-3" /> {g.memberIds?.length || 0} Miembros</span>
-                        <span className="flex items-center gap-1 text-primary font-bold">Gestionar <ChevronRight className="h-3 w-3" /></span>
+                        <span className="flex items-center gap-1 text-primary font-bold">Entrar <ChevronRight className="h-3 w-3" /></span>
                       </div>
                     </CardContent>
                   </Card>

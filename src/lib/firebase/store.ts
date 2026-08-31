@@ -14,7 +14,8 @@ import {
   arrayRemove,
   deleteField,
   limit,
-  writeBatch
+  writeBatch,
+  orderBy
 } from "firebase/firestore";
 import { Group, Debt, UserProfile, DebtStatus, Receipt, ReceiptItem } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -89,13 +90,16 @@ export const addDebt = async (groupId: string, debtorId: string, amount: number,
   return addDoc(debtCollection, data);
 };
 
-export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[]) => {
+export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[], creatorId: string) => {
   const batch = writeBatch(db);
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
   const group = groupSnap?.data() as Group;
 
-  memberIds.forEach(uid => {
+  // Filtramos al creador para que no se cobre a sí mismo
+  const targets = memberIds.filter(id => id !== creatorId);
+
+  targets.forEach(uid => {
     const debtRef = doc(collection(db, "groups", groupId, "debts"));
     batch.set(debtRef, {
       groupId,
@@ -176,11 +180,14 @@ export const claimReceiptItem = (groupId: string, receiptId: string, itemId: str
   });
 };
 
-export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[]) => {
+export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[], adminId: string) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   
   for (const item of items) {
     for (const claim of item.claims) {
+      // Si el reclamo es del admin, no creamos deuda porque él es quien pagó
+      if (claim.userId === adminId) continue;
+      
       const amount = (item.price * claim.percentage) / 100;
       if (amount > 0) {
         await addDebt(groupId, claim.userId, amount, `Consumo: ${item.name}`, receiptId);
