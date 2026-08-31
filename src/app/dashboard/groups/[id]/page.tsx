@@ -3,7 +3,7 @@
 
 import { useEffect, useState, use, useMemo, useRef } from "react";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { getGroupMembersDetails, addDebt, addFixedDebtToAll, createReceipt, claimReceiptItem, finalizeReceipt, updateDebtStatusInGroup } from "@/lib/firebase/store";
+import { getGroupMembersDetails, addDebt, addFixedDebtToAll, createReceipt, claimReceiptItem, finalizeReceipt, updateDebtStatusInGroup, updateGroupTransferDetails } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile, Receipt, ReceiptItem } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -11,12 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, QrCode, UserPlus, ScanLine, Camera, Loader2, DollarSign, Users, Trash2 } from "lucide-react";
+import { Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, QrCode, UserPlus, ScanLine, Camera, Loader2, DollarSign, Users, Trash2, CreditCard, Copy, Pencil, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { parseReceipt } from "@/ai/flows/parse-receipt-flow";
 import { doc, collection, query, orderBy } from "firebase/firestore";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -30,6 +31,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [parsingReceipt, setParsingReceipt] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [editingTransfer, setEditingTransfer] = useState(false);
+  const [transferInput, setTransferInput] = useState("");
 
   const [fixedAmount, setFixedAmount] = useState("");
   const [fixedDescription, setFixedDescription] = useState("");
@@ -62,9 +65,31 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (group?.memberIds) {
       getGroupMembersDetails(group.memberIds).then(setMembers);
     }
-  }, [group?.memberIds]);
+    if (group?.transferDetails) {
+      setTransferInput(group.transferDetails);
+    }
+  }, [group?.memberIds, group?.transferDetails]);
 
   const isAdmin = group?.adminId === user?.uid;
+
+  const handleUpdateTransfer = async () => {
+    setIsActionLoading(true);
+    try {
+      await updateGroupTransferDetails(params.id, transferInput);
+      toast({ title: "Datos actualizados", description: "La información de transferencia ha sido guardada." });
+      setEditingTransfer(false);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudieron guardar los datos." });
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  const copyTransferDetails = () => {
+    if (!group?.transferDetails) return;
+    navigator.clipboard.writeText(group.transferDetails);
+    toast({ title: "Copiado", description: "Datos de transferencia copiados al portapapeles." });
+  };
 
   const handleAddFixedDebt = async () => {
     if (!fixedAmount || !fixedDescription || !user) return;
@@ -244,7 +269,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           </CardContent>
         </Card>
 
-        {/* Panel Derecho: Boletas Activas y Miembros */}
+        {/* Panel Derecho: Boletas Activas, Transferencia y Miembros */}
         <div className="space-y-6">
           {receipts?.filter(r => r.status === 'open').map(receipt => (
             <Card key={receipt.id} className="border-accent/20">
@@ -299,6 +324,55 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
               </CardFooter>
             </Card>
           ))}
+
+          {/* DATOS DE TRANSFERENCIA */}
+          <Card className="border-secondary/20">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-secondary" /> Datos de Pago
+              </CardTitle>
+              {isAdmin && !editingTransfer && (
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setEditingTransfer(true)}>
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {editingTransfer ? (
+                <div className="space-y-3">
+                  <Textarea 
+                    placeholder="Ej: CBU 000000000000, Alias: mi.casa.verde, RUT: 12.345.678-9" 
+                    className="text-xs min-h-[80px]"
+                    value={transferInput}
+                    onChange={(e) => setTransferInput(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" className="flex-1 h-7 text-[10px]" onClick={() => setEditingTransfer(false)}>Cancelar</Button>
+                    <Button size="sm" className="flex-1 h-7 text-[10px]" onClick={handleUpdateTransfer} disabled={isActionLoading}>
+                      <Save className="h-3 w-3 mr-1" /> Guardar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {group.transferDetails ? (
+                    <>
+                      <div className="bg-muted p-3 rounded-lg text-[10px] whitespace-pre-wrap font-mono">
+                        {group.transferDetails}
+                      </div>
+                      <Button variant="outline" className="w-full h-8 text-[10px] gap-2" onClick={copyTransferDetails}>
+                        <Copy className="h-3 w-3" /> Copiar Datos
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="text-[10px] text-muted-foreground text-center py-2 italic">
+                      {isAdmin ? "Agrega tus datos para que te paguen." : "El admin aún no sube sus datos."}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
           
           <Card className="border-primary/20 bg-primary/5">
             <CardHeader className="pb-3">

@@ -67,6 +67,11 @@ export const createGroup = (name: string, type: 'fixed' | 'variable', adminId: s
   });
 };
 
+export const updateGroupTransferDetails = (groupId: string, transferDetails: string) => {
+  const docRef = doc(db, "groups", groupId);
+  return updateDoc(docRef, { transferDetails });
+};
+
 export const addDebt = async (groupId: string, debtorId: string, amount: number, description: string, receiptId?: string) => {
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
@@ -96,7 +101,6 @@ export const addFixedDebtToAll = async (groupId: string, amount: number, descrip
   const groupSnap = await getDoc(groupRef);
   const group = groupSnap?.data() as Group;
 
-  // Incluimos a TODOS los miembros, incluyendo al creador/admin
   memberIds.forEach(uid => {
     const debtRef = doc(collection(db, "groups", groupId, "debts"));
     batch.set(debtRef, {
@@ -183,7 +187,6 @@ export const finalizeReceipt = async (groupId: string, receiptId: string, items:
   
   for (const item of items) {
     for (const claim of item.claims) {
-      // Ahora incluimos a todos, incluso si es el admin
       const amount = (item.price * claim.percentage) / 100;
       if (amount > 0) {
         await addDebt(groupId, claim.userId, amount, `Consumo: ${item.name}`, receiptId);

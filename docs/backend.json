@@ -26,7 +26,8 @@
         "fixedAmount": { "type": "number" },
         "adminId": { "type": "string" },
         "inviteLink": { "type": "string", "format": "uri" },
-        "memberIds": { "type": "array", "items": { "type": "string" } }
+        "memberIds": { "type": "array", "items": { "type": "string" } },
+        "transferDetails": { "type": "string", "description": "Bank account details for transfers." }
       },
       "required": ["id", "name", "type", "adminId", "inviteLink"]
     },
@@ -94,6 +95,7 @@
           "entityName": "UserProfile",
           "schema": { "$ref": "#/backend/entities/UserProfile" },
           "description": "Stores individual user profile information."
+"
         }
       },
       {

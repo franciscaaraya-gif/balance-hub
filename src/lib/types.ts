@@ -23,6 +23,7 @@ export interface Group {
   memberStatuses?: Record<string, MemberStatus>;
   inviteToken: string;
   inviteLink: string;
+  transferDetails?: string;
   createdAt: number;
 }
 
