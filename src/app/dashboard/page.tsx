@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { PlusCircle, Users, Wallet, ChevronRight, Loader2, PiggyBank, ReceiptText, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where, collectionGroup } from "firebase/firestore";
+import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -23,21 +23,25 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // Consulta todos los grupos donde el usuario es MIEMBRO (incluye admin)
+  // Consulta optimizada: Buscamos grupos donde el usuario es miembro.
+  // Añadimos orderBy para consistencia con los índices.
   const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'groups'), 
-      where('memberIds', 'array-contains', user.uid)
+      where('memberIds', 'array-contains', user.uid),
+      orderBy('createdAt', 'desc')
     );
   }, [firestore, user?.uid]);
   const { data: myGroups, isLoading: myGroupsLoading, error: groupsError } = useCollection<Group>(myGroupsQuery);
 
+  // Consulta Global (Collection Group): Busca todas las deudas del usuario en CUALQUIER grupo.
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collectionGroup(firestore, 'debts'),
-      where('debtorId', '==', user.uid)
+      where('debtorId', '==', user.uid),
+      orderBy('status', 'asc') // Pendientes primero
     );
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading, error: debtsError } = useCollection<Debt>(myDebtsQuery);
@@ -133,7 +137,7 @@ export default function Dashboard() {
       {(groupsError || debtsError) && (
         <div className="p-4 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
           <AlertCircle className="h-5 w-5" />
-          <span>Hubo un problema al cargar tus datos. Reintenta en unos momentos.</span>
+          <span>Hubo un problema de permisos al cargar tus datos. Reintenta en unos momentos.</span>
         </div>
       )}
 

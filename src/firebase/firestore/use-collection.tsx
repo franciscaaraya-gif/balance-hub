@@ -59,16 +59,13 @@ export function useCollection<T = any>(
         const queryAny = memoizedTargetRefOrQuery as any;
         
         // Intentar extraer una ruta útil para el reporte de error de permisos
+        // En Firebase v11, las rutas internas pueden estar en lugares distintos
         if (queryAny.path) {
           reportedPath = queryAny.path;
-        } else if (queryAny._query?.path) {
-          reportedPath = queryAny._query.path.toString();
+        } else if (queryAny._query?.path?.segments) {
+          reportedPath = queryAny._query.path.segments.join('/');
         } else if (queryAny._query?.collectionGroup) {
           reportedPath = `collectionGroup(${queryAny._query.collectionGroup})`;
-        } else if (serverError.code === 'permission-denied') {
-          // Si no podemos determinar la ruta exacta pero es un error de permisos,
-          // usamos un marcador que ayude a identificar el fallo en reglas globales
-          reportedPath = "collection-group-query";
         }
 
         const contextualError = new FirestorePermissionError({

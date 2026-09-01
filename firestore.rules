@@ -3,44 +3,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Regla global: permite todo a usuarios autenticados
-    // Nota: Para Collection Group Queries, se requieren las reglas con {path=**} de abajo.
+    // REGLA MAESTRA PARA PROTOTIPO: 
+    // Permite cualquier operación de lectura o escritura a usuarios autenticados.
+    // El uso del comodín recursivo {document=**} en la raíz es la forma más 
+    // estable de asegurar que tanto las consultas directas como las de 
+    // Collection Group (debts, receipts) funcionen sin errores de permisos.
     match /{document=**} {
       allow read, write: if request.auth != null;
     }
 
-    // Regla específica para consultas globales (Collection Group) de deudas
-    // Es CRÍTICO que estas reglas estén en el nivel superior con {path=**}
-    match /{path=**}/debts/{debtId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Regla específica para consultas globales (Collection Group) de boletas
-    match /{path=**}/receipts/{receiptId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Reglas para perfiles de usuario
-    match /userProfiles/{userId} {
-      allow read, write: if request.auth != null;
-    }
-
-    // Reglas para grupos y sus subcolecciones
-    match /groups/{groupId} {
-      allow read, write: if request.auth != null;
-
-      match /debts/{debtId} {
-        allow read, write: if request.auth != null;
-      }
-
-      match /receipts/{receiptId} {
-        allow read, write: if request.auth != null;
-      }
-    }
-    
-    // Reglas para eventos de asistencia
-    match /events/{eventId} {
-      allow read, write: if request.auth != null;
-    }
+    // Nota: En una aplicación de producción real, aquí desglosaríamos 
+    // los permisos por colección (ej. solo el admin puede borrar el grupo).
+    // Para este prototipo funcional, la regla de arriba garantiza que 
+    // el sistema de cobros y asistencia no se bloquee.
   }
 }
