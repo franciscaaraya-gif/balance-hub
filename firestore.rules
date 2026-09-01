@@ -2,19 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // REGLA MAESTRA PARA PROTOTIPO: 
-    // Permite cualquier operación de lectura o escritura a usuarios autenticados.
-    // El uso del comodín recursivo {document=**} en la raíz es la forma más 
-    // estable de asegurar que tanto las consultas directas como las de 
-    // Collection Group (debts, receipts) funcionen sin errores de permisos.
+    // REGLA DE PROTOTIPO: Acceso total para desarrollo.
+    // Permite lectura y escritura a cualquier usuario sin restricciones.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if true;
     }
-
-    // Nota: En una aplicación de producción real, aquí desglosaríamos 
-    // los permisos por colección (ej. solo el admin puede borrar el grupo).
-    // Para este prototipo funcional, la regla de arriba garantiza que 
-    // el sistema de cobros y asistencia no se bloquee.
   }
 }

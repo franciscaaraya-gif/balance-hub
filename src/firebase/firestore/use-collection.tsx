@@ -54,18 +54,13 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // Diagnóstico mejorado para rutas de consulta
         let reportedPath = "dynamic-query";
         const queryAny = memoizedTargetRefOrQuery as any;
         
-        // Intentar extraer una ruta útil para el reporte de error de permisos
-        // En Firebase v11, las rutas internas pueden estar en lugares distintos
         if (queryAny.path) {
           reportedPath = queryAny.path;
         } else if (queryAny._query?.path?.segments) {
           reportedPath = queryAny._query.path.segments.join('/');
-        } else if (queryAny._query?.collectionGroup) {
-          reportedPath = `collectionGroup(${queryAny._query.collectionGroup})`;
         }
 
         const contextualError = new FirestorePermissionError({
@@ -73,12 +68,13 @@ export function useCollection<T = any>(
           path: reportedPath,
         });
 
+        console.warn('Firestore Permission Issue:', contextualError.message);
         setError(contextualError);
         setData(null);
         setIsLoading(false);
         
-        // Emitir el error contextual para el listener global
-        errorEmitter.emit('permission-error', contextualError);
+        // No emitimos el error global para evitar el crash de pantalla roja
+        // errorEmitter.emit('permission-error', contextualError);
       }
     );
 
