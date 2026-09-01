@@ -62,7 +62,17 @@
         "totalCost": { "type": "number" },
         "creatorId": { "type": "string" },
         "participantIds": { "type": "array", "items": { "type": "string" } },
-        "presentIds": { "type": "array", "items": { "type": "string" } }
+        "presentIds": { "type": "array", "items": { "type": "string" } },
+        "externalGuests": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "addedBy": { "type": "string" }
+            }
+          } 
+        }
       },
       "required": ["id", "title", "date", "totalCost", "creatorId"]
     }

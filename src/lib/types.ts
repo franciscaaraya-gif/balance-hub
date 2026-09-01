@@ -64,6 +64,11 @@ export interface Receipt {
   createdAt: number;
 }
 
+export interface ExternalGuest {
+  name: string;
+  addedBy: string;
+}
+
 export interface Event {
   id: string;
   title: string;
@@ -74,5 +79,7 @@ export interface Event {
   creatorId: string;
   participantIds: string[];
   presentIds: string[];
+  externalGuests?: ExternalGuest[];
+  shareLink?: string;
   createdAt: number;
 }

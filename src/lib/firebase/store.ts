@@ -15,7 +15,7 @@ import {
   limit,
   writeBatch
 } from "firebase/firestore";
-import { Group, UserProfile, DebtStatus, ReceiptItem, Event } from "../types";
+import { Group, UserProfile, DebtStatus, ReceiptItem, Event, ExternalGuest } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -223,13 +223,18 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
 // EVENT / ATTENDANCE STORE FUNCTIONS
 export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds'>) => {
   const eventCollection = collection(db, "events");
+  const eventRef = doc(eventCollection);
   const eventData = {
     ...data,
+    id: eventRef.id,
     participantIds: [data.creatorId],
     presentIds: [data.creatorId],
+    externalGuests: [],
+    shareLink: `${window.location.origin}/attendance/join/${eventRef.id}`,
     createdAt: Date.now(),
   };
-  return addDoc(eventCollection, eventData);
+  await setDoc(eventRef, eventData);
+  return eventRef;
 };
 
 export const addParticipantToEvent = (eventId: string, userId: string) => {
@@ -251,5 +256,19 @@ export const toggleAttendance = (eventId: string, userId: string, isPresent: boo
   const eventRef = doc(db, "events", eventId);
   return updateDoc(eventRef, {
     presentIds: isPresent ? arrayUnion(userId) : arrayRemove(userId)
+  });
+};
+
+export const addExternalGuest = (eventId: string, name: string, addedBy: string) => {
+  const eventRef = doc(db, "events", eventId);
+  return updateDoc(eventRef, {
+    externalGuests: arrayUnion({ name, addedBy })
+  });
+};
+
+export const removeExternalGuest = async (eventId: string, guest: ExternalGuest) => {
+  const eventRef = doc(db, "events", eventId);
+  return updateDoc(eventRef, {
+    externalGuests: arrayRemove(guest)
   });
 };

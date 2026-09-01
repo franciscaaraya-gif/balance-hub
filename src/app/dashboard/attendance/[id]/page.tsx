@@ -3,15 +3,15 @@
 
 import { useEffect, useState, use, useMemo } from "react";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
-import { addParticipantToEvent, toggleAttendance, getGroupMembersDetails, getAllUsers, addAndMarkPresent } from "@/lib/firebase/store";
-import { Event, UserProfile } from "@/lib/types";
+import { addParticipantToEvent, toggleAttendance, getGroupMembersDetails, getAllUsers, addAndMarkPresent, addExternalGuest, removeExternalGuest } from "@/lib/firebase/store";
+import { Event, UserProfile, ExternalGuest } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle } from "lucide-react";
+import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -23,8 +23,10 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const { toast } = useToast();
 
   const [addingParticipant, setAddingParticipant] = useState(false);
+  const [addingGuest, setAddingGuest] = useState(false);
   const [scanningNfc, setScanningNfc] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [guestName, setGuestName] = useState("");
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [participants, setParticipants] = useState<UserProfile[]>([]);
 
@@ -66,6 +68,27 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
+  const handleAddGuest = async () => {
+    if (!guestName || !user) return;
+    try {
+      await addExternalGuest(params.id, guestName, user.uid);
+      toast({ title: "Invitado añadido", description: `${guestName} se sumó a la cuenta.` });
+      setGuestName("");
+      setAddingGuest(false);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al añadir invitado" });
+    }
+  };
+
+  const handleRemoveGuest = async (guest: ExternalGuest) => {
+    try {
+      await removeExternalGuest(params.id, guest);
+      toast({ title: "Invitado eliminado" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error" });
+    }
+  };
+
   const handleTogglePresent = async (uid: string, currentPresent: boolean) => {
     try {
       await toggleAttendance(params.id, uid, !currentPresent);
@@ -74,20 +97,21 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
+  const handleShare = () => {
+    if (!event?.shareLink) return;
+    navigator.clipboard.writeText(event.shareLink);
+    toast({ title: "Link copiado", description: "Envíalo por WhatsApp para que se inscriban." });
+  };
+
   const simulateNfcScan = () => {
     setScanningNfc(true);
-    // Simulamos un retraso de escaneo
     setTimeout(async () => {
       try {
-        // En una app real, esto detectaría un ID vía hardware. 
-        // Aquí buscamos a alguien que NO esté presente, incluso si no está en la lista previa.
         const users = await getAllUsers();
         const eligibleUsers = users.filter(u => !event?.presentIds.includes(u.uid));
         
         if (eligibleUsers.length > 0) {
           const randomUser = eligibleUsers[Math.floor(Math.random() * eligibleUsers.length)];
-          
-          // Si el usuario no estaba inscrito, lo inscribimos y marcamos presente
           if (!event?.participantIds.includes(randomUser.uid)) {
             await addAndMarkPresent(params.id, randomUser.uid);
             toast({ title: `Nuevo Asistente (NFC): ${randomUser.displayName}`, description: "Registrado y marcado presente." });
@@ -117,7 +141,8 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     </div>
   );
 
-  const costPerPerson = (event.presentIds?.length || 0) > 0 ? event.totalCost / event.presentIds.length : 0;
+  const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.length || 0);
+  const costPerPerson = totalPresent > 0 ? event.totalCost / totalPresent : 0;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">
@@ -126,7 +151,12 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <Calendar className="h-32 w-32 rotate-12" />
         </div>
         <div className="space-y-2 relative z-10">
-          <Badge className="bg-accent text-white border-none px-3 font-bold uppercase tracking-widest">{event.date}</Badge>
+          <div className="flex gap-2 items-center">
+            <Badge className="bg-accent text-white border-none px-3 font-bold uppercase tracking-widest">{event.date}</Badge>
+            <Button variant="secondary" size="sm" className="bg-white/10 hover:bg-white/20 text-white text-[10px] h-7 font-bold border-none" onClick={handleShare}>
+              <Share2 className="h-3 w-3 mr-1" /> Copiar Link Invitación
+            </Button>
+          </div>
           <h1 className="text-4xl font-headline font-bold">{event.title}</h1>
           <div className="flex flex-wrap gap-4 text-sm opacity-80 font-medium">
             <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {event.location}</span>
@@ -137,7 +167,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <p className="text-xs uppercase tracking-widest font-bold opacity-70 mb-1">Cuota por Persona</p>
           <p className="text-4xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
           <p className="text-[10px] mt-2 opacity-60 font-medium flex items-center justify-center gap-1">
-            <Users className="h-3 w-3" /> {event.presentIds?.length || 0} PRESENTES
+            <Users className="h-3 w-3" /> {totalPresent} PRESENTES (INC. GUESTS)
           </p>
         </div>
       </div>
@@ -150,8 +180,11 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               <CardDescription>Confirma quiénes asistieron efectivamente.</CardDescription>
             </div>
             <div className="flex gap-2">
+               <Button variant="outline" size="sm" className="h-9 px-4 font-bold" onClick={() => setAddingGuest(true)}>
+                 <Plus className="h-4 w-4 mr-2" /> Añadir +1
+               </Button>
                <Button variant="outline" size="sm" className="h-9 px-4 font-bold" onClick={() => setAddingParticipant(true)}>
-                 <UserPlus className="h-4 w-4 mr-2" /> Añadir
+                 <UserPlus className="h-4 w-4 mr-2" /> Buscar
                </Button>
                <Button variant="default" size="sm" className="bg-accent h-9 px-4 font-bold" onClick={simulateNfcScan} disabled={scanningNfc}>
                  {scanningNfc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Nfc className="h-4 w-4 mr-2" />} NFC
@@ -193,12 +226,36 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </div>
                 );
               })}
-              {participants.length === 0 && (
+              
+              {/* LISTA DE EXTERNAL GUESTS (+1) */}
+              {event.externalGuests?.map((guest, idx) => (
+                <div key={`${guest.name}-${idx}`} className="flex items-center justify-between py-3 px-4 rounded-2xl bg-amber-50 border border-amber-100">
+                  <div className="flex items-center gap-4">
+                    <div className="h-11 w-11 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm bg-amber-500">
+                      {guest.name[0]}
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold leading-none mb-1">{guest.name}</p>
+                      <p className="text-[10px] text-amber-700 font-medium">Invitado (+1)</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8 text-amber-600 hover:bg-amber-100"
+                    onClick={() => handleRemoveGuest(guest)}
+                  >
+                    <UserMinus className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+
+              {participants.length === 0 && (!event.externalGuests || event.externalGuests.length === 0) && (
                 <div className="py-20 text-center space-y-3">
                   <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto opacity-50">
                     <Users className="h-8 w-8 text-muted-foreground" />
                   </div>
-                  <p className="text-muted-foreground font-medium italic">No hay personas inscritas. Usa "Añadir" o "NFC" para registrar.</p>
+                  <p className="text-muted-foreground font-medium italic">No hay personas inscritas. Comparte el link o usa "Añadir".</p>
                 </div>
               )}
             </div>
@@ -215,22 +272,26 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex justify-between items-center text-xs font-medium">
-                <span className="text-muted-foreground">Inversión Total:</span>
+                <span className="text-muted-foreground">Costo Total:</span>
                 <span className="font-bold text-primary">${event.totalCost.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-medium">
-                <span className="text-muted-foreground">Gente en el lugar:</span>
+                <span className="text-muted-foreground">Usuarios Presentes:</span>
                 <span className="font-bold text-primary">{event.presentIds?.length || 0}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-medium">
+                <span className="text-muted-foreground">Invitados (+1):</span>
+                <span className="font-bold text-primary">{event.externalGuests?.length || 0}</span>
               </div>
               <div className="pt-4 border-t border-primary/10 flex justify-between items-end">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Deuda por Persona</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cuota por Cabeza</span>
                   <p className="text-2xl font-headline font-bold text-primary">${costPerPerson.toFixed(2)}</p>
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full text-xs font-bold bg-primary hover:bg-primary/90" onClick={() => toast({ title: "Próximamente", description: "Esta función generará cobros automáticos en tus grupos." })}>
+              <Button className="w-full text-xs font-bold bg-primary hover:bg-primary/90" onClick={() => toast({ title: "Próximamente", description: "Carga automática a BalanceHub." })}>
                 Cargar Deudas al Grupo
               </Button>
             </CardFooter>
@@ -239,23 +300,24 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <div className="bg-accent/10 p-6 rounded-3xl border border-accent/20 space-y-4 shadow-sm">
              <div className="flex items-center gap-3 text-accent font-bold">
                <div className="bg-accent/20 p-2 rounded-xl">
-                 <Nfc className="h-5 w-5" /> 
+                 <Share2 className="h-5 w-5" /> 
                </div>
-               <span className="text-sm font-headline uppercase tracking-wide">Check-in Inteligente</span>
+               <span className="text-sm font-headline uppercase tracking-wide">Link WhatsApp</span>
              </div>
              <p className="text-xs text-accent/80 leading-relaxed font-medium">
-               Usa el NFC para registrar personas al instante aunque no estén en la lista. El sistema agregará al usuario y recalculará los costos al momento.
+               Copia el link de invitación y mándalo por chat. Tus amigos podrán inscribirse ellos mismos y añadir a sus invitados (+1).
              </p>
+             <Button variant="outline" className="w-full h-8 text-xs font-bold border-accent text-accent hover:bg-accent/10" onClick={handleShare}>Copiar Link</Button>
           </div>
         </div>
       </div>
 
-      {/* MODAL: Añadir Participante */}
+      {/* MODAL: Añadir Participante (Registrado) */}
       <Dialog open={addingParticipant} onOpenChange={setAddingParticipant}>
         <DialogContent className="max-w-md rounded-3xl">
           <DialogHeader className="text-center pb-4">
             <DialogTitle className="text-2xl font-headline">Inscribir Integrante</DialogTitle>
-            <DialogDescription>Busca personas registradas en BalanceHub para invitarlas.</DialogDescription>
+            <DialogDescription>Busca personas registradas en BalanceHub.</DialogDescription>
           </DialogHeader>
           <div className="space-y-5 py-2">
             <div className="relative">
@@ -277,12 +339,28 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </Button>
                 </div>
               ))}
-              {searchTerm && filteredUsers.length === 0 && <p className="text-center text-xs text-muted-foreground py-10 font-medium">No se encontraron más usuarios registrados.</p>}
-              {!searchTerm && <p className="text-center text-[10px] text-muted-foreground pt-4 uppercase tracking-widest font-bold">Escribe para buscar usuarios</p>}
             </div>
           </div>
           <DialogFooter className="sm:justify-center">
             <Button variant="ghost" className="text-muted-foreground font-bold" onClick={() => setAddingParticipant(false)}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: Añadir Invitado (+1) */}
+      <Dialog open={addingGuest} onOpenChange={setAddingGuest}>
+        <DialogContent className="max-w-xs rounded-3xl">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Registrar (+1)</DialogTitle>
+            <DialogDescription>Para personas que no tienen BalanceHub.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label className="text-xs font-bold uppercase mb-2 block">Nombre del Invitado</Label>
+            <Input placeholder="Ej: Amigo de Juan" value={guestName} onChange={e => setGuestName(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="text-xs" onClick={() => setAddingGuest(false)}>Cancelar</Button>
+            <Button className="text-xs" onClick={handleAddGuest} disabled={!guestName}>Añadir a la cuenta</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
