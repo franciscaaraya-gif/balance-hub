@@ -77,9 +77,11 @@ export interface Event {
   location: string;
   totalCost: number;
   creatorId: string;
+  groupId: string; // Vínculo con el grupo de cobro
   participantIds: string[];
   presentIds: string[];
   externalGuests?: ExternalGuest[];
   shareLink?: string;
+  isCharged?: boolean; // Indica si las deudas ya se pasaron al grupo
   createdAt: number;
 }

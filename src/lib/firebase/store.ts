@@ -231,10 +231,39 @@ export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'partic
     presentIds: [data.creatorId],
     externalGuests: [],
     shareLink: `${window.location.origin}/attendance/join/${eventRef.id}`,
+    isCharged: false,
     createdAt: Date.now(),
   };
   await setDoc(eventRef, eventData);
   return eventRef;
+};
+
+export const chargeEventToGroup = async (eventId: string) => {
+  const eventRef = doc(db, "events", eventId);
+  const eventSnap = await getDoc(eventRef);
+  if (!eventSnap.exists()) throw new Error("Evento no encontrado");
+  const event = eventSnap.data() as Event;
+
+  if (event.isCharged) throw new Error("Este evento ya fue cobrado.");
+
+  const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.length || 0);
+  if (totalPresent === 0) throw new Error("No hay asistentes para cobrar.");
+
+  const costPerPerson = event.totalCost / totalPresent;
+  
+  // Procesar deudas para cada miembro presente, incluyendo sus invitados (+1)
+  for (const uid of event.presentIds) {
+    const myGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
+    const totalMultiplier = 1 + myGuests.length;
+    const finalDebtAmount = costPerPerson * totalMultiplier;
+
+    if (finalDebtAmount > 0) {
+      await addDebt(event.groupId, uid, finalDebtAmount, `Asistencia: ${event.title}`);
+    }
+  }
+
+  // Marcar evento como cobrado
+  await updateDoc(eventRef, { isCharged: true });
 };
 
 export const addParticipantToEvent = (eventId: string, userId: string) => {

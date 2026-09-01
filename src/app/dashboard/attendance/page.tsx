@@ -3,17 +3,18 @@
 
 import { useState } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { createEvent } from "@/lib/firebase/store";
-import { Event } from "@/lib/types";
+import { createEvent, chargeEventToGroup } from "@/lib/firebase/store";
+import { Event, Group } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users, AlertCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users, AlertCircle, Coins, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where } from "firebase/firestore";
+import { collection, query, where, orderBy } from "firebase/firestore";
 
 export default function AttendanceDashboard() {
   const { user, isUserLoading } = useUser();
@@ -22,16 +23,23 @@ export default function AttendanceDashboard() {
   
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCharging, setIsCharging] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     title: "",
     date: "",
     time: "",
     location: "",
-    totalCost: ""
+    totalCost: "",
+    groupId: ""
   });
 
-  // Consulta simplificada para evitar problemas de índices durante el prototipado
+  const groupsQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
+  }, [firestore, user?.uid]);
+  const { data: groups } = useCollection<Group>(groupsQuery);
+
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -43,8 +51,8 @@ export default function AttendanceDashboard() {
   const { data: events, isLoading: eventsLoading, error: eventsError } = useCollection<Event>(eventsQuery);
 
   const handleCreate = async () => {
-    if (!formData.title || !formData.date || !formData.totalCost || !user) {
-      toast({ variant: "destructive", title: "Faltan datos", description: "El motivo, la fecha y el costo son obligatorios." });
+    if (!formData.title || !formData.date || !formData.totalCost || !formData.groupId || !user) {
+      toast({ variant: "destructive", title: "Faltan datos", description: "El motivo, la fecha, el costo y el grupo son obligatorios." });
       return;
     }
 
@@ -56,15 +64,30 @@ export default function AttendanceDashboard() {
         time: formData.time,
         location: formData.location,
         totalCost: parseFloat(formData.totalCost),
+        groupId: formData.groupId,
         creatorId: user.uid
       });
       toast({ title: "Evento creado", description: "Ahora puedes marcar la asistencia." });
       setOpen(false);
-      setFormData({ title: "", date: "", time: "", location: "", totalCost: "" });
+      setFormData({ title: "", date: "", time: "", location: "", totalCost: "", groupId: "" });
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo crear el evento." });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleChargeToGroup = async (e: React.MouseEvent, eventId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsCharging(eventId);
+    try {
+      await chargeEventToGroup(eventId);
+      toast({ title: "¡Cobros Generados!", description: "Las deudas se han cargado al grupo correspondiente." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al cobrar", description: error.message });
+    } finally {
+      setIsCharging(null);
     }
   };
 
@@ -89,6 +112,20 @@ export default function AttendanceDashboard() {
               <DialogDescription>Completa los detalles para calcular la asistencia.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Grupo de Cobro Asociado</Label>
+                <Select onValueChange={(val) => setFormData({...formData, groupId: val})} value={formData.groupId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un grupo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups?.map(g => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">Las deudas se cargarán automáticamente a este grupo.</p>
+              </div>
               <div className="space-y-2">
                 <Label>Motivo / Evento</Label>
                 <Input placeholder="Ej: Padel con amigos, Asado" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
@@ -144,32 +181,58 @@ export default function AttendanceDashboard() {
              <p className="text-muted-foreground font-medium">Aún no has registrado eventos de asistencia.</p>
           </Card>
         ) : (
-          events.map(event => (
-            <Link key={event.id} href={`/dashboard/attendance/${event.id}`}>
-              <Card className="hover:shadow-lg transition-all border-l-4 border-l-accent group">
-                <CardHeader className="pb-3">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg font-headline group-hover:text-accent transition-colors">{event.title}</CardTitle>
-                    <Badge variant="outline" className="text-[10px]">{event.date}</Badge>
-                  </div>
-                  <CardDescription className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location || "Sin ubicación"}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between items-center py-3 border-t">
-                    <div className="text-xs text-muted-foreground font-bold flex items-center gap-1">
-                      <Users className="h-3 w-3" /> {event.presentIds?.length || 0} presentes
+          events.map(event => {
+            const isAdmin = event.creatorId === user?.uid;
+            return (
+              <Link key={event.id} href={`/dashboard/attendance/${event.id}`}>
+                <Card className="hover:shadow-lg transition-all border-l-4 border-l-accent group relative overflow-hidden">
+                  {event.isCharged && (
+                    <div className="absolute top-0 right-0 p-1 bg-emerald-500 text-white rounded-bl-lg shadow-sm">
+                      <CheckCircle2 className="h-4 w-4" />
                     </div>
-                    <div className="text-sm font-bold text-primary">
-                      Total: ${event.totalCost.toFixed(2)}
+                  )}
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <CardTitle className="text-lg font-headline group-hover:text-accent transition-colors">{event.title}</CardTitle>
+                      <Badge variant="outline" className="text-[10px]">{event.date}</Badge>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-end text-xs font-bold text-accent">
-                    Gestionar Asistencia <ChevronRight className="h-3 w-3 ml-1" />
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))
+                    <CardDescription className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location || "Sin ubicación"}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between items-center py-3 border-t">
+                      <div className="text-xs text-muted-foreground font-bold flex items-center gap-1">
+                        <Users className="h-3 w-3" /> {event.presentIds?.length || 0} presentes
+                      </div>
+                      <div className="text-sm font-bold text-primary">
+                        Total: ${event.totalCost.toFixed(2)}
+                      </div>
+                    </div>
+                    
+                    {isAdmin && (
+                      <Button 
+                        disabled={event.isCharged || isCharging === event.id}
+                        variant={event.isCharged ? "outline" : "default"}
+                        className="w-full h-9 text-xs font-bold gap-2 shadow-inner"
+                        onClick={(e) => handleChargeToGroup(e, event.id)}
+                      >
+                        {isCharging === event.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : event.isCharged ? (
+                          <><CheckCircle2 className="h-3.5 w-3.5" /> Cobros Realizados</>
+                        ) : (
+                          <><Coins className="h-3.5 w-3.5" /> Cargar Deudas al Grupo</>
+                        )}
+                      </Button>
+                    )}
+
+                    <div className="flex items-center justify-end text-xs font-bold text-accent pt-2">
+                      Ver Asistencia <ChevronRight className="h-3 w-3 ml-1" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            )
+          })
         )}
       </div>
     </div>

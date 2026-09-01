@@ -3,18 +3,19 @@
 
 import { useEffect, useState, use, useMemo } from "react";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
-import { addParticipantToEvent, toggleAttendance, getGroupMembersDetails, getAllUsers, addAndMarkPresent, addExternalGuest, removeExternalGuest } from "@/lib/firebase/store";
-import { Event, UserProfile, ExternalGuest } from "@/lib/types";
+import { addParticipantToEvent, toggleAttendance, getGroupMembersDetails, getAllUsers, addAndMarkPresent, addExternalGuest, removeExternalGuest, chargeEventToGroup } from "@/lib/firebase/store";
+import { Event, UserProfile, ExternalGuest, Group } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus, ShieldCheck } from "lucide-react";
+import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus, ShieldCheck, Coins, ArrowRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 export default function EventAttendanceDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -25,6 +26,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [addingGuest, setAddingGuest] = useState(false);
   const [scanningNfc, setScanningNfc] = useState(false);
+  const [isCharging, setIsCharging] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [guestName, setGuestName] = useState("");
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
@@ -36,6 +38,12 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   }, [firestore, params.id]);
 
   const { data: event, isLoading: eventLoading, error: eventError } = useDoc<Event>(eventRef);
+
+  const groupRef = useMemoFirebase(() => {
+    if (!firestore || !event?.groupId) return null;
+    return doc(firestore, 'groups', event.groupId);
+  }, [firestore, event?.groupId]);
+  const { data: group } = useDoc<Group>(groupRef);
 
   useEffect(() => {
     if (event?.participantIds) {
@@ -65,6 +73,18 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       setSearchTerm("");
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
+    }
+  };
+
+  const handleChargeToGroup = async () => {
+    setIsCharging(true);
+    try {
+      await chargeEventToGroup(params.id);
+      toast({ title: "¡Éxito!", description: "Deudas cargadas al grupo." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsCharging(false);
     }
   };
 
@@ -165,6 +185,11 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {event.location}</span>
             <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {event.time}</span>
           </div>
+          {group && (
+            <Link href={`/dashboard/groups/${group.id}`} className="inline-flex items-center gap-2 text-xs text-white/70 hover:text-white transition-colors mt-2">
+              <Zap className="h-3 w-3" /> Asociado a Grupo: <span className="underline font-bold">{group.name}</span> <ArrowRight className="h-3 w-3" />
+            </Link>
+          )}
         </div>
         <div className="bg-white/10 backdrop-blur-md p-6 rounded-2xl text-center min-w-[220px] border border-white/20 relative z-10">
           <p className="text-xs uppercase tracking-widest font-bold opacity-70 mb-1">Cuota por Persona</p>
@@ -231,7 +256,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                       </Button>
                     </div>
 
-                    {/* INVITADOS ASOCIADOS A ESTE USUARIO */}
                     {userGuests.map((guest, idx) => (
                       <div key={`${guest.name}-${idx}`} className="flex items-center justify-between py-2 px-4 ml-8 rounded-xl bg-amber-50/50 border border-amber-100/50">
                         <div className="flex items-center gap-3">
@@ -258,15 +282,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </div>
                 );
               })}
-
-              {participants.length === 0 && (!event.externalGuests || event.externalGuests.length === 0) && (
-                <div className="py-20 text-center space-y-3">
-                  <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto opacity-50">
-                    <Users className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <p className="text-muted-foreground font-medium italic">No hay personas inscritas aún.</p>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -285,24 +300,24 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 <span className="font-bold text-primary">${event.totalCost.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-medium">
-                <span className="text-muted-foreground">Registrados Presentes:</span>
-                <span className="font-bold text-primary">{event.presentIds?.length || 0}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-medium">
-                <span className="text-muted-foreground">Invitados (+1):</span>
-                <span className="font-bold text-primary">{event.externalGuests?.length || 0}</span>
+                <span className="text-muted-foreground">Cuota x Persona:</span>
+                <span className="font-bold text-primary">${costPerPerson.toFixed(2)}</span>
               </div>
               <div className="pt-4 border-t border-muted flex justify-between items-end">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cuota x Persona</span>
-                  <p className="text-2xl font-headline font-bold text-primary">${costPerPerson.toFixed(2)}</p>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Presentes Hoy</span>
+                  <p className="text-2xl font-headline font-bold text-primary">{totalPresent}</p>
                 </div>
               </div>
             </CardContent>
             {isAdmin && (
               <CardFooter>
-                <Button className="w-full text-xs font-bold bg-primary hover:bg-primary/90" onClick={() => toast({ title: "Próximamente", description: "Carga automática de deudas a BalanceHub." })}>
-                  Dividir y Cobrar en BalanceHub
+                <Button 
+                  disabled={event.isCharged || isCharging}
+                  className="w-full text-xs font-bold bg-primary hover:bg-primary/90 gap-2" 
+                  onClick={handleChargeToGroup}
+                >
+                  {isCharging ? <Loader2 className="animate-spin h-3.5 w-3.5" /> : event.isCharged ? <><CheckCircle2 className="h-3.5 w-3.5" /> Deudas Cargadas</> : <><Coins className="h-3.5 w-3.5" /> Cargar al Grupo de Cobro</>}
                 </Button>
               </CardFooter>
             )}
@@ -316,7 +331,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                <span className="text-sm font-headline uppercase tracking-wide">Link de Asistencia</span>
              </div>
              <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-               Cualquier persona con este enlace puede confirmar su asistencia y añadir sus propios acompañantes (+1).
+               Cualquier persona con este enlace puede confirmar su asistencia y añadir acompañantes (+1).
              </p>
              <Button variant="outline" className="w-full h-10 text-xs font-bold border-primary text-primary hover:bg-primary/5" onClick={handleShare}>
                Copiar Link para WhatsApp
@@ -351,25 +366,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </Button>
                 </div>
               ))}
-              {filteredUsers.length === 0 && searchTerm && (
-                <p className="text-center py-4 text-xs text-muted-foreground italic">No se encontraron usuarios que no estén ya inscritos.</p>
-              )}
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={scanningNfc} onOpenChange={setScanningNfc}>
-        <DialogContent className="max-w-xs text-center py-12 rounded-3xl border-none">
-          <div className="flex flex-col items-center gap-8">
-            <div className={cn("p-10 rounded-full bg-accent/10 border-4 border-accent border-dashed relative", scanningNfc && "animate-[pulse_2s_infinite]")}>
-              <Nfc className="h-20 w-20 text-accent" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="font-headline font-bold text-2xl text-primary">Esperando NFC...</h3>
-              <p className="text-xs text-muted-foreground">Acerca el teléfono del asistente.</p>
-            </div>
-            <Loader2 className="h-6 w-6 animate-spin text-accent" />
           </div>
         </DialogContent>
       </Dialog>
