@@ -10,6 +10,7 @@ service cloud.firestore {
     }
 
     // Regla específica para consultas globales (Collection Group) de deudas
+    // Es CRÍTICO que estas reglas estén en el nivel superior con {path=**}
     match /{path=**}/debts/{debtId} {
       allow read, write: if request.auth != null;
     }

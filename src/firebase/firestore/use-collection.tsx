@@ -55,31 +55,32 @@ export function useCollection<T = any>(
       },
       async (serverError: FirestoreError) => {
         // Diagnóstico mejorado para rutas de consulta
-        let path = "dynamic-query";
+        let reportedPath = "dynamic-query";
         const queryAny = memoizedTargetRefOrQuery as any;
         
-        // Intentar extraer una ruta útil para el reporte de error
-        // En SDK v9+, las queries guardan la ruta en estructuras internas que pueden variar
+        // Intentar extraer una ruta útil para el reporte de error de permisos
         if (queryAny.path) {
-          path = queryAny.path;
+          reportedPath = queryAny.path;
         } else if (queryAny._query?.path) {
-          path = queryAny._query.path.toString();
+          reportedPath = queryAny._query.path.toString();
         } else if (queryAny._query?.collectionGroup) {
-          path = `collectionGroup(${queryAny._query.collectionGroup})`;
-        } else if (serverError.message.includes('permission')) {
-          // Si no podemos determinar la ruta exacta, usamos un marcador descriptivo
-          path = "collection-group-query";
+          reportedPath = `collectionGroup(${queryAny._query.collectionGroup})`;
+        } else if (serverError.code === 'permission-denied') {
+          // Si no podemos determinar la ruta exacta pero es un error de permisos,
+          // usamos un marcador que ayude a identificar el fallo en reglas globales
+          reportedPath = "collection-group-query";
         }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: path,
+          path: reportedPath,
         });
 
         setError(contextualError);
         setData(null);
         setIsLoading(false);
         
+        // Emitir el error contextual para el listener global
         errorEmitter.emit('permission-error', contextualError);
       }
     );
