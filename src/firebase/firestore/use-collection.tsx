@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -60,17 +59,21 @@ export function useCollection<T = any>(
         const queryAny = memoizedTargetRefOrQuery as any;
         
         // Intentar extraer una ruta útil para el reporte de error
+        // En SDK v9+, las queries guardan la ruta en estructuras internas que pueden variar
         if (queryAny.path) {
           path = queryAny.path;
         } else if (queryAny._query?.path) {
           path = queryAny._query.path.toString();
         } else if (queryAny._query?.collectionGroup) {
           path = `collectionGroup(${queryAny._query.collectionGroup})`;
+        } else if (serverError.message.includes('permission')) {
+          // Si no podemos determinar la ruta exacta, usamos un marcador descriptivo
+          path = "collection-group-query";
         }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: path || "unknown-collection-path",
+          path: path,
         });
 
         setError(contextualError);

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from "react";
@@ -41,7 +40,7 @@ export default function Dashboard() {
       where('debtorId', '==', user.uid)
     );
   }, [firestore, user?.uid]);
-  const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
+  const { data: myDebts, isLoading: myDebtsLoading, error: debtsError } = useCollection<Debt>(myDebtsQuery);
 
   const pendingDebts = useMemo(() => {
     if (!myDebts) return [];
@@ -131,10 +130,10 @@ export default function Dashboard() {
         </Dialog>
       </div>
 
-      {groupsError && (
+      {(groupsError || debtsError) && (
         <div className="p-4 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
           <AlertCircle className="h-5 w-5" />
-          <span>Error al cargar grupos: {groupsError.message}</span>
+          <span>Hubo un problema al cargar tus datos. Reintenta en unos momentos.</span>
         </div>
       )}
 
