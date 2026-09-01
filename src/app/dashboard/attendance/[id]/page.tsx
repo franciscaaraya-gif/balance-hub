@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus } from "lucide-react";
+import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -143,6 +143,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.length || 0);
   const costPerPerson = totalPresent > 0 ? event.totalCost / totalPresent : 0;
+  const isAdmin = event.creatorId === user?.uid;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">
@@ -153,9 +154,11 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         <div className="space-y-2 relative z-10">
           <div className="flex gap-2 items-center">
             <Badge className="bg-accent text-white border-none px-3 font-bold uppercase tracking-widest">{event.date}</Badge>
-            <Button variant="secondary" size="sm" className="bg-white/10 hover:bg-white/20 text-white text-[10px] h-7 font-bold border-none" onClick={handleShare}>
-              <Share2 className="h-3 w-3 mr-1" /> WhatsApp Link
-            </Button>
+            {isAdmin && (
+              <Badge variant="outline" className="border-white/20 text-white bg-white/10 text-[10px]">
+                <ShieldCheck className="h-3 w-3 mr-1" /> Administrador
+              </Badge>
+            )}
           </div>
           <h1 className="text-4xl font-headline font-bold">{event.title}</h1>
           <div className="flex flex-wrap gap-4 text-sm opacity-80 font-medium">
@@ -167,31 +170,30 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <p className="text-xs uppercase tracking-widest font-bold opacity-70 mb-1">Cuota por Persona</p>
           <p className="text-4xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
           <p className="text-[10px] mt-2 opacity-60 font-medium flex items-center justify-center gap-1">
-            <Users className="h-3 w-3" /> {totalPresent} PRESENTES (INC. GUESTS)
+            <Users className="h-3 w-3" /> {totalPresent} PRESENTES (TOTAL)
           </p>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="md:col-span-2 shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
+        <Card className="md:col-span-2 shadow-sm border-none bg-white">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7 border-b border-muted">
             <div>
-              <CardTitle className="text-xl font-headline">Lista de Asistencia</CardTitle>
-              <CardDescription>Usuarios y sus invitados (+1).</CardDescription>
+              <CardTitle className="text-xl font-headline">Gestión de Asistencia</CardTitle>
+              <CardDescription>Lista completa de participantes e invitados (+1).</CardDescription>
             </div>
-            <div className="flex gap-2">
-               <Button variant="outline" size="sm" className="h-9 px-4 font-bold" onClick={() => setAddingGuest(true)}>
-                 <Plus className="h-4 w-4 mr-2" /> Añadir (+1)
-               </Button>
-               <Button variant="outline" size="sm" className="h-9 px-4 font-bold" onClick={() => setAddingParticipant(true)}>
-                 <UserPlus className="h-4 w-4 mr-2" /> Buscar Usuario
-               </Button>
-               <Button variant="default" size="sm" className="bg-accent h-9 px-4 font-bold" onClick={simulateNfcScan} disabled={scanningNfc}>
-                 {scanningNfc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Nfc className="h-4 w-4 mr-2" />} NFC
-               </Button>
-            </div>
+            {isAdmin && (
+              <div className="flex gap-2">
+                 <Button variant="outline" size="sm" className="h-9 px-4 font-bold border-muted-foreground/20" onClick={() => setAddingParticipant(true)}>
+                   <Search className="h-4 w-4 mr-2" /> Buscar
+                 </Button>
+                 <Button variant="default" size="sm" className="bg-accent h-9 px-4 font-bold hover:bg-accent/90" onClick={simulateNfcScan} disabled={scanningNfc}>
+                   {scanningNfc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Nfc className="h-4 w-4 mr-2" />} NFC
+                 </Button>
+              </div>
+            )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div className="space-y-4">
               {participants.map(p => {
                 const isPresent = event.presentIds?.includes(p.uid);
@@ -200,8 +202,8 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 return (
                   <div key={p.uid} className="space-y-2">
                     <div className={cn(
-                      "flex items-center justify-between py-3 px-4 rounded-2xl transition-all border border-transparent",
-                      isPresent ? "bg-emerald-50 border-emerald-100" : "hover:bg-muted/50"
+                      "flex items-center justify-between py-3 px-4 rounded-2xl transition-all border",
+                      isPresent ? "bg-emerald-50 border-emerald-100" : "bg-muted/20 border-transparent hover:bg-muted/30"
                     )}>
                       <div className="flex items-center gap-4">
                         <div className={cn(
@@ -218,6 +220,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                       <Button 
                         variant={isPresent ? "default" : "outline"} 
                         size="sm" 
+                        disabled={!isAdmin && p.uid !== user?.uid}
                         className={cn(
                           "rounded-full gap-2 text-xs font-bold h-8 transition-all",
                           isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none px-4" : "text-muted-foreground border-dashed"
@@ -228,7 +231,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                       </Button>
                     </div>
 
-                    {/* LISTA DE EXTERNAL GUESTS (+1) VINCULADOS A ESTE USUARIO */}
+                    {/* INVITADOS ASOCIADOS A ESTE USUARIO */}
                     {userGuests.map((guest, idx) => (
                       <div key={`${guest.name}-${idx}`} className="flex items-center justify-between py-2 px-4 ml-8 rounded-xl bg-amber-50/50 border border-amber-100/50">
                         <div className="flex items-center gap-3">
@@ -240,14 +243,16 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                             <p className="text-[9px] text-amber-700/70 font-medium italic">Acompañante de {p.displayName}</p>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 text-amber-600/50 hover:bg-amber-100"
-                          onClick={() => handleRemoveGuest(guest)}
-                        >
-                          <UserMinus className="h-3.5 w-3.5" />
-                        </Button>
+                        {isAdmin && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-7 w-7 text-amber-600/50 hover:bg-amber-100"
+                            onClick={() => handleRemoveGuest(guest)}
+                          >
+                            <UserMinus className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -267,7 +272,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         </Card>
 
         <div className="space-y-6">
-          <Card className="border-primary/20 bg-primary/5 shadow-none overflow-hidden">
+          <Card className="border-none shadow-sm bg-white overflow-hidden">
             <div className="h-1 bg-accent w-full" />
             <CardHeader className="pb-4">
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-primary">
@@ -287,40 +292,44 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 <span className="text-muted-foreground">Invitados (+1):</span>
                 <span className="font-bold text-primary">{event.externalGuests?.length || 0}</span>
               </div>
-              <div className="pt-4 border-t border-primary/10 flex justify-between items-end">
+              <div className="pt-4 border-t border-muted flex justify-between items-end">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Por Persona</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cuota x Persona</span>
                   <p className="text-2xl font-headline font-bold text-primary">${costPerPerson.toFixed(2)}</p>
                 </div>
               </div>
             </CardContent>
-            <CardFooter>
-              <Button className="w-full text-xs font-bold bg-primary hover:bg-primary/90" onClick={() => toast({ title: "Próximamente", description: "Carga automática de deudas a BalanceHub." })}>
-                Dividir y Cobrar
-              </Button>
-            </CardFooter>
+            {isAdmin && (
+              <CardFooter>
+                <Button className="w-full text-xs font-bold bg-primary hover:bg-primary/90" onClick={() => toast({ title: "Próximamente", description: "Carga automática de deudas a BalanceHub." })}>
+                  Dividir y Cobrar en BalanceHub
+                </Button>
+              </CardFooter>
+            )}
           </Card>
 
-          <div className="bg-accent/10 p-6 rounded-3xl border border-accent/20 space-y-4 shadow-sm">
-             <div className="flex items-center gap-3 text-accent font-bold">
-               <div className="bg-accent/20 p-2 rounded-xl">
-                 <Share2 className="h-5 w-5" /> 
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-muted space-y-4">
+             <div className="flex items-center gap-3 text-primary font-bold">
+               <div className="bg-primary/10 p-2 rounded-xl">
+                 <Share2 className="h-5 w-5 text-primary" /> 
                </div>
-               <span className="text-sm font-headline uppercase tracking-wide">Link de Invitación</span>
+               <span className="text-sm font-headline uppercase tracking-wide">Link de Asistencia</span>
              </div>
-             <p className="text-xs text-accent/80 leading-relaxed font-medium">
-               Comparte este link por WhatsApp para que tus amigos se inscriban y añadan a sus acompañantes (+1).
+             <p className="text-xs text-muted-foreground leading-relaxed font-medium">
+               Cualquier persona con este enlace puede confirmar su asistencia y añadir sus propios acompañantes (+1).
              </p>
-             <Button variant="outline" className="w-full h-8 text-xs font-bold border-accent text-accent hover:bg-accent/10" onClick={handleShare}>Copiar Link</Button>
+             <Button variant="outline" className="w-full h-10 text-xs font-bold border-primary text-primary hover:bg-primary/5" onClick={handleShare}>
+               Copiar Link para WhatsApp
+             </Button>
           </div>
         </div>
       </div>
 
-      {/* MODALES IGUALES AL ANTERIOR PERO CON UI PULIDA */}
       <Dialog open={addingParticipant} onOpenChange={setAddingParticipant}>
-        <DialogContent className="max-w-md rounded-3xl">
+        <DialogContent className="max-w-md rounded-3xl border-none">
           <DialogHeader className="text-center pb-4">
-            <DialogTitle className="text-2xl font-headline">Añadir Usuario</DialogTitle>
+            <DialogTitle className="text-2xl font-headline">Añadir Asistente</DialogTitle>
+            <DialogDescription>Busca usuarios registrados por nombre o email.</DialogDescription>
           </DialogHeader>
           <div className="space-y-5 py-2">
             <div className="relative">
@@ -329,7 +338,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             </div>
             <div className="max-h-72 overflow-y-auto space-y-2 pr-2">
               {filteredUsers.map(u => (
-                <div key={u.uid} className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-2xl transition-all">
+                <div key={u.uid} className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-2xl transition-all border border-transparent">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs text-primary">{u.displayName?.[0]}</div>
                     <div>
@@ -342,34 +351,24 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </Button>
                 </div>
               ))}
+              {filteredUsers.length === 0 && searchTerm && (
+                <p className="text-center py-4 text-xs text-muted-foreground italic">No se encontraron usuarios que no estén ya inscritos.</p>
+              )}
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={addingGuest} onOpenChange={setAddingGuest}>
-        <DialogContent className="max-w-xs rounded-3xl">
-          <DialogHeader>
-            <DialogTitle className="font-headline">Añadir Invitado (+1)</DialogTitle>
-            <DialogDescription>Se asociará a tu cuenta.</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label className="text-xs font-bold uppercase mb-2 block">Nombre del Acompañante</Label>
-            <Input placeholder="Ej: Primo de Juan" value={guestName} onChange={e => setGuestName(e.target.value)} />
-          </div>
-          <DialogFooter>
-            <Button className="w-full font-bold" onClick={handleAddGuest} disabled={!guestName}>Confirmar (+1)</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={scanningNfc} onOpenChange={setScanningNfc}>
-        <DialogContent className="max-w-xs text-center py-12 rounded-3xl">
+        <DialogContent className="max-w-xs text-center py-12 rounded-3xl border-none">
           <div className="flex flex-col items-center gap-8">
-            <div className={cn("p-10 rounded-full bg-accent/10 border-4 border-accent border-dashed relative", scanningNfc && "animate-[spin_6s_linear_infinite]")}>
+            <div className={cn("p-10 rounded-full bg-accent/10 border-4 border-accent border-dashed relative", scanningNfc && "animate-[pulse_2s_infinite]")}>
               <Nfc className="h-20 w-20 text-accent" />
             </div>
-            <h3 className="font-headline font-bold text-2xl text-primary">Esperando NFC...</h3>
+            <div className="space-y-2">
+              <h3 className="font-headline font-bold text-2xl text-primary">Esperando NFC...</h3>
+              <p className="text-xs text-muted-foreground">Acerca el teléfono del asistente.</p>
+            </div>
             <Loader2 className="h-6 w-6 animate-spin text-accent" />
           </div>
         </DialogContent>
