@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap } from "lucide-react";
+import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   }, [addingParticipant]);
 
   const filteredUsers = useMemo(() => {
+    if (!allUsers) return [];
     return allUsers.filter(u => 
       !event?.participantIds.includes(u.uid) && 
       (u.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -92,7 +93,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   if (eventLoading) return <div className="h-full flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!event) return <div className="p-8 text-center">Evento no encontrado.</div>;
 
-  const costPerPerson = event.presentIds.length > 0 ? event.totalCost / event.presentIds.length : 0;
+  const costPerPerson = event.presentIds?.length > 0 ? event.totalCost / event.presentIds.length : 0;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -108,7 +109,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         <div className="bg-white/10 backdrop-blur-md p-6 rounded-2xl text-center min-w-[200px] border border-white/20">
           <p className="text-xs uppercase tracking-widest font-bold opacity-70 mb-1">Costo por persona</p>
           <p className="text-4xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
-          <p className="text-[10px] mt-2 opacity-50">Basado en {event.presentIds.length} presentes</p>
+          <p className="text-[10px] mt-2 opacity-50">Basado en {event.presentIds?.length || 0} presentes</p>
         </div>
       </div>
 
@@ -131,7 +132,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <CardContent>
             <div className="divide-y">
               {participants.map(p => {
-                const isPresent = event.presentIds.includes(p.uid);
+                const isPresent = event.presentIds?.includes(p.uid);
                 return (
                   <div key={p.uid} className={cn(
                     "flex items-center justify-between py-4 transition-colors px-2 rounded-xl",
@@ -156,7 +157,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                         "rounded-full gap-2",
                         isPresent ? "text-emerald-600 hover:text-emerald-700 bg-emerald-100" : "text-muted-foreground"
                       )}
-                      onClick={() => handleTogglePresent(p.uid, isPresent)}
+                      onClick={() => handleTogglePresent(p.uid, !!isPresent)}
                     >
                       {isPresent ? <><CheckCircle2 className="h-4 w-4" /> Presente</> : <><Circle className="h-4 w-4" /> Ausente</>}
                     </Button>
@@ -184,7 +185,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-muted-foreground">Asistentes:</span>
-                <span className="font-bold">{event.presentIds.length}</span>
+                <span className="font-bold">{event.presentIds?.length || 0}</span>
               </div>
               <div className="pt-3 border-t flex justify-between items-center">
                 <span className="text-sm font-bold">Cuota:</span>

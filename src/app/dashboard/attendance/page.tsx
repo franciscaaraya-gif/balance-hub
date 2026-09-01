@@ -10,10 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users } from "lucide-react";
+import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 
 export default function AttendanceDashboard() {
   const { user, isUserLoading } = useUser();
@@ -31,16 +31,16 @@ export default function AttendanceDashboard() {
     totalCost: ""
   });
 
+  // Consulta simplificada para evitar problemas de índices durante el prototipado
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'events'), 
-      where('participantIds', 'array-contains', user.uid),
-      orderBy('createdAt', 'desc')
+      where('participantIds', 'array-contains', user.uid)
     );
   }, [firestore, user?.uid]);
 
-  const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
+  const { data: events, isLoading: eventsLoading, error: eventsError } = useCollection<Event>(eventsQuery);
 
   const handleCreate = async () => {
     if (!formData.title || !formData.date || !formData.totalCost || !user) {
@@ -128,16 +128,23 @@ export default function AttendanceDashboard() {
         </Dialog>
       </div>
 
+      {eventsError && (
+        <div className="bg-destructive/10 text-destructive p-4 rounded-xl flex items-center gap-2 text-sm">
+          <AlertCircle className="h-4 w-4" />
+          Error al cargar eventos. Verifica la conexión.
+        </div>
+      )}
+
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {eventsLoading ? (
           [1, 2, 3].map(i => <div key={i} className="h-40 rounded-xl bg-muted animate-pulse" />)
-        ) : events?.length === 0 ? (
+        ) : !events || events.length === 0 ? (
           <Card className="col-span-full border-dashed py-20 text-center flex flex-col items-center justify-center space-y-4">
              <Calendar className="h-12 w-12 text-muted-foreground opacity-20" />
              <p className="text-muted-foreground font-medium">Aún no has registrado eventos de asistencia.</p>
           </Card>
         ) : (
-          events?.map(event => (
+          events.map(event => (
             <Link key={event.id} href={`/dashboard/attendance/${event.id}`}>
               <Card className="hover:shadow-lg transition-all border-l-4 border-l-accent group">
                 <CardHeader className="pb-3">
@@ -150,7 +157,7 @@ export default function AttendanceDashboard() {
                 <CardContent className="space-y-4">
                   <div className="flex justify-between items-center py-3 border-t">
                     <div className="text-xs text-muted-foreground font-bold flex items-center gap-1">
-                      <Users className="h-3 w-3" /> {event.presentIds.length} presentes
+                      <Users className="h-3 w-3" /> {event.presentIds?.length || 0} presentes
                     </div>
                     <div className="text-sm font-bold text-primary">
                       Total: ${event.totalCost.toFixed(2)}
