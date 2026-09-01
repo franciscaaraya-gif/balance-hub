@@ -48,40 +48,23 @@
       },
       "required": ["id", "groupId", "debtorId", "amount", "status", "createdAt"]
     },
-    "Receipt": {
+    "Event": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Receipt",
+      "title": "Event",
       "type": "object",
-      "description": "A scanned bill with items that can be split among members.",
+      "description": "Represents an attendance event for cost splitting.",
       "properties": {
         "id": { "type": "string" },
-        "groupId": { "type": "string" },
-        "imageUrl": { "type": "string" },
-        "status": { "type": "string", "enum": ["open", "processing", "completed"] },
-        "items": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "name": { "type": "string" },
-              "price": { "type": "number" },
-              "claims": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "userId": { "type": "string" },
-                    "percentage": { "type": "number" }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "title": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "totalCost": { "type": "number" },
+        "creatorId": { "type": "string" },
+        "participantIds": { "type": "array", "items": { "type": "string" } },
+        "presentIds": { "type": "array", "items": { "type": "string" } }
       },
-      "required": ["id", "groupId", "status", "items", "createdAt"]
+      "required": ["id", "title", "date", "totalCost", "creatorId"]
     }
   },
   "auth": {
@@ -95,7 +78,6 @@
           "entityName": "UserProfile",
           "schema": { "$ref": "#/backend/entities/UserProfile" },
           "description": "Stores individual user profile information."
-"
         }
       },
       {
@@ -107,19 +89,11 @@
         }
       },
       {
-        "path": "/groups/{groupId}/debts/{debtId}",
+        "path": "/events/{eventId}",
         "definition": {
-          "entityName": "Debt",
-          "schema": { "$ref": "#/backend/entities/Debt" },
-          "description": "Stores individual debt records."
-        }
-      },
-      {
-        "path": "/groups/{groupId}/receipts/{receiptId}",
-        "definition": {
-          "entityName": "Receipt",
-          "schema": { "$ref": "#/backend/entities/Receipt" },
-          "description": "Stores parsed receipts and their split status."
+          "entityName": "Event",
+          "schema": { "$ref": "#/backend/entities/Event" },
+          "description": "Stores attendance events and cost splits."
         }
       }
     ]

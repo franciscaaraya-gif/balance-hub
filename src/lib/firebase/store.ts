@@ -11,10 +11,11 @@ import {
   addDoc, 
   updateDoc,
   arrayUnion,
+  arrayRemove,
   limit,
   writeBatch
 } from "firebase/firestore";
-import { Group, UserProfile, DebtStatus, ReceiptItem } from "../types";
+import { Group, UserProfile, DebtStatus, ReceiptItem, Event } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -33,6 +34,12 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   const userRef = doc(db, "userProfiles", uid);
   const snap = await getDoc(userRef);
   return snap.exists() ? (snap.data() as UserProfile) : null;
+};
+
+export const getAllUsers = async (): Promise<UserProfile[]> => {
+  const q = query(collection(db, "userProfiles"), limit(100));
+  const snap = await getDocs(q);
+  return snap.docs.map(doc => doc.data() as UserProfile);
 };
 
 export const createGroup = async (name: string, type: 'fixed' | 'variable', adminId: string, fixedAmount?: number) => {
@@ -211,4 +218,30 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
     if (p) profiles.push(p);
   }
   return profiles;
+};
+
+// EVENT / ATTENDANCE STORE FUNCTIONS
+export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds'>) => {
+  const eventCollection = collection(db, "events");
+  const eventData = {
+    ...data,
+    participantIds: [data.creatorId],
+    presentIds: [data.creatorId],
+    createdAt: Date.now(),
+  };
+  return addDoc(eventCollection, eventData);
+};
+
+export const addParticipantToEvent = (eventId: string, userId: string) => {
+  const eventRef = doc(db, "events", eventId);
+  return updateDoc(eventRef, {
+    participantIds: arrayUnion(userId)
+  });
+};
+
+export const toggleAttendance = (eventId: string, userId: string, isPresent: boolean) => {
+  const eventRef = doc(db, "events", eventId);
+  return updateDoc(eventRef, {
+    presentIds: isPresent ? arrayUnion(userId) : arrayRemove(userId)
+  });
 };

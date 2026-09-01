@@ -63,3 +63,16 @@ export interface Receipt {
   items: ReceiptItem[];
   createdAt: number;
 }
+
+export interface Event {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  totalCost: number;
+  creatorId: string;
+  participantIds: string[];
+  presentIds: string[];
+  createdAt: number;
+}
