@@ -154,7 +154,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <div className="flex gap-2 items-center">
             <Badge className="bg-accent text-white border-none px-3 font-bold uppercase tracking-widest">{event.date}</Badge>
             <Button variant="secondary" size="sm" className="bg-white/10 hover:bg-white/20 text-white text-[10px] h-7 font-bold border-none" onClick={handleShare}>
-              <Share2 className="h-3 w-3 mr-1" /> Copiar Link Invitación
+              <Share2 className="h-3 w-3 mr-1" /> WhatsApp Link
             </Button>
           </div>
           <h1 className="text-4xl font-headline font-bold">{event.title}</h1>
@@ -176,15 +176,15 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         <Card className="md:col-span-2 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-7">
             <div>
-              <CardTitle className="text-xl font-headline">Registro de Asistencia</CardTitle>
-              <CardDescription>Confirma quiénes asistieron efectivamente.</CardDescription>
+              <CardTitle className="text-xl font-headline">Lista de Asistencia</CardTitle>
+              <CardDescription>Usuarios y sus invitados (+1).</CardDescription>
             </div>
             <div className="flex gap-2">
                <Button variant="outline" size="sm" className="h-9 px-4 font-bold" onClick={() => setAddingGuest(true)}>
-                 <Plus className="h-4 w-4 mr-2" /> Añadir +1
+                 <Plus className="h-4 w-4 mr-2" /> Añadir (+1)
                </Button>
                <Button variant="outline" size="sm" className="h-9 px-4 font-bold" onClick={() => setAddingParticipant(true)}>
-                 <UserPlus className="h-4 w-4 mr-2" /> Buscar
+                 <UserPlus className="h-4 w-4 mr-2" /> Buscar Usuario
                </Button>
                <Button variant="default" size="sm" className="bg-accent h-9 px-4 font-bold" onClick={simulateNfcScan} disabled={scanningNfc}>
                  {scanningNfc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Nfc className="h-4 w-4 mr-2" />} NFC
@@ -192,70 +192,74 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-1">
+            <div className="space-y-4">
               {participants.map(p => {
                 const isPresent = event.presentIds?.includes(p.uid);
+                const userGuests = event.externalGuests?.filter(g => g.addedBy === p.uid) || [];
+                
                 return (
-                  <div key={p.uid} className={cn(
-                    "flex items-center justify-between py-3 px-4 rounded-2xl transition-all border border-transparent",
-                    isPresent ? "bg-emerald-50 border-emerald-100" : "hover:bg-muted/50"
-                  )}>
-                    <div className="flex items-center gap-4">
-                      <div className={cn(
-                        "h-11 w-11 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm transition-transform",
-                        isPresent ? "bg-emerald-500 scale-105" : "bg-muted-foreground/30"
-                      )}>
-                        {p.displayName?.[0]}
+                  <div key={p.uid} className="space-y-2">
+                    <div className={cn(
+                      "flex items-center justify-between py-3 px-4 rounded-2xl transition-all border border-transparent",
+                      isPresent ? "bg-emerald-50 border-emerald-100" : "hover:bg-muted/50"
+                    )}>
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "h-11 w-11 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm transition-transform",
+                          isPresent ? "bg-emerald-500 scale-105" : "bg-muted-foreground/30"
+                        )}>
+                          {p.displayName?.[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold leading-none mb-1">{p.displayName}</p>
+                          <p className="text-[10px] text-muted-foreground font-medium">{p.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold leading-none mb-1">{p.displayName}</p>
-                        <p className="text-[10px] text-muted-foreground font-medium">{p.email}</p>
-                      </div>
+                      <Button 
+                        variant={isPresent ? "default" : "outline"} 
+                        size="sm" 
+                        className={cn(
+                          "rounded-full gap-2 text-xs font-bold h-8 transition-all",
+                          isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none px-4" : "text-muted-foreground border-dashed"
+                        )}
+                        onClick={() => handleTogglePresent(p.uid, !!isPresent)}
+                      >
+                        {isPresent ? <><CheckCircle2 className="h-3.5 w-3.5" /> Presente</> : <><Circle className="h-3.5 w-3.5" /> Ausente</>}
+                      </Button>
                     </div>
-                    <Button 
-                      variant={isPresent ? "default" : "outline"} 
-                      size="sm" 
-                      className={cn(
-                        "rounded-full gap-2 text-xs font-bold h-8 transition-all",
-                        isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none px-4" : "text-muted-foreground border-dashed"
-                      )}
-                      onClick={() => handleTogglePresent(p.uid, !!isPresent)}
-                    >
-                      {isPresent ? <><CheckCircle2 className="h-3.5 w-3.5" /> Presente</> : <><Circle className="h-3.5 w-3.5" /> Ausente</>}
-                    </Button>
+
+                    {/* LISTA DE EXTERNAL GUESTS (+1) VINCULADOS A ESTE USUARIO */}
+                    {userGuests.map((guest, idx) => (
+                      <div key={`${guest.name}-${idx}`} className="flex items-center justify-between py-2 px-4 ml-8 rounded-xl bg-amber-50/50 border border-amber-100/50">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-sm bg-amber-500/70">
+                            {guest.name[0]}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold leading-none mb-1">{guest.name}</p>
+                            <p className="text-[9px] text-amber-700/70 font-medium italic">Acompañante de {p.displayName}</p>
+                          </div>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7 text-amber-600/50 hover:bg-amber-100"
+                          onClick={() => handleRemoveGuest(guest)}
+                        >
+                          <UserMinus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 );
               })}
-              
-              {/* LISTA DE EXTERNAL GUESTS (+1) */}
-              {event.externalGuests?.map((guest, idx) => (
-                <div key={`${guest.name}-${idx}`} className="flex items-center justify-between py-3 px-4 rounded-2xl bg-amber-50 border border-amber-100">
-                  <div className="flex items-center gap-4">
-                    <div className="h-11 w-11 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-sm bg-amber-500">
-                      {guest.name[0]}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold leading-none mb-1">{guest.name}</p>
-                      <p className="text-[10px] text-amber-700 font-medium">Invitado (+1)</p>
-                    </div>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-amber-600 hover:bg-amber-100"
-                    onClick={() => handleRemoveGuest(guest)}
-                  >
-                    <UserMinus className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
 
               {participants.length === 0 && (!event.externalGuests || event.externalGuests.length === 0) && (
                 <div className="py-20 text-center space-y-3">
                   <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mx-auto opacity-50">
                     <Users className="h-8 w-8 text-muted-foreground" />
                   </div>
-                  <p className="text-muted-foreground font-medium italic">No hay personas inscritas. Comparte el link o usa "Añadir".</p>
+                  <p className="text-muted-foreground font-medium italic">No hay personas inscritas aún.</p>
                 </div>
               )}
             </div>
@@ -267,7 +271,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             <div className="h-1 bg-accent w-full" />
             <CardHeader className="pb-4">
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-primary">
-                <Zap className="h-4 w-4 text-accent fill-accent" /> Desglose de Costos
+                <Zap className="h-4 w-4 text-accent fill-accent" /> Resumen de Cobro
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -276,7 +280,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 <span className="font-bold text-primary">${event.totalCost.toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-medium">
-                <span className="text-muted-foreground">Usuarios Presentes:</span>
+                <span className="text-muted-foreground">Registrados Presentes:</span>
                 <span className="font-bold text-primary">{event.presentIds?.length || 0}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-medium">
@@ -285,14 +289,14 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               </div>
               <div className="pt-4 border-t border-primary/10 flex justify-between items-end">
                 <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Cuota por Cabeza</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Por Persona</span>
                   <p className="text-2xl font-headline font-bold text-primary">${costPerPerson.toFixed(2)}</p>
                 </div>
               </div>
             </CardContent>
             <CardFooter>
-              <Button className="w-full text-xs font-bold bg-primary hover:bg-primary/90" onClick={() => toast({ title: "Próximamente", description: "Carga automática a BalanceHub." })}>
-                Cargar Deudas al Grupo
+              <Button className="w-full text-xs font-bold bg-primary hover:bg-primary/90" onClick={() => toast({ title: "Próximamente", description: "Carga automática de deudas a BalanceHub." })}>
+                Dividir y Cobrar
               </Button>
             </CardFooter>
           </Card>
@@ -302,84 +306,70 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                <div className="bg-accent/20 p-2 rounded-xl">
                  <Share2 className="h-5 w-5" /> 
                </div>
-               <span className="text-sm font-headline uppercase tracking-wide">Link WhatsApp</span>
+               <span className="text-sm font-headline uppercase tracking-wide">Link de Invitación</span>
              </div>
              <p className="text-xs text-accent/80 leading-relaxed font-medium">
-               Copia el link de invitación y mándalo por chat. Tus amigos podrán inscribirse ellos mismos y añadir a sus invitados (+1).
+               Comparte este link por WhatsApp para que tus amigos se inscriban y añadan a sus acompañantes (+1).
              </p>
              <Button variant="outline" className="w-full h-8 text-xs font-bold border-accent text-accent hover:bg-accent/10" onClick={handleShare}>Copiar Link</Button>
           </div>
         </div>
       </div>
 
-      {/* MODAL: Añadir Participante (Registrado) */}
+      {/* MODALES IGUALES AL ANTERIOR PERO CON UI PULIDA */}
       <Dialog open={addingParticipant} onOpenChange={setAddingParticipant}>
         <DialogContent className="max-w-md rounded-3xl">
           <DialogHeader className="text-center pb-4">
-            <DialogTitle className="text-2xl font-headline">Inscribir Integrante</DialogTitle>
-            <DialogDescription>Busca personas registradas en BalanceHub.</DialogDescription>
+            <DialogTitle className="text-2xl font-headline">Añadir Usuario</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-2">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input className="pl-12 h-12 rounded-2xl bg-muted/30 border-none focus-visible:ring-primary" placeholder="Buscar por nombre o email..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <Input className="pl-12 h-12 rounded-2xl bg-muted/30 border-none focus-visible:ring-primary" placeholder="Nombre o email..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
+            <div className="max-h-72 overflow-y-auto space-y-2 pr-2">
               {filteredUsers.map(u => (
-                <div key={u.uid} className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-2xl transition-all group">
+                <div key={u.uid} className="flex items-center justify-between p-3 hover:bg-muted/50 rounded-2xl transition-all">
                   <div className="flex items-center gap-3">
                     <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs text-primary">{u.displayName?.[0]}</div>
                     <div>
-                      <p className="text-xs font-bold leading-tight">{u.displayName}</p>
+                      <p className="text-xs font-bold">{u.displayName}</p>
                       <p className="text-[10px] text-muted-foreground">{u.email}</p>
                     </div>
                   </div>
-                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-full hover:bg-primary hover:text-white transition-colors" onClick={() => handleAddUser(u.uid)}>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-full hover:bg-primary hover:text-white" onClick={() => handleAddUser(u.uid)}>
                     <PlusCircle className="h-5 w-5" />
                   </Button>
                 </div>
               ))}
             </div>
           </div>
-          <DialogFooter className="sm:justify-center">
-            <Button variant="ghost" className="text-muted-foreground font-bold" onClick={() => setAddingParticipant(false)}>Cerrar</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: Añadir Invitado (+1) */}
       <Dialog open={addingGuest} onOpenChange={setAddingGuest}>
         <DialogContent className="max-w-xs rounded-3xl">
           <DialogHeader>
-            <DialogTitle className="font-headline">Registrar (+1)</DialogTitle>
-            <DialogDescription>Para personas que no tienen BalanceHub.</DialogDescription>
+            <DialogTitle className="font-headline">Añadir Invitado (+1)</DialogTitle>
+            <DialogDescription>Se asociará a tu cuenta.</DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Label className="text-xs font-bold uppercase mb-2 block">Nombre del Invitado</Label>
-            <Input placeholder="Ej: Amigo de Juan" value={guestName} onChange={e => setGuestName(e.target.value)} />
+            <Label className="text-xs font-bold uppercase mb-2 block">Nombre del Acompañante</Label>
+            <Input placeholder="Ej: Primo de Juan" value={guestName} onChange={e => setGuestName(e.target.value)} />
           </div>
           <DialogFooter>
-            <Button variant="outline" className="text-xs" onClick={() => setAddingGuest(false)}>Cancelar</Button>
-            <Button className="text-xs" onClick={handleAddGuest} disabled={!guestName}>Añadir a la cuenta</Button>
+            <Button className="w-full font-bold" onClick={handleAddGuest} disabled={!guestName}>Confirmar (+1)</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: Escaneo NFC (Simulación) */}
       <Dialog open={scanningNfc} onOpenChange={setScanningNfc}>
-        <DialogContent className="max-w-xs text-center py-12 rounded-3xl border-none shadow-2xl">
+        <DialogContent className="max-w-xs text-center py-12 rounded-3xl">
           <div className="flex flex-col items-center gap-8">
-            <div className={cn(
-              "p-10 rounded-full bg-accent/10 border-4 border-accent border-dashed relative",
-              scanningNfc && "animate-[spin_6s_linear_infinite]"
-            )}>
+            <div className={cn("p-10 rounded-full bg-accent/10 border-4 border-accent border-dashed relative", scanningNfc && "animate-[spin_6s_linear_infinite]")}>
               <Nfc className="h-20 w-20 text-accent" />
-              <div className="absolute inset-0 bg-accent/5 rounded-full animate-ping" />
             </div>
-            <div className="space-y-3">
-              <h3 className="font-headline font-bold text-2xl text-primary">Detectando NFC</h3>
-              <p className="text-sm text-muted-foreground font-medium">Acerca el dispositivo del invitado al sensor para el Check-in.</p>
-            </div>
+            <h3 className="font-headline font-bold text-2xl text-primary">Esperando NFC...</h3>
             <Loader2 className="h-6 w-6 animate-spin text-accent" />
           </div>
         </DialogContent>

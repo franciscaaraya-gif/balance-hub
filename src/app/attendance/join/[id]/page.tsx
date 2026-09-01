@@ -23,7 +23,6 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
 
   const [joining, setJoining] = useState(false);
   const [guestName, setGuestName] = useState("");
-  const [addingGuest, setAddingGuest] = useState(false);
 
   const eventRef = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
@@ -138,7 +137,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                 {event.externalGuests?.filter(g => g.addedBy === user?.uid).map((g, i) => (
                   <div key={i} className="text-xs font-medium bg-amber-50 text-amber-700 px-3 py-2 rounded-lg flex justify-between">
                     <span>Acompañante: {g.name}</span>
-                    <span className="opacity-50">Añadido</span>
+                    <span className="opacity-50">Añadido por ti</span>
                   </div>
                 ))}
               </div>
