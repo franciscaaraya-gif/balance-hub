@@ -239,6 +239,14 @@ export const addParticipantToEvent = (eventId: string, userId: string) => {
   });
 };
 
+export const addAndMarkPresent = (eventId: string, userId: string) => {
+  const eventRef = doc(db, "events", eventId);
+  return updateDoc(eventRef, {
+    participantIds: arrayUnion(userId),
+    presentIds: arrayUnion(userId)
+  });
+};
+
 export const toggleAttendance = (eventId: string, userId: string, isPresent: boolean) => {
   const eventRef = doc(db, "events", eventId);
   return updateDoc(eventRef, {
