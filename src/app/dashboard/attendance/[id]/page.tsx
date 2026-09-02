@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus, ShieldCheck, Coins, ArrowRight, User } from "lucide-react";
+import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, QrCode, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus, ShieldCheck, Coins, ArrowRight, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const [addingParticipant, setAddingParticipant] = useState(false);
   const [isCharging, setIsCharging] = useState(false);
-  const [scanningNfc, setScanningNfc] = useState(false);
+  const [showQr, setShowQr] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [participants, setParticipants] = useState<UserProfile[]>([]);
@@ -43,7 +43,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   }, [firestore, event?.groupId]);
   const { data: group } = useDoc<Group>(groupRef);
 
-  // Efecto para sincronizar la lista de participantes mostrada
   useEffect(() => {
     if (event?.participantIds && event.participantIds.length > 0) {
       getGroupMembersDetails(event.participantIds).then(setParticipants);
@@ -112,29 +111,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     toast({ title: "Link copiado", description: "Envíalo por WhatsApp para que se inscriban." });
   };
 
-  const simulateNfcScan = () => {
-    setScanningNfc(true);
-    setTimeout(async () => {
-      try {
-        const users = await getAllUsers();
-        // Buscar un usuario que NO esté presente aún
-        const eligibleUsers = users.filter(u => !event?.presentIds.includes(u.uid));
-        
-        if (eligibleUsers.length > 0) {
-          const randomUser = eligibleUsers[Math.floor(Math.random() * eligibleUsers.length)];
-          await addAndMarkPresent(params.id, randomUser.uid);
-          toast({ title: `Check-in NFC: ${randomUser.displayName}`, description: "Registrado y marcado presente." });
-        } else {
-          toast({ variant: "destructive", title: "No se detectó nuevo usuario", description: "Todos ya están registrados." });
-        }
-      } catch (err) {
-        toast({ variant: "destructive", title: "Error en NFC" });
-      } finally {
-        setScanningNfc(false);
-      }
-    }, 2000);
-  };
-
   if (eventLoading) return <div className="h-full flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   
   if (eventError || !event) return (
@@ -149,6 +125,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.length || 0);
   const costPerPerson = totalPresent > 0 ? event.totalCost / totalPresent : 0;
   const isAdmin = event.creatorId === user?.uid;
+
+  const checkInUrl = `${window.location.origin}/attendance/check-in/${event.id}?token=${event.checkInToken}`;
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(checkInUrl)}`;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20 px-2 sm:px-4">
@@ -198,8 +177,8 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                  <Button variant="outline" size="sm" className="flex-1 sm:flex-none h-10 px-4 font-bold rounded-xl" onClick={() => setAddingParticipant(true)}>
                    <Search className="h-4 w-4 mr-2" /> Buscar
                  </Button>
-                 <Button variant="default" size="sm" className="flex-1 sm:flex-none bg-accent h-10 px-4 font-bold hover:bg-accent/90 rounded-xl shadow-lg shadow-accent/10" onClick={simulateNfcScan} disabled={scanningNfc}>
-                   {scanningNfc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Nfc className="h-4 w-4 mr-2" />} NFC
+                 <Button variant="default" size="sm" className="flex-1 sm:flex-none bg-accent h-10 px-4 font-bold hover:bg-accent/90 rounded-xl shadow-lg shadow-accent/10" onClick={() => setShowQr(true)}>
+                   <QrCode className="h-4 w-4 mr-2" /> Mostrar QR
                  </Button>
               </div>
             )}
@@ -331,6 +310,34 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           </div>
         </div>
       </div>
+
+      {/* MODAL QR */}
+      <Dialog open={showQr} onOpenChange={setShowQr}>
+        <DialogContent className="max-w-md rounded-[2.5rem] border-none p-8 text-center">
+          <DialogHeader className="pb-6">
+            <DialogTitle className="text-2xl font-headline font-bold">Check-in QR</DialogTitle>
+            <DialogDescription className="text-xs uppercase font-bold tracking-widest mt-1">
+              Muestra este código al llegar
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center space-y-6">
+            <div className="bg-white p-6 rounded-[2rem] shadow-xl border-2 border-primary/10">
+              <img src={qrCodeUrl} alt="QR Check-in" className="w-64 h-64 object-contain" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-primary">{event.title}</p>
+              <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest leading-relaxed">
+                Cada asistente debe escanear esto con su cámara para marcar presente automáticamente.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button className="w-full h-12 rounded-2xl font-bold" onClick={() => setShowQr(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addingParticipant} onOpenChange={setAddingParticipant}>
         <DialogContent className="max-w-md rounded-[2.5rem] border-none p-6 sm:p-8">

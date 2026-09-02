@@ -86,8 +86,9 @@ export interface Event {
   groupId: string;
   participantIds: string[];
   presentIds: string[];
-  externalGuests?: ExternalGuest[];
-  shareLink?: string;
-  isCharged?: boolean;
+  externalGuests: ExternalGuest[];
+  shareLink: string;
+  checkInToken?: string;
+  isCharged: boolean;
   createdAt: number;
 }

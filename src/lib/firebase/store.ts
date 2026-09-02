@@ -234,9 +234,10 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
 };
 
 // EVENT / ATTENDANCE STORE FUNCTIONS
-export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds'>) => {
+export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds' | 'externalGuests' | 'shareLink' | 'isCharged'>) => {
   const eventCollection = collection(db, "events");
   const eventRef = doc(eventCollection);
+  const checkInToken = Math.random().toString(36).substring(7);
   const eventData = {
     ...data,
     id: eventRef.id,
@@ -244,6 +245,7 @@ export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'partic
     presentIds: [data.creatorId],
     externalGuests: [],
     shareLink: `${window.location.origin}/attendance/join/${eventRef.id}`,
+    checkInToken,
     isCharged: false,
     createdAt: Date.now(),
   };
@@ -270,6 +272,7 @@ export const chargeEventToGroup = async (eventId: string) => {
   
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
+    // Cada acompañante cuenta como una cabeza adicional
     const totalMultiplier = 1 + myGuests.length;
     const finalDebtAmount = costPerPerson * totalMultiplier;
 
@@ -278,7 +281,7 @@ export const chargeEventToGroup = async (eventId: string) => {
         event.groupId, 
         uid, 
         finalDebtAmount, 
-        `Asistencia: ${event.title}`, 
+        `Asistencia: ${event.title} (Incluye ${myGuests.length} invitados)`, 
         undefined,
         { eventId: event.id, eventName: event.title }
       );
