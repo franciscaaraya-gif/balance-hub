@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from "react";
@@ -23,25 +24,23 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // Consulta optimizada: Buscamos grupos donde el usuario es miembro.
-  // Añadimos orderBy para consistencia con los índices.
+  // Consulta simplificada para evitar problemas de índices durante el prototipado
   const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collection(firestore, 'groups'), 
-      where('memberIds', 'array-contains', user.uid),
-      orderBy('createdAt', 'desc')
+      where('memberIds', 'array-contains', user.uid)
     );
   }, [firestore, user?.uid]);
   const { data: myGroups, isLoading: myGroupsLoading, error: groupsError } = useCollection<Group>(myGroupsQuery);
 
-  // Consulta Global (Collection Group): Busca todas las deudas del usuario en CUALQUIER grupo.
+  // Consulta de deudas - ordenamos por estado para ver las pendientes arriba
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collectionGroup(firestore, 'debts'),
       where('debtorId', '==', user.uid),
-      orderBy('status', 'asc') // Pendientes primero
+      orderBy('status', 'asc')
     );
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading, error: debtsError } = useCollection<Debt>(myDebtsQuery);
@@ -137,7 +136,7 @@ export default function Dashboard() {
       {(groupsError || debtsError) && (
         <div className="p-4 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
           <AlertCircle className="h-5 w-5" />
-          <span>Hubo un problema de permisos al cargar tus datos. Reintenta en unos momentos.</span>
+          <span>Hubo un problema al cargar tus datos. Reintenta en unos momentos.</span>
         </div>
       )}
 
@@ -151,7 +150,7 @@ export default function Dashboard() {
             <div className="grid gap-6 sm:grid-cols-2">
               {[1, 2].map(i => <div key={i} className="h-32 rounded-xl bg-muted animate-pulse" />)}
             </div>
-          ) : myGroups?.length === 0 ? (
+          ) : !myGroups || myGroups.length === 0 ? (
             <Card className="border-dashed bg-transparent py-10">
               <CardContent className="flex flex-col items-center justify-center text-center space-y-3">
                 <div className="p-3 bg-muted rounded-full"><Users className="h-6 w-6 text-muted-foreground" /></div>
