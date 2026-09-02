@@ -1,3 +1,4 @@
+
 {
   "indexes": [
     {
@@ -21,6 +22,20 @@
         {
           "fieldPath": "participantIds",
           "arrayConfig": "CONTAINS"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "debts",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "debtorId",
+          "order": "ASCENDING"
         },
         {
           "fieldPath": "createdAt",
