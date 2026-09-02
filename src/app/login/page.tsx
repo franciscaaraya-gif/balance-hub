@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -19,7 +19,7 @@ import { Wallet, Loader2, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { createUserProfile } from "@/lib/firebase/store";
 
-export default function Login() {
+function LoginContent() {
   const { user, isUserLoading } = useUser();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -154,5 +154,18 @@ export default function Login() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Iniciando sesión...</p>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }
