@@ -77,6 +77,7 @@ export interface Event {
   location: string;
   totalCost: number;
   creatorId: string;
+  creatorName?: string; // Nombre del usuario que creó el evento
   groupId: string; // Vínculo con el grupo de cobro
   participantIds: string[];
   presentIds: string[];

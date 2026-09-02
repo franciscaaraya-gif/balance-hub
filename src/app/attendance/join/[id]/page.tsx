@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Loader2, MapPin, Clock, Users, Plus, CheckCircle2, UserPlus, Info } from "lucide-react";
+import { Calendar, Loader2, MapPin, Clock, Users, Plus, CheckCircle2, UserPlus, Info, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 
@@ -99,6 +99,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
           </div>
           <div>
             <CardTitle className="text-3xl font-headline font-bold text-primary">{event.title}</CardTitle>
+            <p className="text-xs text-muted-foreground font-bold flex items-center justify-center gap-1 mt-1">
+              <User className="h-3 w-3" /> Organizado por: {event.creatorName || "Invitado"}
+            </p>
             <div className="flex flex-wrap justify-center gap-3 text-sm text-muted-foreground font-medium mt-3">
               <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {event.location}</span>
               <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {event.time}</span>

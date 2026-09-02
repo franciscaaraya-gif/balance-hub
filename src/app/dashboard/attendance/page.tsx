@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users, AlertCircle, Coins, CheckCircle2 } from "lucide-react";
+import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users, AlertCircle, Coins, CheckCircle2, User } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, orderBy } from "firebase/firestore";
@@ -65,7 +65,8 @@ export default function AttendanceDashboard() {
         location: formData.location,
         totalCost: parseFloat(formData.totalCost),
         groupId: formData.groupId,
-        creatorId: user.uid
+        creatorId: user.uid,
+        creatorName: user.displayName || 'Organizador'
       });
       toast({ title: "Evento creado", description: "Ahora puedes marcar la asistencia." });
       setOpen(false);
@@ -193,10 +194,15 @@ export default function AttendanceDashboard() {
                   )}
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start">
-                      <CardTitle className="text-lg font-headline group-hover:text-accent transition-colors">{event.title}</CardTitle>
+                      <div className="space-y-1">
+                        <CardTitle className="text-lg font-headline group-hover:text-accent transition-colors">{event.title}</CardTitle>
+                        <p className="text-[10px] text-muted-foreground font-bold flex items-center gap-1">
+                          <User className="h-2.5 w-2.5" /> Organizado por: {event.creatorName || "Invitado"}
+                        </p>
+                      </div>
                       <Badge variant="outline" className="text-[10px]">{event.date}</Badge>
                     </div>
-                    <CardDescription className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location || "Sin ubicación"}</CardDescription>
+                    <CardDescription className="flex items-center gap-1 mt-2"><MapPin className="h-3 w-3" /> {event.location || "Sin ubicación"}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex justify-between items-center py-3 border-t">

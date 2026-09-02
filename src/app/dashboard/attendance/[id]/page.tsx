@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus, ShieldCheck, Coins, ArrowRight } from "lucide-react";
+import { Calendar, MapPin, Clock, DollarSign, Users, UserPlus, Nfc, CheckCircle2, Circle, Loader2, Search, Zap, PlusCircle, AlertCircle, Share2, UserMinus, Plus, ShieldCheck, Coins, ArrowRight, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -184,6 +184,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <div className="flex flex-wrap gap-4 text-sm opacity-80 font-medium">
             <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {event.location}</span>
             <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> {event.time}</span>
+            <span className="flex items-center gap-1"><User className="h-4 w-4" /> Org: {event.creatorName || "Invitado"}</span>
           </div>
           {group && (
             <Link href={`/dashboard/groups/${group.id}`} className="inline-flex items-center gap-2 text-xs text-white/70 hover:text-white transition-colors mt-2">
