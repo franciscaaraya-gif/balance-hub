@@ -261,27 +261,29 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   if (event.isCharged) throw new Error("Este evento ya fue cobrado.");
 
-  const totalParticipantsCount = (event.presentIds?.length || 0) + (event.externalGuests?.length || 0);
-  if (totalParticipantsCount === 0) throw new Error("No hay asistentes para cobrar.");
+  const totalPresentParticipants = event.presentIds?.length || 0;
+  const totalPresentGuests = event.externalGuests?.filter(g => g.present).length || 0;
+  const totalHeads = totalPresentParticipants + totalPresentGuests;
 
-  const costPerPerson = event.totalCost / totalParticipantsCount;
+  if (totalHeads === 0) throw new Error("No hay asistentes para cobrar.");
 
-  // Obtenemos los datos del grupo una sola vez para denormalizar
+  const costPerHead = event.totalCost / totalHeads;
+
   const groupSnap = await getDoc(doc(db, "groups", event.groupId));
   const group = groupSnap.data() as Group;
   
   for (const uid of event.presentIds) {
-    const myGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
-    // Cada acompañante cuenta como una cabeza adicional
-    const totalMultiplier = 1 + myGuests.length;
-    const finalDebtAmount = costPerPerson * totalMultiplier;
+    const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
+    // Un solo cobro consolidado: Usuario + sus invitados presentes
+    const multiplier = 1 + myGuests.length;
+    const finalAmount = costPerHead * multiplier;
 
-    if (finalDebtAmount > 0) {
+    if (finalAmount > 0) {
       await addDebt(
         event.groupId, 
         uid, 
-        finalDebtAmount, 
-        `Asistencia: ${event.title} (Incluye ${myGuests.length} invitados)`, 
+        finalAmount, 
+        `Asistencia: ${event.title} (${multiplier} cabezas)`, 
         undefined,
         { eventId: event.id, eventName: event.title }
       );
@@ -316,7 +318,7 @@ export const toggleAttendance = (eventId: string, userId: string, isPresent: boo
 export const addExternalGuest = (eventId: string, name: string, addedBy: string) => {
   const eventRef = doc(db, "events", eventId);
   return updateDoc(eventRef, {
-    externalGuests: arrayUnion({ name, addedBy })
+    externalGuests: arrayUnion({ name, addedBy, present: false })
   });
 };
 
@@ -324,5 +326,33 @@ export const removeExternalGuest = async (eventId: string, guest: ExternalGuest)
   const eventRef = doc(db, "events", eventId);
   return updateDoc(eventRef, {
     externalGuests: arrayRemove(guest)
+  });
+};
+
+export const toggleGuestPresence = async (eventId: string, guestName: string, addedBy: string, present: boolean) => {
+  const eventRef = doc(db, "events", eventId);
+  const snap = await getDoc(eventRef);
+  if (!snap.exists()) return;
+  const event = snap.data() as Event;
+  const updatedGuests = event.externalGuests.map(g => {
+    if (g.name === guestName && g.addedBy === addedBy) {
+      return { ...g, present };
+    }
+    return g;
+  });
+  return updateDoc(eventRef, { externalGuests: updatedGuests });
+};
+
+export const removeParticipantFromEvent = async (eventId: string, userId: string) => {
+  const eventRef = doc(db, "events", eventId);
+  const snap = await getDoc(eventRef);
+  if (!snap.exists()) return;
+  const event = snap.data() as Event;
+  if (event.isCharged) return; // No permitir borrar si ya se cobró
+  
+  return updateDoc(eventRef, {
+    participantIds: arrayRemove(userId),
+    presentIds: arrayRemove(userId),
+    externalGuests: event.externalGuests.filter(g => g.addedBy !== userId)
   });
 };

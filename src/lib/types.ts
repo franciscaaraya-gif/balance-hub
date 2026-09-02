@@ -72,6 +72,7 @@ export interface Receipt {
 export interface ExternalGuest {
   name: string;
   addedBy: string;
+  present: boolean;
 }
 
 export interface Event {
