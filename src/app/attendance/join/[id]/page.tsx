@@ -4,13 +4,13 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
-import { addAndMarkPresent, addExternalGuest, removeExternalGuest, toggleAttendance, toggleGuestPresence, removeParticipantFromEvent } from "@/lib/firebase/store";
+import { addAndMarkPresent, addExternalGuest, removeExternalGuest, toggleGuestPresence, removeParticipantFromEvent } from "@/lib/firebase/store";
 import { Event, ExternalGuest } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Loader2, MapPin, Clock, Users, Plus, CheckCircle2, UserPlus, Info, User, QrCode, Trash2, CheckCircle, Circle, ArrowLeft, ShieldCheck } from "lucide-react";
+import { Calendar, Loader2, MapPin, Clock, Plus, CheckCircle2, UserPlus, Info, User, Trash2, CheckCircle, Circle, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -131,8 +131,8 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
               <User className="h-3 w-3" /> Organizado por: {event.creatorName}
             </p>
             <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground font-medium mt-3 px-4">
-              <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-full"><MapPin className="h-3 w-3" /> {event.location}</span>
-              <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-full"><Clock className="h-3 w-3" /> {event.time}</span>
+              <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-full"><MapPin className="h-3.5 w-3.5" /> {event.location}</span>
+              <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-full"><Clock className="h-3.5 w-3.5" /> {event.time}</span>
             </div>
           </div>
         </CardHeader>
@@ -141,55 +141,40 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
           {event.isCharged && (
             <div className="bg-emerald-50 text-emerald-700 p-4 rounded-2xl flex items-center gap-3 border border-emerald-100 mb-2">
               <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <p className="text-[11px] font-bold uppercase leading-tight">Este evento ya ha sido liquidado. Los datos son de solo lectura.</p>
+              <p className="text-[11px] font-bold uppercase leading-tight">Este evento ya ha sido liquidado.</p>
             </div>
           )}
 
           <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10 space-y-3 shadow-inner">
              <div className="flex justify-between items-center text-sm">
-               <span className="text-muted-foreground font-medium">Asistentes Hoy:</span>
+               <span className="text-muted-foreground font-medium">Presentes:</span>
                <span className="font-bold text-primary">{totalPresent}</span>
              </div>
              {isEnrolled && (
-               <div className="pt-3 border-t border-primary/10 space-y-2">
-                 <div className="flex justify-between items-center text-[10px] font-bold text-accent uppercase tracking-wider">
-                   <span>Tu Cuota ({myPresentHeads} pers.):</span>
-                   <span className="text-2xl font-headline font-bold text-accent">
-                     ${myTotalDebt.toFixed(2)}
-                   </span>
-                 </div>
+               <div className="pt-3 border-t border-primary/10 space-y-2 text-right">
+                 <p className="text-[10px] font-bold text-accent uppercase tracking-wider">Tu Cuota ({myPresentHeads} pers.)</p>
+                 <p className="text-2xl font-headline font-bold text-accent">${myTotalDebt.toFixed(2)}</p>
                </div>
              )}
           </div>
 
           {!isEnrolled ? (
-            <div className="space-y-3">
-              <Button className="w-full bg-primary h-14 text-lg font-bold shadow-xl shadow-primary/20 hover:scale-[1.02] transition-transform rounded-2xl" onClick={handleJoin} disabled={joining}>
-                {joining ? <Loader2 className="animate-spin mr-2" /> : <><UserPlus className="mr-2 h-5 w-5" /> Confirmar Asistencia</>}
-              </Button>
-              <p className="text-[9px] text-center text-muted-foreground uppercase font-bold tracking-widest leading-relaxed mt-4">
-                <Info className="h-3 w-3 inline mr-1" /> Al inscribirte, podrás sumar invitados y ver tu cuota en tiempo real.
-              </p>
-            </div>
+            <Button className="w-full bg-primary h-14 text-lg font-bold rounded-2xl" onClick={handleJoin} disabled={joining}>
+              {joining ? <Loader2 className="animate-spin mr-2" /> : <><UserPlus className="mr-2 h-5 w-5" /> Confirmar Asistencia</>}
+            </Button>
           ) : (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6">
               <div className={cn(
-                "flex flex-col items-center justify-center gap-2 p-6 rounded-[2rem] font-bold border shadow-sm text-center transition-colors",
+                "flex flex-col items-center justify-center gap-2 p-6 rounded-[2rem] font-bold border text-center",
                 isPresent ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-amber-600 bg-amber-50 border-amber-100"
               )}>
                 {isPresent ? <CheckCircle2 className="h-8 w-8" /> : <Circle className="h-8 w-8" />}
-                <span className="text-lg leading-tight">{isPresent ? "Estás Presente" : "Inscrito (Ausente)"}</span>
-                {!isPresent && !event.isCharged && (
-                  <p className="text-[10px] font-medium opacity-80 mt-1">Escanea el QR del organizador al llegar.</p>
-                )}
+                <span className="text-lg leading-tight">{isPresent ? "Estás Presente" : "Escanea el QR al llegar"}</span>
               </div>
               
               <div className="space-y-4 border-t pt-6">
                 <div className="flex justify-between items-end">
-                  <div className="space-y-1">
-                    <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-[0.2em]">Tus Invitados (+1)</Label>
-                    <p className="text-[10px] text-muted-foreground">Agrégalos aquí. Marcalos al llegar.</p>
-                  </div>
+                  <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Tus Invitados (+1)</Label>
                   {!event.isCharged && (
                     <Button variant="ghost" size="sm" className="h-7 text-[9px] font-black uppercase text-destructive" onClick={() => removeParticipantFromEvent(event.id, user.uid)}>
                       Darse de baja
@@ -203,9 +188,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                       placeholder="Nombre del acompañante" 
                       value={guestName} 
                       onChange={e => setGuestName(e.target.value)} 
-                      className="h-12 rounded-2xl focus-visible:ring-accent bg-muted/50 border-none" 
+                      className="h-12 rounded-2xl bg-muted/50 border-none" 
                     />
-                    <Button size="icon" className="h-12 w-12 shrink-0 bg-accent hover:bg-accent/90 rounded-2xl shadow-lg shadow-accent/20" onClick={handleAddGuest} disabled={!guestName}>
+                    <Button size="icon" className="h-12 w-12 bg-accent rounded-2xl" onClick={handleAddGuest} disabled={!guestName}>
                       <Plus className="h-6 w-6 text-white" />
                     </Button>
                   </div>
@@ -214,36 +199,22 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                 <div className="space-y-2 mt-4">
                   {myGuests.map((g, i) => (
                     <div key={i} className={cn(
-                      "text-sm font-bold px-4 py-3 rounded-2xl flex justify-between items-center border transition-all",
+                      "text-sm font-bold px-4 py-3 rounded-2xl flex justify-between items-center border",
                       g.present ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-muted/50 text-muted-foreground border-transparent"
                     )}>
                       <div className="flex items-center gap-3">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className={cn("h-6 w-6 rounded-full", g.present ? "text-emerald-500" : "text-muted-foreground/30")}
-                          onClick={() => handleToggleGuest(g)}
-                          disabled={event.isCharged}
-                        >
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleToggleGuest(g)} disabled={event.isCharged}>
                           {g.present ? <CheckCircle className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
                         </Button>
                         <span>{g.name}</span>
                       </div>
                       {!event.isCharged && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground/50 hover:bg-destructive/10 hover:text-destructive rounded-full"
-                          onClick={() => handleRemoveGuest(g)}
-                        >
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 hover:text-destructive" onClick={() => handleRemoveGuest(g)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
                   ))}
-                  {myGuests.length === 0 && (
-                    <p className="text-center text-[10px] text-muted-foreground font-bold uppercase py-4 border-2 border-dashed rounded-[2rem] opacity-30">No has traído acompañantes</p>
-                  )}
                 </div>
               </div>
             </div>

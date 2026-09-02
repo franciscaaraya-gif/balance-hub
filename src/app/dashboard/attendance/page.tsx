@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users, AlertCircle, Coins, CheckCircle2, User } from "lucide-react";
+import { PlusCircle, Calendar, MapPin, Clock, DollarSign, Loader2, ChevronRight, Users, CheckCircle2, Coins, User } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where } from "firebase/firestore";
@@ -25,14 +25,7 @@ export default function AttendanceDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCharging, setIsCharging] = useState<string | null>(null);
   
-  const [formData, setFormData] = useState({
-    title: "",
-    date: "",
-    time: "",
-    location: "",
-    totalCost: "",
-    groupId: ""
-  });
+  const [formData, setFormData] = useState({ title: "", date: "", time: "", location: "", totalCost: "", groupId: "" });
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -42,20 +35,15 @@ export default function AttendanceDashboard() {
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
-    return query(
-      collection(firestore, 'events'), 
-      where('participantIds', 'array-contains', user.uid)
-    );
+    return query(collection(firestore, 'events'), where('participantIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
-
-  const { data: events, isLoading: eventsLoading, error: eventsError } = useCollection<Event>(eventsQuery);
+  const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
   const handleCreate = async () => {
     if (!formData.title || !formData.date || !formData.totalCost || !formData.groupId || !user) {
-      toast({ variant: "destructive", title: "Faltan datos", description: "El motivo, la fecha, el costo y el grupo son obligatorios." });
+      toast({ variant: "destructive", title: "Faltan datos" });
       return;
     }
-
     setIsSubmitting(true);
     try {
       await createEvent({
@@ -68,25 +56,24 @@ export default function AttendanceDashboard() {
         creatorId: user.uid,
         creatorName: user.displayName || 'Organizador'
       });
-      toast({ title: "Evento creado", description: "Ahora puedes marcar la asistencia." });
+      toast({ title: "Evento creado" });
       setOpen(false);
       setFormData({ title: "", date: "", time: "", location: "", totalCost: "", groupId: "" });
     } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo crear el evento." });
+      toast({ variant: "destructive", title: "Error" });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleChargeToGroup = async (e: React.MouseEvent, eventId: string) => {
+  const handleCharge = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
-    e.stopPropagation();
-    setIsCharging(eventId);
+    setIsCharging(id);
     try {
-      await chargeEventToGroup(eventId);
-      toast({ title: "¡Cobros Generados!", description: "Las deudas se han cargado al grupo correspondiente." });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error al cobrar", description: error.message });
+      await chargeEventToGroup(id);
+      toast({ title: "Cobros liquidados" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Error", description: err.message });
     } finally {
       setIsCharging(null);
     }
@@ -98,147 +85,82 @@ export default function AttendanceDashboard() {
     <div className="space-y-10 max-w-6xl mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-headline font-bold text-primary">Asistencia y Eventos</h1>
-          <p className="text-muted-foreground">Registra quién asistió y divide los costos fácilmente.</p>
+          <h1 className="text-3xl font-headline font-bold text-primary">Asistencia</h1>
+          <p className="text-muted-foreground">Gestiona tus eventos y costos compartidos.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-accent hover:bg-accent/90 gap-2 h-12 px-6 shadow-lg shadow-accent/20">
-              <PlusCircle className="h-5 w-5" /> Abrir Nueva Fecha
+            <Button className="bg-accent h-12 px-6 rounded-2xl shadow-lg shadow-accent/20">
+              <PlusCircle className="h-5 w-5 mr-2" /> Nueva Fecha
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Nuevo Evento / Reunión</DialogTitle>
-              <DialogDescription>Completa los detalles para calcular la asistencia.</DialogDescription>
-            </DialogHeader>
+          <DialogContent className="max-w-md rounded-[2.5rem] border-none p-8">
+            <DialogHeader><DialogTitle>Nuevo Evento</DialogTitle></DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Grupo de Cobro Asociado</Label>
+              <div className="space-y-1">
+                <Label>Grupo</Label>
                 <Select onValueChange={(val) => setFormData({...formData, groupId: val})} value={formData.groupId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona un grupo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {groups?.map(g => (
-                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+                  <SelectContent>{groups?.map(g => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}</SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground">Las deudas se cargarán automáticamente a este grupo.</p>
               </div>
-              <div className="space-y-2">
-                <Label>Motivo / Evento</Label>
-                <Input placeholder="Ej: Padel con amigos, Asado" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-              </div>
+              <div className="space-y-1"><Label>Motivo</Label><Input placeholder="Ej: Padel" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="rounded-xl" /></div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Fecha</Label>
-                  <Input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Hora</Label>
-                  <Input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} />
-                </div>
+                <div className="space-y-1"><Label>Fecha</Label><Input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="rounded-xl" /></div>
+                <div className="space-y-1"><Label>Hora</Label><Input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="rounded-xl" /></div>
               </div>
-              <div className="space-y-2">
-                <Label>Lugar</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-9" placeholder="Ej: Club de Tenis" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Costo Total del Evento ($)</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input type="number" className="pl-9 font-bold" placeholder="0.00" value={formData.totalCost} onChange={e => setFormData({...formData, totalCost: e.target.value})} />
-                </div>
-              </div>
+              <div className="space-y-1"><Label>Costo Total ($)</Label><Input type="number" placeholder="0.00" value={formData.totalCost} onChange={e => setFormData({...formData, totalCost: e.target.value})} className="rounded-xl font-bold" /></div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={isSubmitting}>
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Crear Evento"}
-              </Button>
+            <DialogFooter className="gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreate} disabled={isSubmitting} className="rounded-xl px-8">Crear</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {eventsError && (
-        <div className="bg-destructive/10 text-destructive p-4 rounded-xl flex items-center gap-2 text-sm">
-          <AlertCircle className="h-4 w-4" />
-          Error al cargar eventos. Verifica la conexión.
-        </div>
-      )}
-
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {eventsLoading ? (
-          [1, 2, 3].map(i => <div key={i} className="h-40 rounded-xl bg-muted animate-pulse" />)
-        ) : !events || events.length === 0 ? (
-          <Card className="col-span-full border-dashed py-20 text-center flex flex-col items-center justify-center space-y-4">
-             <Calendar className="h-12 w-12 text-muted-foreground opacity-20" />
-             <p className="text-muted-foreground font-medium">Aún no has registrado eventos de asistencia.</p>
+          [1, 2, 3].map(i => <div key={i} className="h-40 rounded-[2rem] bg-muted animate-pulse" />)
+        ) : events?.length === 0 ? (
+          <Card className="col-span-full border-dashed py-20 flex flex-col items-center justify-center opacity-30 rounded-[2.5rem]">
+             <Calendar className="h-12 w-12 mb-4" /><p className="font-bold text-xs uppercase tracking-widest">Sin eventos registrados</p>
           </Card>
         ) : (
-          events.map(event => {
-            const isAdmin = event.creatorId === user?.uid;
-            return (
-              <Link key={event.id} href={`/dashboard/attendance/${event.id}`}>
-                <Card className="hover:shadow-lg transition-all border-l-4 border-l-accent group relative overflow-hidden">
-                  {event.isCharged && (
-                    <div className="absolute top-0 right-0 p-1 bg-emerald-500 text-white rounded-bl-lg shadow-sm">
-                      <CheckCircle2 className="h-4 w-4" />
+          events?.map(event => (
+            <Link key={event.id} href={`/dashboard/attendance/${event.id}`}>
+              <Card className="hover:shadow-lg transition-all border-l-4 border-l-accent rounded-[2rem] group relative overflow-hidden bg-white">
+                {event.isCharged && <div className="absolute top-0 right-0 p-1 bg-emerald-500 text-white rounded-bl-lg"><CheckCircle2 className="h-4 w-4" /></div>}
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg font-headline group-hover:text-accent transition-colors">{event.title}</CardTitle>
+                      <p className="text-[10px] text-muted-foreground font-bold flex items-center gap-1"><User className="h-2.5 w-2.5" /> {event.creatorName}</p>
                     </div>
+                    <Badge variant="outline" className="text-[9px] rounded-lg">{event.date}</Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between items-center py-3 border-t text-[10px] font-bold">
+                    <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {event.presentIds?.length || 0} PRESENTES</span>
+                    <span className="text-primary">${event.totalCost.toFixed(2)}</span>
+                  </div>
+                  {event.creatorId === user?.uid && !event.isCharged && (
+                    <Button 
+                      disabled={isCharging === event.id}
+                      className="w-full h-9 rounded-xl text-[10px] font-black uppercase tracking-widest bg-primary gap-2"
+                      onClick={(e) => handleCharge(e, event.id)}
+                    >
+                      {isCharging === event.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Coins className="h-3.5 w-3.5" /> Liquidar Cobros</>}
+                    </Button>
                   )}
-                  <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-1">
-                        <CardTitle className="text-lg font-headline group-hover:text-accent transition-colors">{event.title}</CardTitle>
-                        <p className="text-[10px] text-muted-foreground font-bold flex items-center gap-1">
-                          <User className="h-2.5 w-2.5" /> Organizado por: {event.creatorName || "Invitado"}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-[10px]">{event.date}</Badge>
-                    </div>
-                    <CardDescription className="flex items-center gap-1 mt-2"><MapPin className="h-3 w-3" /> {event.location || "Sin ubicación"}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex justify-between items-center py-3 border-t">
-                      <div className="text-xs text-muted-foreground font-bold flex items-center gap-1">
-                        <Users className="h-3 w-3" /> {event.presentIds?.length || 0} presentes
-                      </div>
-                      <div className="text-sm font-bold text-primary">
-                        Total: ${event.totalCost.toFixed(2)}
-                      </div>
-                    </div>
-                    
-                    {isAdmin && (
-                      <Button 
-                        disabled={event.isCharged || isCharging === event.id}
-                        variant={event.isCharged ? "outline" : "default"}
-                        className="w-full h-9 text-xs font-bold gap-2 shadow-inner"
-                        onClick={(e) => handleChargeToGroup(e, event.id)}
-                      >
-                        {isCharging === event.id ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : event.isCharged ? (
-                          <><CheckCircle2 className="h-3.5 w-3.5" /> Cobros Realizados</>
-                        ) : (
-                          <><Coins className="h-3.5 w-3.5" /> Cargar Deudas al Grupo</>
-                        )}
-                      </Button>
-                    )}
-
-                    <div className="flex items-center justify-end text-xs font-bold text-accent pt-2">
-                      Ver Asistencia <ChevronRight className="h-3 w-3 ml-1" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            )
-          })
+                  <div className="flex items-center justify-end text-[10px] font-black text-accent uppercase tracking-widest pt-1">
+                    Ver Detalles <ChevronRight className="h-3 w-3 ml-1" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))
         )}
       </div>
     </div>
@@ -247,7 +169,7 @@ export default function AttendanceDashboard() {
 
 function Badge({ children, variant = "default", className }: { children: React.ReactNode, variant?: "default" | "outline", className?: string }) {
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${variant === 'outline' ? 'border border-border' : 'bg-primary text-primary-foreground'} ${className}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${variant === 'outline' ? 'border border-border text-muted-foreground' : 'bg-primary text-primary-foreground'} ${className}`}>
       {children}
     </span>
   );

@@ -144,45 +144,6 @@ export const updateDebtStatusInGroup = (groupId: string, debtId: string, status:
   });
 };
 
-export const createReceipt = (groupId: string, items: { name: string, price: number }[]) => {
-  const receiptCollection = collection(db, "groups", groupId, "receipts");
-  const data = {
-    groupId,
-    status: 'open',
-    items: items.map(item => ({
-      id: Math.random().toString(36).substring(7),
-      name: item.name,
-      price: item.price,
-      claims: []
-    })),
-    createdAt: Date.now()
-  };
-
-  addDoc(receiptCollection, data);
-};
-
-export const claimReceiptItem = (groupId: string, receiptId: string, itemId: string, userId: string, percentage: number, items: ReceiptItem[]) => {
-  const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
-  const updatedItems = items.map(item => {
-    if (item.id === itemId) {
-      const existingClaimIndex = item.claims.findIndex(c => c.userId === userId);
-      const newClaims = [...item.claims];
-      if (percentage <= 0) {
-        if (existingClaimIndex > -1) newClaims.splice(existingClaimIndex, 1);
-      } else {
-        if (existingClaimIndex > -1) newClaims[existingClaimIndex].percentage = percentage;
-        else newClaims.push({ userId, percentage });
-      }
-      return { ...item, claims: newClaims };
-    }
-    return item;
-  });
-
-  updateDoc(receiptRef, {
-    items: updatedItems
-  });
-};
-
 export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[]) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   
@@ -233,7 +194,6 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
   return profiles;
 };
 
-// EVENT / ATTENDANCE STORE FUNCTIONS
 export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds' | 'externalGuests' | 'shareLink' | 'isCharged'>) => {
   const eventCollection = collection(db, "events");
   const eventRef = doc(eventCollection);
@@ -269,12 +229,8 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   const costPerHead = event.totalCost / totalHeads;
 
-  const groupSnap = await getDoc(doc(db, "groups", event.groupId));
-  const group = groupSnap.data() as Group;
-  
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
-    // Un solo cobro consolidado: Usuario + sus invitados presentes
     const multiplier = 1 + myGuests.length;
     const finalAmount = costPerHead * multiplier;
 
@@ -348,7 +304,7 @@ export const removeParticipantFromEvent = async (eventId: string, userId: string
   const snap = await getDoc(eventRef);
   if (!snap.exists()) return;
   const event = snap.data() as Event;
-  if (event.isCharged) return; // No permitir borrar si ya se cobró
+  if (event.isCharged) return;
   
   return updateDoc(eventRef, {
     participantIds: arrayRemove(userId),
