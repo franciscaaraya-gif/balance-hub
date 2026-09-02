@@ -213,6 +213,7 @@ export const joinGroupByInvite = async (userId: string, inviteToken: string) => 
 export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserProfile[]> => {
   if (!memberIds || memberIds.length === 0) return [];
   const profiles: UserProfile[] = [];
+  // Use sequential await for reliability in prototype
   for (const id of memberIds) {
     const p = await getUserProfile(id);
     if (p) profiles.push(p);
@@ -246,12 +247,11 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   if (event.isCharged) throw new Error("Este evento ya fue cobrado.");
 
-  const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.length || 0);
-  if (totalPresent === 0) throw new Error("No hay asistentes para cobrar.");
+  const totalParticipantsCount = (event.presentIds?.length || 0) + (event.externalGuests?.length || 0);
+  if (totalParticipantsCount === 0) throw new Error("No hay asistentes para cobrar.");
 
-  const costPerPerson = event.totalCost / totalPresent;
+  const costPerPerson = event.totalCost / totalParticipantsCount;
   
-  // Procesar deudas para cada miembro presente, incluyendo sus invitados (+1)
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
     const totalMultiplier = 1 + myGuests.length;
@@ -262,7 +262,6 @@ export const chargeEventToGroup = async (eventId: string) => {
     }
   }
 
-  // Marcar evento como cobrado
   await updateDoc(eventRef, { isCharged: true });
 };
 

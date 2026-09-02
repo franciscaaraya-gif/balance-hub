@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Calendar, Loader2, MapPin, Clock, Users, Plus, CheckCircle2, UserPlus, Info, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
+import { Badge } from "@/components/ui/badge";
 
 export default function JoinEvent({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -65,10 +66,12 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-background">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground animate-pulse font-medium">Cargando evento...</p>
+        <p className="text-muted-foreground animate-pulse font-medium">Validando sesión...</p>
       </div>
     );
   }
+
+  if (!user) return null; // Prevenir flash de contenido mientras redirige
 
   if (!event) {
     return (
@@ -86,8 +89,8 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     );
   }
 
-  const isJoined = event.presentIds?.includes(user?.uid || "");
-  const myGuests = event.externalGuests?.filter(g => g.addedBy === user?.uid) || [];
+  const isJoined = event.presentIds?.includes(user.uid);
+  const myGuests = event.externalGuests?.filter(g => g.addedBy === user.uid) || [];
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
@@ -123,7 +126,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                <div className="pt-3 border-t border-primary/10 flex justify-between items-center">
                  <span className="text-xs font-bold text-accent uppercase tracking-wider">Tu Cuota Estimada:</span>
                  <span className="text-xl font-headline font-bold text-accent">
-                   ${(event.totalCost / ((event.presentIds?.length || 0) + (event.externalGuests?.length || 0))).toFixed(2)}
+                   ${(event.totalCost / Math.max(1, (event.presentIds?.length || 0) + (event.externalGuests?.length || 0))).toFixed(2)}
                  </span>
                </div>
              )}
@@ -191,13 +194,5 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
         </div>
       </Card>
     </div>
-  );
-}
-
-function Badge({ children, variant = "default", className }: { children: React.ReactNode, variant?: "default" | "outline", className?: string }) {
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${variant === 'outline' ? 'border border-border text-muted-foreground' : 'bg-primary text-primary-foreground'} ${className}`}>
-      {children}
-    </span>
   );
 }

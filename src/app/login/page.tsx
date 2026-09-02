@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,7 +9,7 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useUser } from "@/firebase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +26,10 @@ export default function Login() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
+
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -36,9 +40,9 @@ export default function Login() {
 
   useEffect(() => {
     if (user && !isUserLoading) {
-      router.push("/dashboard");
+      router.push(redirectTo);
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, router, redirectTo]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

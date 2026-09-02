@@ -24,11 +24,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const { toast } = useToast();
 
   const [addingParticipant, setAddingParticipant] = useState(false);
-  const [addingGuest, setAddingGuest] = useState(false);
-  const [scanningNfc, setScanningNfc] = useState(false);
   const [isCharging, setIsCharging] = useState(false);
+  const [scanningNfc, setScanningNfc] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [guestName, setGuestName] = useState("");
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [participants, setParticipants] = useState<UserProfile[]>([]);
 
@@ -88,18 +86,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
-  const handleAddGuest = async () => {
-    if (!guestName || !user) return;
-    try {
-      await addExternalGuest(params.id, guestName, user.uid);
-      toast({ title: "Invitado añadido", description: `${guestName} se sumó a la cuenta.` });
-      setGuestName("");
-      setAddingGuest(false);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error al añadir invitado" });
-    }
-  };
-
   const handleRemoveGuest = async (guest: ExternalGuest) => {
     try {
       await removeExternalGuest(params.id, guest);
@@ -132,13 +118,8 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         
         if (eligibleUsers.length > 0) {
           const randomUser = eligibleUsers[Math.floor(Math.random() * eligibleUsers.length)];
-          if (!event?.participantIds.includes(randomUser.uid)) {
-            await addAndMarkPresent(params.id, randomUser.uid);
-            toast({ title: `Nuevo Asistente (NFC): ${randomUser.displayName}`, description: "Registrado y marcado presente." });
-          } else {
-            await handleTogglePresent(randomUser.uid, false);
-            toast({ title: `Check-in NFC: ${randomUser.displayName}`, description: "Asistencia confirmada." });
-          }
+          await addAndMarkPresent(params.id, randomUser.uid);
+          toast({ title: `Check-in NFC: ${randomUser.displayName}`, description: "Registrado y marcado presente." });
         } else {
           toast({ variant: "destructive", title: "No se detectó nuevo usuario", description: "Todos ya están registrados." });
         }
