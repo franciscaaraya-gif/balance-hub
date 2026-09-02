@@ -15,7 +15,7 @@ import {
   limit,
   writeBatch
 } from "firebase/firestore";
-import { Group, UserProfile, DebtStatus, ReceiptItem, Event, ExternalGuest } from "../types";
+import { Group, UserProfile, DebtStatus, ReceiptItem, Event, ExternalGuest, Debt } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -70,7 +70,14 @@ export const updateGroupTransferDetails = (groupId: string, transferDetails: str
   return updateDoc(docRef, { transferDetails });
 };
 
-export const addDebt = async (groupId: string, debtorId: string, amount: number, description: string, receiptId?: string) => {
+export const addDebt = async (
+  groupId: string, 
+  debtorId: string, 
+  amount: number, 
+  description: string, 
+  receiptId?: string,
+  extraData?: { eventId?: string; eventName?: string }
+) => {
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
   if (!groupSnap.exists()) throw new Error("Grupo no encontrado");
@@ -86,6 +93,10 @@ export const addDebt = async (groupId: string, debtorId: string, amount: number,
     receiptId: receiptId || null,
     groupAdminId: group.adminId,
     groupMemberIds: group.memberIds,
+    groupName: group.name,
+    transferDetails: group.transferDetails || null,
+    eventId: extraData?.eventId || null,
+    eventName: extraData?.eventName || null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -110,6 +121,8 @@ export const addFixedDebtToAll = async (groupId: string, amount: number, descrip
       status: 'pending',
       groupAdminId: group.adminId,
       groupMemberIds: group.memberIds,
+      groupName: group.name,
+      transferDetails: group.transferDetails || null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
@@ -213,7 +226,6 @@ export const joinGroupByInvite = async (userId: string, inviteToken: string) => 
 export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserProfile[]> => {
   if (!memberIds || memberIds.length === 0) return [];
   const profiles: UserProfile[] = [];
-  // Use sequential await for reliability in prototype
   for (const id of memberIds) {
     const p = await getUserProfile(id);
     if (p) profiles.push(p);
@@ -251,6 +263,10 @@ export const chargeEventToGroup = async (eventId: string) => {
   if (totalParticipantsCount === 0) throw new Error("No hay asistentes para cobrar.");
 
   const costPerPerson = event.totalCost / totalParticipantsCount;
+
+  // Obtenemos los datos del grupo una sola vez para denormalizar
+  const groupSnap = await getDoc(doc(db, "groups", event.groupId));
+  const group = groupSnap.data() as Group;
   
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
@@ -258,7 +274,14 @@ export const chargeEventToGroup = async (eventId: string) => {
     const finalDebtAmount = costPerPerson * totalMultiplier;
 
     if (finalDebtAmount > 0) {
-      await addDebt(event.groupId, uid, finalDebtAmount, `Asistencia: ${event.title}`);
+      await addDebt(
+        event.groupId, 
+        uid, 
+        finalDebtAmount, 
+        `Asistencia: ${event.title}`, 
+        undefined,
+        { eventId: event.id, eventName: event.title }
+      );
     }
   }
 

@@ -39,6 +39,11 @@ export interface Debt {
   receiptId?: string;
   groupAdminId: string;
   groupMemberIds: string[];
+  // Campos denormalizados para acceso autónomo (Nivel 2)
+  groupName?: string;
+  eventName?: string;
+  eventId?: string;
+  transferDetails?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -77,12 +82,12 @@ export interface Event {
   location: string;
   totalCost: number;
   creatorId: string;
-  creatorName?: string; // Nombre del usuario que creó el evento
-  groupId: string; // Vínculo con el grupo de cobro
+  creatorName?: string;
+  groupId: string;
   participantIds: string[];
   presentIds: string[];
   externalGuests?: ExternalGuest[];
   shareLink?: string;
-  isCharged?: boolean; // Indica si las deudas ya se pasaron al grupo
+  isCharged?: boolean;
   createdAt: number;
 }

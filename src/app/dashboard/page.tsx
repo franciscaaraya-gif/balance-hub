@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Users, Wallet, ChevronRight, Loader2, PiggyBank, ReceiptText, AlertCircle, Clock, CheckCircle2 } from "lucide-react";
+import { PlusCircle, Users, Wallet, ChevronRight, Loader2, PiggyBank, ReceiptText, AlertCircle, Clock, CheckCircle2, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
@@ -24,7 +24,6 @@ export default function Dashboard() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  // Consulta simplificada para evitar problemas de índices durante el prototipado
   const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
@@ -34,13 +33,11 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: myGroups, isLoading: myGroupsLoading, error: groupsError } = useCollection<Group>(myGroupsQuery);
 
-  // Consulta de deudas - ordenamos por estado para ver las pendientes arriba
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(
       collectionGroup(firestore, 'debts'),
-      where('debtorId', '==', user.uid),
-      orderBy('status', 'asc')
+      where('debtorId', '==', user.uid)
     );
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading, error: debtsError } = useCollection<Debt>(myDebtsQuery);
@@ -60,6 +57,18 @@ export default function Dashboard() {
     } catch (e) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo crear el grupo." });
     }
+  };
+
+  const showPaymentInfo = (debt: Debt) => {
+    if (!debt.transferDetails) {
+      toast({ title: "Sin datos", description: "El administrador no ha subido datos de pago." });
+      return;
+    }
+    navigator.clipboard.writeText(debt.transferDetails);
+    toast({ 
+      title: "Datos copiados", 
+      description: "Los datos de transferencia del grupo se han copiado al portapapeles." 
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -209,14 +218,25 @@ export default function Dashboard() {
               ) : (
                 <div className="space-y-3">
                   {pendingDebts.map(debt => (
-                    <div key={debt.id} className="flex items-center justify-between p-3 bg-muted/30 rounded-xl border group hover:bg-muted/50 transition-colors">
-                      <div className="space-y-1">
-                        <p className="text-xs font-bold truncate max-w-[120px]">{debt.description || "Deuda"}</p>
-                        {getStatusBadge(debt.status)}
+                    <div key={debt.id} className="flex flex-col p-3 bg-muted/30 rounded-xl border group hover:bg-muted/50 transition-colors gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-[10px] text-muted-foreground uppercase font-black">{debt.groupName || 'Deuda Directa'}</p>
+                          <p className="text-xs font-bold truncate max-w-[150px]">{debt.eventName || debt.description}</p>
+                          {getStatusBadge(debt.status)}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-accent">${debt.amount.toFixed(2)}</p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-accent">${debt.amount.toFixed(2)}</p>
-                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full h-8 text-[9px] font-black uppercase tracking-widest gap-2 mt-1"
+                        onClick={() => showPaymentInfo(debt)}
+                      >
+                        <CreditCard className="h-3 w-3" /> Datos de Pago
+                      </Button>
                     </div>
                   ))}
                 </div>
