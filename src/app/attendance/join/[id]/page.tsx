@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, use } from "react";
@@ -42,7 +41,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     if (!user || !event) return;
     setJoining(true);
     try {
-      await addAndMarkPresent(params.id, user.uid);
+      await addAndMarkPresent(event.id, user.uid);
       toast({ title: "¡Listo!", description: `Has confirmado tu asistencia a: ${event.title}` });
     } catch (error) {
       toast({ variant: "destructive", title: "Error al inscribirse" });
@@ -54,7 +53,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
   const handleAddGuest = async () => {
     if (!guestName || !user || !event || event.isCharged) return;
     try {
-      await addExternalGuest(params.id, guestName, user.uid);
+      await addExternalGuest(event.id, guestName, user.uid);
       toast({ title: "Invitado añadido", description: `${guestName} se sumó a la cuenta.` });
       setGuestName("");
     } catch (e) {
@@ -63,9 +62,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
   };
 
   const handleRemoveGuest = async (guest: ExternalGuest) => {
-    if (event?.isCharged) return;
+    if (!event || event.isCharged) return;
     try {
-      await removeExternalGuest(params.id, guest);
+      await removeExternalGuest(event.id, guest);
       toast({ title: "Invitado eliminado" });
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
@@ -73,9 +72,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
   };
 
   const handleToggleGuest = async (guest: ExternalGuest) => {
-    if (event?.isCharged) return;
+    if (!event || event.isCharged) return;
     try {
-      await toggleGuestPresence(params.id, guest.name, guest.addedBy, !guest.present);
+      await toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present);
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
     }
@@ -108,8 +107,8 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     );
   }
 
-  const isEnrolled = event.participantIds?.includes(user.uid);
-  const isPresent = event.presentIds?.includes(user.uid);
+  const isEnrolled = event.participantIds?.includes(user.uid) || false;
+  const isPresent = event.presentIds?.includes(user.uid) || false;
   const myGuests = event.externalGuests?.filter(g => g.addedBy === user.uid) || [];
   const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.filter(g => g.present).length || 0);
   const myPresentHeads = (isPresent ? 1 : 0) + myGuests.filter(g => g.present).length;
@@ -200,7 +199,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                   {myGuests.map((g, i) => (
                     <div key={i} className={cn(
                       "text-sm font-bold px-4 py-3 rounded-2xl flex justify-between items-center border",
-                      g.present ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-muted/50 text-muted-foreground border-transparent"
+                      g.present ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-muted/5 text-muted-foreground border-transparent"
                     )}>
                       <div className="flex items-center gap-3">
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleToggleGuest(g)} disabled={event.isCharged}>

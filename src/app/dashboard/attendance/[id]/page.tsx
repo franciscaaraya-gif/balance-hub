@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, use, useMemo } from "react";
@@ -47,10 +46,10 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   }, [event?.participantIds]);
 
   const handleAddQuickGuest = async () => {
-    if (!newGuestName || !guestResponsibleUid) return;
+    if (!newGuestName || !guestResponsibleUid || !event) return;
     try {
-      await addExternalGuest(params.id, newGuestName, guestResponsibleUid);
-      await toggleGuestPresence(params.id, newGuestName, guestResponsibleUid, true);
+      await addExternalGuest(event.id, newGuestName, guestResponsibleUid);
+      await toggleGuestPresence(event.id, newGuestName, guestResponsibleUid, true);
       toast({ title: "Persona añadida" });
       setNewGuestName("");
       setAddingNonEnrolled(false);
@@ -60,9 +59,10 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   };
 
   const handleChargeToGroup = async () => {
+    if (!event) return;
     setIsCharging(true);
     try {
-      await chargeEventToGroup(params.id);
+      await chargeEventToGroup(event.id);
       toast({ title: "¡Éxito!", description: "Deudas cargadas al grupo." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -71,15 +71,36 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
+  if (eventLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium animate-pulse">Cargando detalles del evento...</p>
+      </div>
+    );
+  }
+
+  if (eventError || !event) {
+    return (
+      <div className="p-8 text-center min-h-[50vh] flex flex-col items-center justify-center gap-4">
+        <AlertCircle className="mx-auto h-16 w-16 opacity-20 text-destructive" />
+        <div>
+          <h2 className="text-2xl font-headline font-bold">Evento no encontrado</h2>
+          <p className="text-muted-foreground">El evento que buscas no existe o ha sido eliminado.</p>
+        </div>
+        <Button variant="outline" className="rounded-2xl" onClick={() => window.history.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" /> Volver
+        </Button>
+      </div>
+    );
+  }
+
   const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.filter(g => g.present).length || 0);
   const costPerPerson = totalPresent > 0 ? event.totalCost / totalPresent : 0;
   const isAdmin = event.creatorId === user?.uid;
 
-  const checkInUrl = `${window.location.origin}/attendance/check-in/${event.id}?token=${event.checkInToken}`;
+  const checkInUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/attendance/check-in/${event.id}?token=${event.checkInToken}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(checkInUrl)}`;
-
-  if (eventLoading) return <div className="h-full flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (eventError || !event) return <div className="p-8 text-center"><AlertCircle className="mx-auto h-12 w-12 opacity-50 mb-4" /><p>Evento no encontrado.</p></div>;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20 px-2 sm:px-4">
@@ -142,7 +163,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                         size="sm" 
                         disabled={event.isCharged}
                         className={cn("rounded-full text-[10px] font-black h-9", isPresent && "bg-emerald-500 hover:bg-emerald-600 border-none")}
-                        onClick={() => toggleAttendance(params.id, p.uid, !isPresent)}
+                        onClick={() => toggleAttendance(event.id, p.uid, !isPresent)}
                       >
                         {isPresent ? "Presente" : "Ausente"}
                       </Button>
@@ -159,12 +180,12 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                             size="icon" 
                             className="h-8 w-8" 
                             disabled={event.isCharged}
-                            onClick={() => toggleGuestPresence(params.id, guest.name, guest.addedBy, !guest.present)}
+                            onClick={() => toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present)}
                           >
                             {guest.present ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5" />}
                           </Button>
                           {!event.isCharged && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeExternalGuest(params.id, guest)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeExternalGuest(event.id, guest)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
@@ -174,6 +195,11 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </div>
                 );
               })}
+              {participants.length === 0 && (
+                <div className="text-center py-10 opacity-30 italic text-sm">
+                  Aún no hay participantes inscritos.
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
