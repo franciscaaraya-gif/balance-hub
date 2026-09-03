@@ -21,13 +21,20 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 export const createUserProfile = async (uid: string, email: string, displayName: string) => {
   const userRef = doc(db, "userProfiles", uid);
-  await setDoc(userRef, {
+  // Refactorizado a no bloqueante
+  setDoc(userRef, {
     uid,
     email,
     displayName,
     role: 'user',
     createdAt: Date.now(),
-  }, { merge: true });
+  }, { merge: true }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: userRef.path,
+      operation: 'write',
+      requestResourceData: { uid, email, displayName, role: 'user' }
+    }));
+  });
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
@@ -67,7 +74,14 @@ export const createGroup = async (name: string, type: 'fixed' | 'variable', admi
 
 export const updateGroupTransferDetails = (groupId: string, transferDetails: string) => {
   const docRef = doc(db, "groups", groupId);
-  return updateDoc(docRef, { transferDetails });
+  // Refactorizado a no bloqueante
+  updateDoc(docRef, { transferDetails }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: docRef.path,
+      operation: 'update',
+      requestResourceData: { transferDetails }
+    }));
+  });
 };
 
 export const addDebt = async (
@@ -101,7 +115,14 @@ export const addDebt = async (
     updatedAt: Date.now(),
   };
 
-  return addDoc(debtCollection, data);
+  // Refactorizado a no bloqueante
+  addDoc(debtCollection, data).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: debtCollection.path,
+      operation: 'create',
+      requestResourceData: data
+    }));
+  });
 };
 
 export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[]) => {
@@ -158,6 +179,12 @@ export const finalizeReceipt = async (groupId: string, receiptId: string, items:
 
   updateDoc(receiptRef, {
     status: 'completed'
+  }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: receiptRef.path,
+      operation: 'update',
+      requestResourceData: { status: 'completed' }
+    }));
   });
 };
 
@@ -194,7 +221,7 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
   return profiles;
 };
 
-export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds' | 'externalGuests' | 'shareLink' | 'isCharged'>) => {
+export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds' | 'externalGuests' | 'shareLink' | 'isCharged'>) => {
   const eventCollection = collection(db, "events");
   const eventRef = doc(eventCollection);
   const checkInToken = Math.random().toString(36).substring(7);
@@ -209,7 +236,16 @@ export const createEvent = async (data: Omit<Event, 'id' | 'createdAt' | 'partic
     isCharged: false,
     createdAt: Date.now(),
   };
-  await setDoc(eventRef, eventData);
+
+  // Refactorizado a no bloqueante
+  setDoc(eventRef, eventData).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: eventRef.path,
+      operation: 'create',
+      requestResourceData: eventData
+    }));
+  });
+  
   return eventRef;
 };
 
@@ -246,7 +282,13 @@ export const chargeEventToGroup = async (eventId: string) => {
     }
   }
 
-  await updateDoc(eventRef, { isCharged: true });
+  updateDoc(eventRef, { isCharged: true }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: eventRef.path,
+      operation: 'update',
+      requestResourceData: { isCharged: true }
+    }));
+  });
 };
 
 export const addParticipantToEvent = (eventId: string, userId: string) => {

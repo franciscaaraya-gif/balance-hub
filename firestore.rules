@@ -36,13 +36,15 @@ service cloud.firestore {
     // Eventos: Participantes ven el evento (Acceso puntual)
     match /events/{eventId} {
       allow read: if request.auth != null && (
-        request.auth.uid == resource.data.creatorId || 
-        request.auth.uid in resource.data.participantIds
+        (resource != null && request.auth.uid == resource.data.creatorId) || 
+        (resource != null && request.auth.uid in resource.data.participantIds)
       );
-      allow write: if request.auth != null && request.auth.uid == resource.data.creatorId;
+      // Corregido: Validar creatorId usando request.resource para creación y resource para actualización
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorId;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
     }
     
-    // Regla de escape para queries globales filtradas por debtorId
+    // Regla de escape para deudas (Nivel 2): El deudor siempre puede leer su propia deuda
     match /{path=**}/debts/{debtId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.debtorId;
     }

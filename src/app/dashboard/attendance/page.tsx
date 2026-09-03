@@ -41,12 +41,13 @@ export default function AttendanceDashboard() {
 
   const handleCreate = async () => {
     if (!formData.title || !formData.date || !formData.totalCost || !formData.groupId || !user) {
-      toast({ variant: "destructive", title: "Faltan datos" });
+      toast({ variant: "destructive", title: "Faltan datos", description: "Por favor completa todos los campos obligatorios." });
       return;
     }
     setIsSubmitting(true);
     try {
-      await createEvent({
+      // Llamada no bloqueante según guías
+      createEvent({
         title: formData.title,
         date: formData.date,
         time: formData.time,
@@ -56,11 +57,17 @@ export default function AttendanceDashboard() {
         creatorId: user.uid,
         creatorName: user.displayName || 'Organizador'
       });
-      toast({ title: "Evento creado" });
+      
+      toast({ title: "Evento creado", description: "Tu evento se está sincronizando con el servidor." });
       setOpen(false);
       setFormData({ title: "", date: "", time: "", location: "", totalCost: "", groupId: "" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error" });
+    } catch (e: any) {
+      console.error("Error al crear evento:", e);
+      toast({ 
+        variant: "destructive", 
+        title: "Error al crear evento", 
+        description: e.message || "Ocurrió un error inesperado al intentar guardar el evento." 
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -113,7 +120,9 @@ export default function AttendanceDashboard() {
             </div>
             <DialogFooter className="gap-2">
               <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={isSubmitting} className="rounded-xl px-8">Crear</Button>
+              <Button onClick={handleCreate} disabled={isSubmitting} className="rounded-xl px-8">
+                {isSubmitting ? <Loader2 className="animate-spin" /> : "Crear"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
