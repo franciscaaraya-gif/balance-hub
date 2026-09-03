@@ -65,7 +65,7 @@ export function useCollection<T = any>(
           return;
         }
 
-        let reportedPath = "dynamic-query";
+        let reportedPath = "unknown-collection";
         const queryAny = memoizedTargetRefOrQuery as any;
         
         if (queryAny.path) {
@@ -78,7 +78,7 @@ export function useCollection<T = any>(
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: reportedPath || 'root',
+          path: reportedPath,
         });
 
         console.warn('Firestore Permission Issue:', contextualError.message);
