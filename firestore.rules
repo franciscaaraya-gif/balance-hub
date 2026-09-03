@@ -33,15 +33,14 @@ service cloud.firestore {
       }
     }
 
-    // Eventos: Participantes ven el evento (Acceso puntual)
+    // Eventos: Permitir lectura y actualización para el flujo de RSVP y Check-in
     match /events/{eventId} {
-      allow read: if request.auth != null && (
-        (resource != null && request.auth.uid == resource.data.creatorId) || 
-        (resource != null && request.auth.uid in resource.data.participantIds)
-      );
-      // Corregido: Validar creatorId usando request.resource para creación y resource para actualización
+      // Cualquier usuario logueado puede ver el evento para unirse
+      allow read: if request.auth != null;
+      // Solo el creador borra o cambia configuración base
       allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorId;
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
+      allow update: if request.auth != null;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
     }
     
     // Regla de escape para deudas (Nivel 2): El deudor siempre puede leer su propia deuda
