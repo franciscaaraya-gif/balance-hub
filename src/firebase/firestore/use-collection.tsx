@@ -8,6 +8,7 @@ import {
   FirestoreError,
   QuerySnapshot,
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -54,6 +55,16 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
+        // RACE CONDITION CHECK:
+        // If the user just logged out, Firestore will immediately deny all active listeners.
+        // We check auth state. If no user is logged in, we ignore the error as it's expected during logout.
+        const auth = getAuth();
+        if (!auth.currentUser) {
+          setData(null);
+          setIsLoading(false);
+          return;
+        }
+
         let reportedPath = "dynamic-query";
         const queryAny = memoizedTargetRefOrQuery as any;
         
@@ -61,11 +72,13 @@ export function useCollection<T = any>(
           reportedPath = queryAny.path;
         } else if (queryAny._query?.path?.segments) {
           reportedPath = queryAny._query.path.segments.join('/');
+        } else if (queryAny.type === 'collectionGroup' || queryAny._query?.collectionGroup) {
+          reportedPath = `(collectionGroup: ${queryAny._query?.collectionGroup || 'unknown'})`;
         }
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: reportedPath,
+          path: reportedPath || 'root',
         });
 
         console.warn('Firestore Permission Issue:', contextualError.message);
@@ -73,8 +86,8 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
         
-        // No emitimos el error global para evitar el crash de pantalla roja
-        // errorEmitter.emit('permission-error', contextualError);
+        // Only emit global error if we are still supposedly logged in
+        errorEmitter.emit('permission-error', contextualError);
       }
     );
 

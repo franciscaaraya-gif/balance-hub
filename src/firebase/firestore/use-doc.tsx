@@ -1,4 +1,3 @@
-
 'use client';
     
 import { useState, useEffect } from 'react';
@@ -9,6 +8,7 @@ import {
   FirestoreError,
   DocumentSnapshot,
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -65,11 +65,21 @@ export function useDoc<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
+        // RACE CONDITION CHECK: 
+        // Ignore permission errors if the user has just logged out.
+        const auth = getAuth();
+        if (!auth.currentUser) {
+          setData(null);
+          setIsLoading(false);
+          return;
+        }
+
         const contextualError = new FirestorePermissionError({
           operation: 'get',
           path: memoizedDocRef.path,
         });
 
+        console.warn('Firestore Permission Issue:', contextualError.message);
         setError(contextualError);
         setData(null);
         setIsLoading(false);
