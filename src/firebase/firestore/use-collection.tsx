@@ -67,14 +67,14 @@ export function useCollection<T = any>(
         let reportedPath = "[unidentified-collection]";
         const queryAny = memoizedTargetRefOrQuery as any;
         
-        if (queryAny.path) {
-          reportedPath = queryAny.path;
-        } else if (queryAny._query?.path?.segments) {
-          reportedPath = queryAny._query.path.segments.join('/');
-        } else if (queryAny.type === 'collectionGroup' || queryAny._query?.collectionGroup) {
-          // Mejoramos el reporte de collectionGroup evitando el fallback 'unknown'
+        // PRIORITIZE COLLECTION GROUP CHECK TO AVOID INTERNAL SDK METADATA STRINGS (like 'root' or 'unknown')
+        if (queryAny.type === 'collectionGroup' || queryAny._query?.collectionGroup) {
           const groupName = queryAny._query?.collectionGroup || '[unidentified-group]';
           reportedPath = `(collectionGroup: ${groupName})`;
+        } else if (queryAny.path) {
+          reportedPath = queryAny.path;
+        } else if (queryAny._query?.path?.segments && queryAny._query.path.segments.length > 0) {
+          reportedPath = queryAny._query.path.segments.join('/');
         }
 
         const contextualError = new FirestorePermissionError({
