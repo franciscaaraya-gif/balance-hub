@@ -84,7 +84,7 @@ export function useDoc<T = any>(
         setData(null);
         setIsLoading(false);
 
-        // trigger global error propagation
+        // Trigger global error propagation only if still authenticated
         errorEmitter.emit('permission-error', contextualError);
       }
     );

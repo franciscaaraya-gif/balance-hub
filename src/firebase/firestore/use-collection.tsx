@@ -56,8 +56,7 @@ export function useCollection<T = any>(
       },
       async (serverError: FirestoreError) => {
         // RACE CONDITION CHECK:
-        // If the user just logged out, Firestore will immediately deny all active listeners.
-        // We check auth state. If no user is logged in, we ignore the error as it's expected during logout.
+        // Ignore permission errors if the user has just logged out or is not authenticated.
         const auth = getAuth();
         if (!auth.currentUser) {
           setData(null);
@@ -86,7 +85,7 @@ export function useCollection<T = any>(
         setData(null);
         setIsLoading(false);
         
-        // Only emit global error if we are still supposedly logged in
+        // Only emit global error if we are still authenticated to avoid redirect loops during logout
         errorEmitter.emit('permission-error', contextualError);
       }
     );

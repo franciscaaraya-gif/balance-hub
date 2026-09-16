@@ -25,14 +25,12 @@ export default function Dashboard() {
   const { toast } = useToast();
 
   const myGroupsQuery = useMemoFirebase(() => {
-    // CRITICAL: Guard against undefined user.uid to prevent root path queries
     if (!firestore || !user?.uid) return null;
     return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
   const { data: myGroups, isLoading: myGroupsLoading } = useCollection<Group>(myGroupsQuery);
 
   const myDebtsQuery = useMemoFirebase(() => {
-    // CRITICAL: Guard against undefined user.uid to prevent root path queries
     if (!firestore || !user?.uid) return null;
     return query(collectionGroup(firestore, 'debts'), where('debtorId', '==', user.uid), orderBy('createdAt', 'desc'));
   }, [firestore, user?.uid]);

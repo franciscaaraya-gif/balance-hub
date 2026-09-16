@@ -77,21 +77,22 @@ function buildAuthObject(currentUser: User | null): FirebaseAuthObject | null {
 function buildRequestObject(context: SecurityRuleContext): SecurityRuleRequest {
   let authObject: FirebaseAuthObject | null = null;
   try {
-    // Safely attempt to get the current user.
     const firebaseAuth = getAuth();
     const currentUser = firebaseAuth.currentUser;
     if (currentUser) {
       authObject = buildAuthObject(currentUser);
     }
   } catch {
-    // This will catch errors if the Firebase app is not yet initialized.
-    // In this case, we'll proceed without auth information.
+    // Auth might not be initialized yet
   }
+
+  // Ensure path is clean and doesn't just say "root" if empty
+  const cleanPath = context.path && context.path !== 'root' ? context.path : 'unknown';
 
   return {
     auth: authObject,
     method: context.operation,
-    path: `/databases/(default)/documents/${context.path}`,
+    path: `/databases/(default)/documents/${cleanPath}`,
     resource: context.requestResourceData ? { data: context.requestResourceData } : undefined,
   };
 }
