@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -46,8 +45,8 @@ export default function AttendanceDashboard() {
     }
     setIsSubmitting(true);
     try {
-      // Llamada no bloqueante según guías
-      createEvent({
+      // createEvent es no-bloqueante según guías, pero envolveremos su inicio en try/catch
+      await createEvent({
         title: formData.title,
         date: formData.date,
         time: formData.time,
@@ -58,7 +57,7 @@ export default function AttendanceDashboard() {
         creatorName: user.displayName || 'Organizador'
       });
       
-      toast({ title: "Evento creado", description: "Tu evento se está sincronizando con el servidor." });
+      toast({ title: "Evento creado", description: "Tu evento se ha registrado correctamente." });
       setOpen(false);
       setFormData({ title: "", date: "", time: "", location: "", totalCost: "", groupId: "" });
     } catch (e: any) {
@@ -66,7 +65,7 @@ export default function AttendanceDashboard() {
       toast({ 
         variant: "destructive", 
         title: "Error al crear evento", 
-        description: e.message || "Ocurrió un error inesperado al intentar guardar el evento." 
+        description: e.message || "Ocurrió un error al intentar guardar el evento en el servidor." 
       });
     } finally {
       setIsSubmitting(false);

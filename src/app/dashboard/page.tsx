@@ -46,11 +46,16 @@ export default function Dashboard() {
     if (!newGroupName || !user) return;
     try {
       await createGroup(newGroupName, newGroupType, user.uid);
-      toast({ title: "Grupo creado" });
+      toast({ title: "Grupo creado", description: "El grupo se ha guardado correctamente en el servidor." });
       setNewGroupName("");
       setOpen(false);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error" });
+    } catch (e: any) {
+      console.error("Error detallado al crear grupo:", e);
+      toast({ 
+        variant: "destructive", 
+        title: "Error al crear grupo", 
+        description: e.message || "Asegúrate de tener permisos para crear grupos." 
+      });
     }
   };
 
