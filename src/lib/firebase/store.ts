@@ -1,4 +1,3 @@
-
 import { db } from "./config";
 import { 
   collection, 
@@ -21,7 +20,6 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 export const createUserProfile = async (uid: string, email: string, displayName: string) => {
   const userRef = doc(db, "userProfiles", uid);
-  // Refactorizado a no bloqueante
   setDoc(userRef, {
     uid,
     email,
@@ -74,7 +72,6 @@ export const createGroup = async (name: string, type: 'fixed' | 'variable', admi
 
 export const updateGroupTransferDetails = (groupId: string, transferDetails: string) => {
   const docRef = doc(db, "groups", groupId);
-  // Refactorizado a no bloqueante
   updateDoc(docRef, { transferDetails }).catch(error => {
     errorEmitter.emit('permission-error', new FirestorePermissionError({
       path: docRef.path,
@@ -115,7 +112,6 @@ export const addDebt = async (
     updatedAt: Date.now(),
   };
 
-  // Refactorizado a no bloqueante
   addDoc(debtCollection, data).catch(error => {
     errorEmitter.emit('permission-error', new FirestorePermissionError({
       path: debtCollection.path,
@@ -237,7 +233,6 @@ export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantI
     createdAt: Date.now(),
   };
 
-  // Refactorizado a no bloqueante
   setDoc(eventRef, eventData).catch(error => {
     errorEmitter.emit('permission-error', new FirestorePermissionError({
       path: eventRef.path,

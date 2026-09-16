@@ -3,54 +3,36 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Perfiles de usuario: Solo el dueño lee/escribe su perfil completo
     match /userProfiles/{userId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Grupos: Acceso de Nivel 1 (Membresía completa)
     match /groups/{groupId} {
-      // Solo miembros ven los detalles del grupo y lista de miembros
-      allow read: if request.auth != null && (
-        (resource != null && request.auth.uid in resource.data.memberIds) ||
-        (resource == null)
-      );
+      allow read: if request.auth != null && (resource == null || request.auth.uid in resource.data.memberIds);
+      allow create: if request.auth != null && request.resource.data.adminId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.adminId == request.auth.uid;
       
-      // Permitir creación si el usuario se marca como admin
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.adminId;
-      
-      // Permitir actualización/borrado solo al admin
-      allow update, delete: if request.auth != null && request.auth.uid == resource.data.adminId;
-      
-      // Deudas dentro del grupo
       match /debts/{debtId} {
-        allow read: if request.auth != null && (
-          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds ||
-          request.auth.uid == resource.data.debtorId
-        );
+        allow read: if request.auth != null && (request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds || request.auth.uid == resource.data.debtorId);
         allow create: if request.auth != null && request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.adminId;
         allow update, delete: if request.auth != null && request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.adminId;
       }
       
-      // Boletas: Solo miembros (Nivel 1)
       match /receipts/{receiptId} {
          allow read, write: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
       }
     }
 
-    // Eventos: Permitir lectura y actualización para el flujo de RSVP y Check-in
     match /events/{eventId} {
       allow read: if request.auth != null;
-      // Corregido: Validar creatorId desde request.resource para creación
       allow create: if request.auth != null && request.auth.uid == request.resource.data.creatorId;
       allow update: if request.auth != null;
       allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
     }
     
-    // Regla para consultas globales de deudas (Collection Group Queries)
     match /{path=**}/debts/{debtId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.debtorId;
+      allow read, list: if request.auth != null && resource.data.debtorId == request.auth.uid;
     }
   }
 }
