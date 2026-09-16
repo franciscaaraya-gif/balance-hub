@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, use, useMemo } from "react";
@@ -31,9 +32,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [guestResponsibleUid, setGuestResponsibleUid] = useState("");
 
   const eventRef = useMemoFirebase(() => {
-    if (!firestore || !params.id) return null;
+    if (!firestore || !params.id || !user?.uid) return null;
     return doc(firestore, 'events', params.id);
-  }, [firestore, params.id]);
+  }, [firestore, params.id, user?.uid]);
 
   const { data: event, isLoading: eventLoading, error: eventError } = useDoc<Event>(eventRef);
 

@@ -48,21 +48,21 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const groupRef = useMemoFirebase(() => {
-    if (!firestore || !params.id) return null;
+    if (!firestore || !params.id || !user?.uid) return null;
     return doc(firestore, 'groups', params.id);
-  }, [firestore, params.id]);
+  }, [firestore, params.id, user?.uid]);
   const { data: group, isLoading: groupLoading } = useDoc<Group>(groupRef);
 
   const debtsQuery = useMemoFirebase(() => {
-    if (!firestore || !params.id) return null;
+    if (!firestore || !params.id || !user?.uid) return null;
     return query(collection(firestore, 'groups', params.id, 'debts'), orderBy('createdAt', 'desc'));
-  }, [firestore, params.id]);
+  }, [firestore, params.id, user?.uid]);
   const { data: debts } = useCollection<Debt>(debtsQuery);
 
   const receiptsQuery = useMemoFirebase(() => {
-    if (!firestore || !params.id) return null;
+    if (!firestore || !params.id || !user?.uid) return null;
     return query(collection(firestore, 'groups', params.id, 'receipts'), orderBy('createdAt', 'desc'));
-  }, [firestore, params.id]);
+  }, [firestore, params.id, user?.uid]);
   const { data: receipts } = useCollection<Receipt>(receiptsQuery);
 
   useEffect(() => {
