@@ -43,7 +43,8 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
     }
     
-    // Regla de escape para deudas (Nivel 2): El deudor siempre puede leer su propia deuda
+    // Regla para consultas globales de deudas (Collection Group Queries)
+    // Permite al deudor listar todas sus deudas a través de diferentes grupos/eventos
     match /{path=**}/debts/{debtId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.debtorId;
     }
