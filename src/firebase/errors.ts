@@ -86,8 +86,8 @@ function buildRequestObject(context: SecurityRuleContext): SecurityRuleRequest {
     // Auth might not be initialized yet
   }
 
-  // Ensure path is clean and doesn't just say "root" if empty
-  const cleanPath = context.path && context.path !== 'root' ? context.path : 'unknown';
+  // Eliminamos fallbacks confusos como 'root' o 'unknown'
+  const cleanPath = context.path || '[unspecified-path]';
 
   return {
     auth: authObject,

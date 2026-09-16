@@ -76,7 +76,7 @@ export function useDoc<T = any>(
 
         const contextualError = new FirestorePermissionError({
           operation: 'get',
-          path: memoizedDocRef.path,
+          path: memoizedDocRef.path || '[unidentified-doc-path]',
         });
 
         console.warn('Firestore Permission Issue:', contextualError.message);
