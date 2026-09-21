@@ -17,8 +17,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, User, Trash2, XCircle } from "lucide-react";
+import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, User, Trash2, XCircle, Plus, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -31,6 +33,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const [isCharging, setIsCharging] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [newGuestName, setNewGuestName] = useState("");
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
 
   const eventRef = useMemoFirebase(() => {
@@ -78,7 +81,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const totalPresentGuests = event.externalGuests?.filter(g => g.present).length || 0;
   const totalAbsents = absentIds.length;
 
-  // Fórmula unificada de liquidación
   const totalHeads = totalPresentParticipants + totalPresentGuests + (event.chargeAbsentees ? totalAbsents : 0);
   const costPerPerson = totalHeads > 0 ? event.totalCost / totalHeads : 0;
   
@@ -100,6 +102,17 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       toast({ title: "Participante eliminado del evento" });
     } catch (e) {
       toast({ variant: "destructive", title: "Error al eliminar" });
+    }
+  };
+
+  const handleAddGuest = async () => {
+    if (!newGuestName.trim() || !user) return;
+    try {
+      await addExternalGuest(event.id, newGuestName.trim(), user.uid);
+      setNewGuestName("");
+      toast({ title: "Invitado agregado" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al agregar invitado" });
     }
   };
 
@@ -146,7 +159,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
             <div>
               <CardTitle className="text-lg font-headline">Lista de Control</CardTitle>
-              <CardDescription className="text-xs">Todos los anotados por el link y sus estados.</CardDescription>
+              <CardDescription className="text-xs">Participantes registrados e invitados especiales.</CardDescription>
             </div>
             {isAdmin && !event.isCharged && (
               <Button variant="outline" size="sm" className="rounded-xl h-10 border-2" onClick={() => setShowQr(true)}>
@@ -155,27 +168,27 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             )}
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="space-y-4">
-              {/* Iteración de Verdad Absoluta sobre participantIds */}
-              {event.participantIds.map(uid => {
-                const profile = profilesMap[uid];
-                const isPresent = event.presentIds?.includes(uid);
-                
-                // Determinar el estado exacto según la liquidación
-                let statusLabel = "Confirmado (RSVP)";
-                let badgeStyle = "bg-muted/60 text-muted-foreground";
-                
-                if (isPresent) {
-                  statusLabel = "Presente";
-                  badgeStyle = "bg-emerald-500 text-white";
-                } else if (event.isCharged) {
-                  statusLabel = "Ausente";
-                  badgeStyle = "bg-destructive/10 text-destructive border border-destructive/20";
-                }
+            <div className="space-y-8">
+              {/* Participantes Registrados */}
+              <div className="space-y-4">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-accent pl-2">Usuarios Registrados</h3>
+                {event.participantIds.map(uid => {
+                  const profile = profilesMap[uid];
+                  const isPresent = event.presentIds?.includes(uid);
+                  
+                  let statusLabel = "Confirmado (RSVP)";
+                  let badgeStyle = "bg-muted/60 text-muted-foreground";
+                  
+                  if (isPresent) {
+                    statusLabel = "Presente";
+                    badgeStyle = "bg-emerald-500 text-white";
+                  } else if (event.isCharged) {
+                    statusLabel = "Ausente";
+                    badgeStyle = "bg-destructive/10 text-destructive border border-destructive/20";
+                  }
 
-                return (
-                  <div key={uid} className="space-y-2">
-                    <div className={cn(
+                  return (
+                    <div key={uid} className={cn(
                       "flex items-center justify-between p-4 rounded-2xl border transition-all",
                       isPresent ? "bg-emerald-50/60 border-emerald-100" : "bg-muted/10 border-transparent"
                     )}>
@@ -192,7 +205,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                       </div>
                       
                       <div className="flex items-center gap-2">
-                        {/* Botón de eliminar sólo para Admin antes de liquidar */}
                         {isAdmin && !event.isCharged && (
                           <Button 
                             variant="ghost" 
@@ -219,15 +231,75 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                         )}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
 
-              {event.participantIds.length === 0 && (
-                <div className="text-center py-10 opacity-30 italic text-sm">
-                  Nadie se ha anotado todavía a esta fecha.
-                </div>
-              )}
+              {/* Invitados Externos (+1) */}
+              <div className="space-y-4">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-secondary pl-2">Invitados (+1)</h3>
+                
+                {isAdmin && !event.isCharged && (
+                  <div className="flex gap-2 p-2 bg-muted/20 rounded-2xl">
+                    <Input 
+                      placeholder="Nombre del invitado" 
+                      value={newGuestName}
+                      onChange={(e) => setNewGuestName(e.target.value)}
+                      className="h-10 rounded-xl bg-white text-xs"
+                    />
+                    <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 px-4">
+                      <Plus className="h-4 w-4 mr-1" /> Agregar
+                    </Button>
+                  </div>
+                )}
+
+                {event.externalGuests?.map((guest, idx) => (
+                  <div key={`${guest.name}-${idx}`} className={cn(
+                    "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                    guest.present ? "bg-secondary/10 border-secondary/20" : "bg-muted/10 border-transparent"
+                  )}>
+                    <div className="flex items-center gap-3">
+                      <div className="h-9 w-9 rounded-full bg-secondary/10 flex items-center justify-center font-bold text-secondary text-sm">
+                        {guest.name[0]}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold">{guest.name}</p>
+                        <p className="text-[8px] text-muted-foreground uppercase font-black">Traído por: {profilesMap[guest.addedBy]?.displayName || "Usuario"}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      {isAdmin && !event.isCharged && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-xl"
+                          onClick={() => removeExternalGuest(event.id, guest)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                      
+                      {!event.isCharged && (
+                        <Button 
+                          variant={guest.present ? "secondary" : "outline"} 
+                          size="sm"
+                          className={cn(
+                            "rounded-xl text-[10px] font-black h-9 px-3", 
+                            guest.present ? "bg-secondary text-white hover:bg-secondary/90 border-none" : "border-secondary/20 text-secondary"
+                          )}
+                          onClick={() => toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present)}
+                        >
+                          {guest.present ? "Quitar Asistencia" : "Marcar Llegada"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {(!event.externalGuests || event.externalGuests.length === 0) && (
+                  <div className="text-center py-4 opacity-30 italic text-[10px]">No hay invitados externos.</div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -255,11 +327,15 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
               <div className="pt-2 border-t space-y-2 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground font-medium">Presentes (Asistieron):</span>
+                  <span className="text-muted-foreground font-medium">Presentes:</span>
                   <span className="font-bold text-primary">{totalPresentParticipants}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground font-medium">Ausentes (No llegaron):</span>
+                  <span className="text-muted-foreground font-medium">Invitados Presentes:</span>
+                  <span className="font-bold text-secondary">{totalPresentGuests}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Ausentes:</span>
                   <span className="font-bold text-orange-600">{totalAbsents}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-bold">
@@ -286,7 +362,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                <Share2 className="h-4 w-4 text-accent" />
                <span className="text-xs font-black uppercase tracking-widest">Enlace RSVP WhatsApp</span>
              </div>
-             <p className="text-[10px] text-muted-foreground">Comparte este link. Al anotarse quedarán unidos automáticamente como miembros oficiales del grupo.</p>
+             <p className="text-[10px] text-muted-foreground leading-relaxed">Comparte este link. Al anotarse quedarán unidos automáticamente como miembros oficiales del grupo.</p>
              <Button 
                variant="outline" 
                className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
