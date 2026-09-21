@@ -55,8 +55,6 @@ export function useCollection<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // RACE CONDITION CHECK:
-        // Ignore permission errors if the user has just logged out or is not authenticated.
         const auth = getAuth();
         if (!auth.currentUser) {
           setData(null);
@@ -67,7 +65,6 @@ export function useCollection<T = any>(
         let reportedPath = "[unidentified-collection]";
         const queryAny = memoizedTargetRefOrQuery as any;
         
-        // PRIORITIZE COLLECTION GROUP CHECK TO AVOID INTERNAL SDK METADATA STRINGS (like 'root' or 'unknown')
         if (queryAny.type === 'collectionGroup' || queryAny._query?.collectionGroup) {
           const groupName = queryAny._query?.collectionGroup || '[unidentified-group]';
           reportedPath = `(collectionGroup: ${groupName})`;
@@ -77,18 +74,23 @@ export function useCollection<T = any>(
           reportedPath = queryAny._query.path.segments.join('/');
         }
 
-        const contextualError = new FirestorePermissionError({
-          operation: 'list',
-          path: reportedPath,
-        });
+        if (serverError.code === 'permission-denied') {
+          const contextualError = new FirestorePermissionError({
+            operation: 'list',
+            path: reportedPath,
+          });
 
-        console.warn('Firestore Permission Issue:', contextualError.message);
-        setError(contextualError);
-        setData(null);
-        setIsLoading(false);
-        
-        // Only emit global error if we are still authenticated to avoid redirect loops during logout
-        errorEmitter.emit('permission-error', contextualError);
+          console.warn('Firestore Permission Issue:', contextualError.message);
+          setError(contextualError);
+          setData(null);
+          setIsLoading(false);
+          errorEmitter.emit('permission-error', contextualError);
+        } else {
+          console.error('Firestore Collection Error:', serverError.code, serverError.message);
+          setError(serverError);
+          setData(null);
+          setIsLoading(false);
+        }
       }
     );
 

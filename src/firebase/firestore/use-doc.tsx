@@ -12,17 +12,12 @@ import { getAuth } from 'firebase/auth';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
-/** Utility type to add an 'id' field to a given type T. */
 type WithId<T> = T & { id: string };
 
-/**
- * Interface for the return value of the useDoc hook.
- * @template T Type of the document data.
- */
 export interface UseDocResult<T> {
-  data: WithId<T> | null; // Document data with ID, or null.
-  isLoading: boolean;       // True if loading.
-  error: FirestoreError | Error | null; // Error object, or null.
+  data: WithId<T> | null;
+  isLoading: boolean;
+  error: FirestoreError | Error | null;
 }
 
 /**
@@ -65,8 +60,6 @@ export function useDoc<T = any>(
         setIsLoading(false);
       },
       async (serverError: FirestoreError) => {
-        // RACE CONDITION CHECK: 
-        // Ignore permission errors if the user has just logged out.
         const auth = getAuth();
         if (!auth.currentUser) {
           setData(null);
@@ -74,18 +67,23 @@ export function useDoc<T = any>(
           return;
         }
 
-        const contextualError = new FirestorePermissionError({
-          operation: 'get',
-          path: memoizedDocRef.path || '[unidentified-doc-path]',
-        });
+        if (serverError.code === 'permission-denied') {
+          const contextualError = new FirestorePermissionError({
+            operation: 'get',
+            path: memoizedDocRef.path || '[unidentified-doc-path]',
+          });
 
-        console.warn('Firestore Permission Issue:', contextualError.message);
-        setError(contextualError);
-        setData(null);
-        setIsLoading(false);
-
-        // Trigger global error propagation only if still authenticated
-        errorEmitter.emit('permission-error', contextualError);
+          console.warn('Firestore Permission Issue:', contextualError.message);
+          setError(contextualError);
+          setData(null);
+          setIsLoading(false);
+          errorEmitter.emit('permission-error', contextualError);
+        } else {
+          console.error('Firestore Document Error:', serverError.code, serverError.message);
+          setError(serverError);
+          setData(null);
+          setIsLoading(false);
+        }
       }
     );
 
