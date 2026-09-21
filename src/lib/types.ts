@@ -5,7 +5,7 @@ export interface UserProfile {
   email: string | null;
   displayName: string | null;
   role: UserRole;
-  transferDetails?: string; // New: personal payment info
+  transferDetails?: string;
   createdAt: number;
 }
 
@@ -33,8 +33,8 @@ export interface Debt {
   id: string;
   groupId: string;
   debtorId: string;
-  creditorId: string; // New: who receives the money
-  chargeGroupId: string; // New: links multiple debts to one expense
+  creditorId: string;
+  chargeGroupId: string;
   amount: number;
   description: string;
   status: DebtStatus;
@@ -44,7 +44,7 @@ export interface Debt {
   groupName?: string;
   eventName?: string;
   eventId?: string;
-  transferDetails?: string; // Legacy/Fallback
+  transferDetails?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -67,6 +67,8 @@ export interface Receipt {
   imageUrl?: string;
   status: 'open' | 'processing' | 'completed';
   items: ReceiptItem[];
+  claims?: Record<string, number>;
+  creditorId: string;
   createdAt: number;
 }
 

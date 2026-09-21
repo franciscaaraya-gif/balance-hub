@@ -149,7 +149,7 @@ export const addDebt = async (
     groupAdminId: group.adminId,
     groupMemberIds: group.memberIds,
     groupName: group.name,
-    transferDetails: group.transferDetails || null, // Legacy support
+    transferDetails: group.transferDetails || null,
     eventId: extraData?.eventId || null,
     eventName: extraData?.eventName || null,
     createdAt: Date.now(),
@@ -208,51 +208,48 @@ export const updateDebtStatusInGroup = (groupId: string, debtId: string, status:
   });
 };
 
-export const createReceipt = (groupId: string, items: any[]) => {
+export const createReceipt = (groupId: string, items: any[], creditorId: string) => {
   const receiptCollection = collection(db, "groups", groupId, "receipts");
   const data = {
     groupId,
     status: 'open',
+    creditorId,
     items: items.map((it, idx) => ({
       id: String(idx),
       name: it.name,
       price: it.price,
       claims: []
     })),
+    claims: {},
     createdAt: Date.now()
   };
   return addDoc(receiptCollection, data);
 };
 
-export const claimReceiptItem = async (groupId: string, receiptId: string, itemId: string, userId: string, percentage: number, currentItems: ReceiptItem[]) => {
+export const claimReceiptItem = async (groupId: string, receiptId: string, itemId: string, userId: string, percentage: number) => {
   const docRef = doc(db, "groups", groupId, "receipts", receiptId);
-  const updatedItems = currentItems.map(item => {
-    if (item.id === itemId) {
-      const filteredClaims = item.claims.filter(c => c.userId !== userId);
-      if (percentage > 0) {
-        filteredClaims.push({ userId, percentage });
-      }
-      return { ...item, claims: filteredClaims };
-    }
-    return item;
+  return updateDoc(docRef, {
+    [`claims.${itemId}_${userId}`]: percentage
   });
-  return updateDoc(docRef, { items: updatedItems });
 };
 
-export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[], creditorId: string, description?: string) => {
+export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[], claims: Record<string, number> = {}, creditorId: string, description?: string) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   const chargeGroupId = Math.random().toString(36).substring(7);
   
   for (const item of items) {
-    for (const claim of item.claims) {
-      const amount = (item.price * claim.percentage) / 100;
-      if (amount > 0) {
-        await addDebt(groupId, claim.userId, amount, description || `Consumo: ${item.name}`, creditorId, chargeGroupId, receiptId);
+    for (const [key, percentage] of Object.entries(claims)) {
+      if (key.startsWith(`${item.id}_`) && percentage > 0) {
+        const userId = key.substring(item.id.length + 1);
+        const amount = (item.price * percentage) / 100;
+        if (amount > 0) {
+          await addDebt(groupId, userId, amount, description || `Consumo Boleta: ${item.name}`, creditorId, chargeGroupId, receiptId);
+        }
       }
     }
   }
 
-  updateDoc(receiptRef, {
+  return updateDoc(receiptRef, {
     status: 'completed'
   }).catch(error => {
     errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -344,7 +341,7 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
-  const chargeGroupId = event.id; // Use eventId as chargeGroupId
+  const chargeGroupId = event.id;
 
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];

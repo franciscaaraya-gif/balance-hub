@@ -81,7 +81,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   }, [firestore, params.id, user?.uid]);
   const { data: receipts } = useCollection<Receipt>(receiptsQuery);
 
-  // Carga de eventos del grupo con filtro y ordenamiento
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
     return query(
@@ -94,7 +93,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   useEffect(() => {
     if (eventsError) {
-      console.error("Error en query de eventos (posible falta de índice):", eventsError);
+      console.error("Error en query de eventos:", eventsError);
     }
   }, [eventsError]);
 
@@ -213,8 +212,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       }
       setIsActionLoading(true);
       try {
-        await createReceipt(params.id, parsedItems.map(it => ({ name: it.name, price: it.totalPrice })));
-        toast({ title: "Boleta Activa Creada", description: "Ahora cada miembro puede reclamar lo que consumió." });
+        await createReceipt(params.id, parsedItems.map(it => ({ name: it.name, price: it.totalPrice })), creditorId || user!.uid);
+        toast({ title: "Boleta Activa Creada", description: "Ahora los miembros pueden marcar sus consumos en tiempo real." });
         setAddingExpense(false);
         resetExpenseForm();
       } catch (error: any) {
@@ -403,7 +402,6 @@ Papas fritas;2;3500;7000`;
                               {members.find(m => m.uid === debt.debtorId)?.displayName?.[0] || '?'}
                             </div>
                             <span className="text-xs font-bold">{members.find(m => m.uid === debt.debtorId)?.displayName || 'Usuario'}</span>
-                            {debt.debtorId === user?.uid && <Badge className="text-[7px] h-3.5 bg-accent/20 text-accent border-none uppercase">Yo</Badge>}
                           </div>
                           <div className="flex items-center gap-3">
                             <span className="text-xs font-black text-primary">${debt.amount.toFixed(2)}</span>
@@ -448,52 +446,90 @@ Papas fritas;2;3500;7000`;
                 <CardTitle className="text-xs font-black uppercase tracking-widest text-accent flex items-center gap-2">
                   <ScanLine className="h-4 w-4" /> Boleta Activa
                 </CardTitle>
-                <CardDescription className="text-[10px]">Marca tus consumos para dividir la cuenta.</CardDescription>
+                <CardDescription className="text-[10px]">Boleta activa — Marca los consumos propios o de amigos en tiempo real.</CardDescription>
               </CardHeader>
-              <CardContent className="p-0 max-h-80 overflow-y-auto">
+              <CardContent className="p-0 max-h-[400px] overflow-y-auto">
                 <div className="divide-y">
-                  {receipt.items.map(item => {
-                    const myClaim = item.claims.find(c => c.userId === user?.uid);
-                    return (
-                      <div key={item.id} className="p-4 flex flex-col gap-2 hover:bg-muted/30 transition-colors">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="text-xs font-bold">{item.name}</p>
-                            <p className="text-[10px] text-muted-foreground">${item.price.toFixed(2)}</p>
-                          </div>
-                          <Checkbox checked={!!myClaim} onCheckedChange={(val) => claimReceiptItem(params.id, receipt.id, item.id, user!.uid, val ? 100 : 0, receipt.items)} className="h-5 w-5 rounded-lg" />
-                        </div>
-                        {myClaim && (
-                          <div className="flex items-center gap-2 bg-accent/5 p-2 rounded-xl">
-                            <span className="text-[10px] font-bold text-accent">Tu Cuota %:</span>
-                            <Input 
-                              type="number" 
-                              className="h-7 w-20 text-[10px] font-bold border-accent/20" 
-                              value={myClaim.percentage} 
-                              onChange={(e) => claimReceiptItem(params.id, receipt.id, item.id, user!.uid, parseFloat(e.target.value) || 0, receipt.items)} 
-                            />
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {item.claims.filter(c => c.userId !== user?.uid).map(c => (
-                            <Badge key={c.userId} variant="secondary" className="text-[8px] px-1.5 py-0.5 rounded-md opacity-70">
-                              {members.find(m => m.uid === c.userId)?.displayName?.split(' ')[0]}: {c.percentage}%
-                            </Badge>
-                          ))}
+                  {receipt.items.map(item => (
+                    <div key={item.id} className="p-4 space-y-3 hover:bg-muted/10 transition-colors">
+                      <div>
+                        <p className="text-xs font-bold text-primary">{item.name}</p>
+                        <p className="text-[10px] text-muted-foreground">${item.price.toFixed(2)}</p>
+                      </div>
+                      
+                      <div className="space-y-2 bg-muted/20 p-2.5 rounded-xl text-[11px]">
+                        <p className="text-[9px] font-black uppercase text-muted-foreground tracking-wider mb-1">Consumido por:</p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {members.map(m => {
+                            const claimKey = `${item.id}_${m.uid}`;
+                            const currentPercentage = receipt.claims?.[claimKey] || 0;
+                            const isClaimed = currentPercentage > 0;
+                            
+                            return (
+                              <div key={m.uid} className="flex items-center justify-between bg-white p-2 rounded-lg border border-transparent hover:border-accent/20 transition-all">
+                                <div className="flex items-center gap-2 truncate max-w-[150px]">
+                                  <Checkbox 
+                                    checked={isClaimed} 
+                                    onCheckedChange={(val) => {
+                                      claimReceiptItem(params.id, receipt.id, item.id, m.uid, val ? 100 : 0);
+                                    }} 
+                                    className="h-4 w-4 rounded" 
+                                  />
+                                  <span className="font-bold text-xs truncate">{m.displayName}</span>
+                                </div>
+                                {isClaimed && (
+                                  <div className="flex items-center gap-1">
+                                    <Input 
+                                      type="number" 
+                                      className="h-7 w-14 text-[10px] p-1 text-center font-bold" 
+                                      value={currentPercentage} 
+                                      onChange={(e) => {
+                                        const p = parseFloat(e.target.value) || 0;
+                                        claimReceiptItem(params.id, receipt.id, item.id, m.uid, p);
+                                      }} 
+                                    />
+                                    <span className="text-[9px] text-muted-foreground">%</span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </CardContent>
-              <CardFooter className="p-4 bg-accent/5 border-t">
-                <Button 
-                  className="w-full bg-accent text-xs font-black uppercase tracking-widest h-11 rounded-xl shadow-lg shadow-accent/20 text-white" 
-                  onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, user!.uid)}
-                  disabled={isActionLoading}
-                >
-                  {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Finalizar y Generar Cobros"}
-                </Button>
+              <CardFooter className="p-4 bg-accent/5 border-t flex flex-col gap-2">
+                <div className="text-[10px] font-medium text-muted-foreground w-full text-center">
+                  Acreedor: <span className="font-bold text-primary">{members.find(m => m.uid === receipt.creditorId)?.displayName || '...'}</span>
+                </div>
+                {user?.uid === receipt.creditorId ? (
+                  <Button 
+                    className="w-full bg-accent text-xs font-black uppercase tracking-widest h-11 rounded-xl shadow-lg shadow-accent/20 text-white" 
+                    onClick={async () => {
+                      setIsActionLoading(true);
+                      try {
+                        await finalizeReceipt(params.id, receipt.id, receipt.items, receipt.claims, receipt.creditorId);
+                        toast({ title: "Boleta finalizada", description: "Se generaron las deudas individuales." });
+                      } catch (err: any) {
+                        toast({ variant: "destructive", title: "Error", description: err.message });
+                      } finally {
+                        setIsActionLoading(false);
+                      }
+                    }}
+                    disabled={isActionLoading}
+                  >
+                    {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Finalizar y Generar Cobros"}
+                  </Button>
+                ) : (
+                  <Button 
+                    className="w-full bg-muted text-muted-foreground text-xs font-black uppercase tracking-widest h-11 rounded-xl cursor-not-allowed" 
+                    disabled
+                  >
+                    Esperando que el acreedor finalice
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           ))}
@@ -574,6 +610,22 @@ Papas fritas;2;3500;7000`;
               </div>
             )}
 
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest px-1">Acreedor (Quién pagó)</Label>
+              <Select value={creditorId} onValueChange={setCreditorId}>
+                <SelectTrigger className="h-12 rounded-xl">
+                  <SelectValue placeholder="Seleccionar acreedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {members.map(m => (
+                    <SelectItem key={m.uid} value={m.uid} className="text-xs">
+                      {m.displayName || 'Usuario'} {m.uid === user?.uid ? "(Tú)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {expenseMode !== 'item' ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -599,22 +651,6 @@ Papas fritas;2;3500;7000`;
                       />
                     </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest px-1">Acreedor (Quién pagó)</Label>
-                  <Select value={creditorId} onValueChange={setCreditorId}>
-                    <SelectTrigger className="h-12 rounded-xl">
-                      <SelectValue placeholder="Seleccionar acreedor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {members.map(m => (
-                        <SelectItem key={m.uid} value={m.uid} className="text-xs">
-                          {m.displayName || 'Usuario'} {m.uid === user?.uid ? "(Tú)" : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="flex items-center justify-between p-4 bg-muted/40 rounded-2xl border">
@@ -777,7 +813,6 @@ Papas fritas;2;3500;7000`;
         </DialogContent>
       </Dialog>
 
-      {/* Diálogos de Resumen IA e Invitación... (Sin cambios) */}
       <Dialog open={!!creditorProfile} onOpenChange={() => setCreditorProfile(null)}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none text-center">
           <DialogHeader>
