@@ -71,7 +71,14 @@ export const createGroup = async (name: string, type: 'fixed' | 'variable', admi
     createdAt: Date.now(),
   };
 
-  return addDoc(groupCollection, data);
+  return addDoc(groupCollection, data).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: groupCollection.path,
+      operation: 'create',
+      requestResourceData: data
+    }));
+    throw error;
+  });
 };
 
 export const updateGroupTransferDetails = (groupId: string, transferDetails: string) => {
@@ -238,6 +245,13 @@ export const joinGroupByInvite = async (userId: string, inviteToken: string) => 
     members: arrayUnion(userId),
     memberIds: arrayUnion(userId),
     [`memberStatuses.${userId}`]: 'active'
+  }).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: groupRef.path,
+      operation: 'update',
+      requestResourceData: { memberIds: userId }
+    }));
+    throw error;
   });
   return group.id;
 };
@@ -340,39 +354,55 @@ export const chargeEventToGroup = async (eventId: string) => {
 
 export const addParticipantToEvent = async (eventId: string, userId: string) => {
   const eventRef = doc(db, "events", eventId);
-  await updateDoc(eventRef, {
-    participantIds: arrayUnion(userId)
-  });
-  
   const eventSnap = await getDoc(eventRef);
-  if (eventSnap.exists()) {
-    const ev = eventSnap.data() as Event;
-    const groupRef = doc(db, "groups", ev.groupId);
-    await updateDoc(groupRef, {
-      members: arrayUnion(userId),
-      memberIds: arrayUnion(userId),
-      [`memberStatuses.${userId}`]: 'active'
-    }).catch(() => {});
-  }
+  if (!eventSnap.exists()) throw new Error("Evento no encontrado");
+  const ev = eventSnap.data() as Event;
+  const groupRef = doc(db, "groups", ev.groupId);
+
+  const batch = writeBatch(db);
+  batch.update(eventRef, { participantIds: arrayUnion(userId) });
+  batch.update(groupRef, {
+    members: arrayUnion(userId),
+    memberIds: arrayUnion(userId),
+    [`memberStatuses.${userId}`]: 'active'
+  });
+
+  return batch.commit().catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: groupRef.path,
+      operation: 'update',
+      requestResourceData: { memberIds: userId, eventId }
+    }));
+    throw error;
+  });
 };
 
 export const addAndMarkPresent = async (eventId: string, userId: string) => {
   const eventRef = doc(db, "events", eventId);
-  await updateDoc(eventRef, {
+  const eventSnap = await getDoc(eventRef);
+  if (!eventSnap.exists()) throw new Error("Evento no encontrado");
+  const ev = eventSnap.data() as Event;
+  const groupRef = doc(db, "groups", ev.groupId);
+
+  const batch = writeBatch(db);
+  batch.update(eventRef, {
     participantIds: arrayUnion(userId),
     presentIds: arrayUnion(userId)
   });
+  batch.update(groupRef, {
+    members: arrayUnion(userId),
+    memberIds: arrayUnion(userId),
+    [`memberStatuses.${userId}`]: 'active'
+  });
 
-  const eventSnap = await getDoc(eventRef);
-  if (eventSnap.exists()) {
-    const ev = eventSnap.data() as Event;
-    const groupRef = doc(db, "groups", ev.groupId);
-    await updateDoc(groupRef, {
-      members: arrayUnion(userId),
-      memberIds: arrayUnion(userId),
-      [`memberStatuses.${userId}`]: 'active'
-    }).catch(() => {});
-  }
+  return batch.commit().catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: groupRef.path,
+      operation: 'update',
+      requestResourceData: { memberIds: userId, eventId }
+    }));
+    throw error;
+  });
 };
 
 export const toggleAttendance = (eventId: string, userId: string, isPresent: boolean) => {
@@ -385,7 +415,7 @@ export const toggleAttendance = (eventId: string, userId: string, isPresent: boo
 export const addExternalGuest = (eventId: string, name: string, addedBy: string) => {
   const eventRef = doc(db, "events", eventId);
   return updateDoc(eventRef, {
-    externalGuests: arrayUnion({ name, addedBy, present: true })
+    externalGuests: arrayUnion({ name, addedBy, present: false })
   });
 };
 
@@ -412,8 +442,17 @@ export const toggleGuestPresence = async (eventId: string, guestName: string, ad
 
 export const removeParticipantFromEvent = async (eventId: string, userId: string) => {
   const eventRef = doc(db, "events", eventId);
+  const eventSnap = await getDoc(eventRef);
+  if (!eventSnap.exists()) return;
+  const event = eventSnap.data() as Event;
+
+  if (event.isCharged) return;
+
+  const updatedGuests = event.externalGuests.filter(g => g.addedBy !== userId);
+
   return updateDoc(eventRef, {
     participantIds: arrayRemove(userId),
-    presentIds: arrayRemove(userId)
+    presentIds: arrayRemove(userId),
+    externalGuests: updatedGuests
   });
 };
