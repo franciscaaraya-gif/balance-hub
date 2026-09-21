@@ -10,7 +10,6 @@ import {
   claimReceiptItem, 
   finalizeReceipt, 
   updateDebtStatusInGroup, 
-  updateGroupTransferDetails,
   getUserProfile
 } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile, Receipt, ReceiptItem, Event } from "@/lib/types";
@@ -19,18 +18,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  Wallet, Plus, Share2, Sparkles, AlertCircle, CheckCircle2, QrCode, 
-  UserPlus, ScanLine, Camera, Loader2, DollarSign, Users, Trash2, 
-  CreditCard, Copy, Pencil, Save, BrainCircuit, ReceiptText, ChevronDown, 
-  ChevronRight, ArrowRight, User
+  Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
+  UserPlus, ScanLine, Loader2, DollarSign, Users, 
+  CreditCard, Copy, BrainCircuit, ReceiptText, ChevronRight, User, TextCursorInput
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { parseReceipt } from "@/ai/flows/parse-receipt-flow";
-import { generateDebtSummary } from "@/ai/flows/ai-debt-summary-generation";
 import { doc, collection, query, orderBy, where } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,19 +39,21 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const { toast } = useToast();
 
   const [addingExpense, setAddingExpense] = useState(false);
-  const [expenseMode, setExpenseMode] = useState<'manual' | 'event'>('manual');
+  const [expenseMode, setExpenseMode] = useState<'manual' | 'event' | 'item'>('manual');
+  const [divideEqually, setDivideEqually] = useState(true);
+  const [manualAmounts, setManualAmounts] = useState<Record<string, string>>({});
+  
+  const [pastedText, setPastedText] = useState("");
+  const [parsedItems, setParsedItems] = useState<Array<{ name: string; quantity: number; unitPrice: number; totalPrice: number }>>([]);
+
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [creditorId, setCreditorId] = useState<string>("");
   const [expenseTitle, setExpenseTitle] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
-  const [scanningReceipt, setScanningReceipt] = useState(false);
-  const [parsingReceipt, setParsingReceipt] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [editingTransfer, setEditingTransfer] = useState(false);
-  const [transferInput, setTransferInput] = useState("");
   
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -62,8 +61,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [creditorProfile, setCreditorProfile] = useState<UserProfile | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const groupRef = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
@@ -87,28 +84,30 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (!firestore || !params.id || !user?.uid) return null;
     return query(collection(firestore, 'events'), where('groupId', '==', params.id), orderBy('createdAt', 'desc'));
   }, [firestore, params.id, user?.uid]);
-  const { data: events } = useCollection<Event>(eventsQuery);
+  const { data: events, error: eventsError } = useCollection<Event>(eventsQuery);
+
+  useEffect(() => {
+    if (eventsError) {
+      console.error("Error cargando eventos de este grupo:", eventsError);
+    }
+  }, [eventsError]);
 
   useEffect(() => {
     if (group?.memberIds) {
       getGroupMembersDetails(group.memberIds).then(setMembers);
     }
-    if (group?.transferDetails) {
-      setTransferInput(group.transferDetails);
-    }
     if (user?.uid) {
       setCreditorId(user.uid);
     }
-  }, [group?.memberIds, group?.transferDetails, user?.uid]);
+  }, [group?.memberIds, user?.uid]);
 
   const isAdmin = group?.adminId === user?.uid;
 
-  // Group debts by chargeGroupId
   const groupedExpenses = useMemo(() => {
     if (!debts) return [];
     const groups: Record<string, Debt[]> = {};
     debts.forEach(debt => {
-      const gid = debt.chargeGroupId || debt.id; // Fallback to id for ungrouped
+      const gid = debt.chargeGroupId || debt.id;
       if (!groups[gid]) groups[gid] = [];
       groups[gid].push(debt);
     });
@@ -123,6 +122,18 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       totalCount: debts.length
     })).sort((a, b) => b.createdAt - a.createdAt);
   }, [debts]);
+
+  const manualSum = useMemo(() => {
+    return Object.values(manualAmounts).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
+  }, [manualAmounts]);
+
+  const totalTarget = useMemo(() => {
+    return parseFloat(expenseAmount) || 0;
+  }, [expenseAmount]);
+
+  const difference = useMemo(() => {
+    return totalTarget - manualSum;
+  }, [totalTarget, manualSum]);
 
   const handleGenerateAiSummary = async () => {
     if (!group || !debts || !members) return;
@@ -147,22 +158,115 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     }
   };
 
-  const handleRegisterExpense = async () => {
-    if (!expenseTitle || !expenseAmount || !creditorId || selectedMembers.length === 0) {
-      toast({ variant: "destructive", title: "Faltan datos", description: "Completa el título, monto y selecciona participantes." });
+  const handleParseItems = () => {
+    const lines = pastedText.split('\n').map(l => l.trim()).filter(Boolean);
+    const items: Array<{ name: string; quantity: number; unitPrice: number; totalPrice: number }> = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const parts = lines[i].split(';');
+      if (parts.length < 2) {
+        toast({
+          variant: "destructive",
+          title: "Error de formato",
+          description: `La línea ${i + 1} no cumple el formato 'nombre;cantidad;precio_unitario;precio_total'`
+        });
+        return;
+      }
+      const name = parts[0].trim();
+      const quantity = parseInt(parts[1]) || 1;
+      const unitPrice = parseFloat(parts[2]) || 0;
+      const totalPrice = parseFloat(parts[3]) || (quantity * unitPrice) || 0;
+      
+      if (!name || isNaN(totalPrice)) {
+        toast({
+          variant: "destructive",
+          title: "Error de formato",
+          description: `Monto o nombre inválido en la línea ${i + 1}`
+        });
+        return;
+      }
+      items.push({ name, quantity, unitPrice, totalPrice });
+    }
+    
+    if (items.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Texto vacío",
+        description: "No se encontraron ítems válidos para procesar."
+      });
       return;
     }
-    setIsActionLoading(true);
-    try {
-      const amount = parseFloat(expenseAmount) / selectedMembers.length;
-      await addFixedDebtToAll(params.id, amount, expenseTitle, selectedMembers, creditorId);
-      toast({ title: "Gasto Registrado", description: "Se han generado las deudas correspondientes." });
-      setAddingExpense(false);
-      resetExpenseForm();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    } finally {
-      setIsActionLoading(false);
+    
+    setParsedItems(items);
+    const sum = items.reduce((acc, item) => acc + item.totalPrice, 0);
+    setExpenseAmount(sum.toString());
+    toast({ title: "Texto Procesado", description: `Se extrajeron ${items.length} ítems correctamente.` });
+  };
+
+  const handleRegisterExpense = async () => {
+    if (expenseMode === 'item') {
+      if (parsedItems.length === 0) {
+        toast({ variant: "destructive", title: "Faltan datos", description: "Por favor, ingresa y procesa el texto de la boleta primero." });
+        return;
+      }
+      setIsActionLoading(true);
+      try {
+        await createReceipt(params.id, parsedItems.map(it => ({ name: it.name, price: it.totalPrice })));
+        toast({ title: "Boleta Creada", description: "Se ha cargado como Boleta Activa para que los miembros reclamen sus consumos." });
+        setAddingExpense(false);
+        resetExpenseForm();
+      } catch (error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+      } finally {
+        setIsActionLoading(false);
+      }
+      return;
+    }
+
+    if (!expenseTitle || !expenseAmount || !creditorId) {
+      toast({ variant: "destructive", title: "Faltan datos", description: "Completa el concepto y el monto total." });
+      return;
+    }
+
+    if (divideEqually) {
+      if (selectedMembers.length === 0) {
+        toast({ variant: "destructive", title: "Selecciona participantes", description: "Debes marcar al menos a un miembro para dividir." });
+        return;
+      }
+      setIsActionLoading(true);
+      try {
+        const amount = parseFloat(expenseAmount) / selectedMembers.length;
+        await addFixedDebtToAll(params.id, amount, expenseTitle, selectedMembers, creditorId);
+        toast({ title: "Gasto Registrado", description: "Se han generado las deudas compartidas equitativamente." });
+        setAddingExpense(false);
+        resetExpenseForm();
+      } catch (error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+      } finally {
+        setIsActionLoading(false);
+      }
+    } else {
+      if (Math.abs(difference) > 0.01) {
+        toast({ variant: "destructive", title: "El monto no cuadra", description: `La suma de los montos individuales debe ser igual al total. Diferencia actual: $${difference.toFixed(2)}` });
+        return;
+      }
+      setIsActionLoading(true);
+      try {
+        const chargeGroupId = Math.random().toString(36).substring(7);
+        for (const uid of Object.keys(manualAmounts)) {
+          const amt = parseFloat(manualAmounts[uid]) || 0;
+          if (amt > 0) {
+            await addDebt(params.id, uid, amt, expenseTitle, creditorId, chargeGroupId);
+          }
+        }
+        toast({ title: "Gasto Registrado", description: "Se han guardado los cobros con montos asimétricos." });
+        setAddingExpense(false);
+        resetExpenseForm();
+      } catch (error: any) {
+        toast({ variant: "destructive", title: "Error", description: error.message });
+      } finally {
+        setIsActionLoading(false);
+      }
     }
   };
 
@@ -172,6 +276,10 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     setSelectedMembers([]);
     setCreditorId(user?.uid || "");
     setSelectedEventId(null);
+    setDivideEqually(true);
+    setManualAmounts({});
+    setPastedText("");
+    setParsedItems([]);
   };
 
   const handleEventSelect = (eventId: string) => {
@@ -181,7 +289,27 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       setExpenseTitle(event.title);
       setExpenseAmount(event.totalCost.toString());
       setSelectedMembers(event.presentIds || []);
+      
+      const initialManuals: Record<string, string> = {};
+      if (event.presentIds && event.presentIds.length > 0) {
+        const eqPrice = (event.totalCost / event.presentIds.length).toFixed(2);
+        event.presentIds.forEach(uid => {
+          initialManuals[uid] = eqPrice;
+        });
+      }
+      setManualAmounts(initialManuals);
     }
+  };
+
+  const copyAiPrompt = () => {
+    const promptText = `Analiza la imagen de esta boleta/factura y devuélveme SOLO una lista, un ítem por línea, en este formato exacto sin encabezados ni texto adicional:
+nombre_item;cantidad;precio_unitario;precio_total
+
+Ejemplo:
+Cerveza;4;2500;10000
+Papas fritas;2;3500;7000`;
+    navigator.clipboard.writeText(promptText);
+    toast({ title: "Prompt Copiado", description: "Pégalo en ChatGPT o Gemini junto a la foto de tu boleta." });
   };
 
   const showCreditorDetails = async (cid: string) => {
@@ -222,11 +350,10 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Panel Izquierdo: Historial Agrupado */}
         <Card className="lg:col-span-2 border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
           <CardHeader className="border-b pb-6">
             <CardTitle className="text-lg font-headline">Historial de Gastos</CardTitle>
-            <CardDescription className="text-xs">Cobros agrupados por evento o registro manual.</CardDescription>
+            <CardDescription className="text-xs">Cobros agrupados por evento o registro manual colaborativo.</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y">
@@ -319,10 +446,9 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           </CardContent>
         </Card>
 
-        {/* Panel Derecho: Perfiles y Recibos */}
         <div className="space-y-6">
            {receipts?.filter(r => r.status === 'open').map(receipt => (
-            <Card key={receipt.id} className="border-accent/30 shadow-md rounded-[2rem] overflow-hidden">
+            <Card key={receipt.id} className="border-accent/30 shadow-md rounded-[2rem] overflow-hidden bg-white">
               <CardHeader className="bg-accent/5 pb-3 border-b">
                 <CardTitle className="text-xs font-black uppercase tracking-widest text-accent flex items-center gap-2">
                   <ScanLine className="h-4 w-4" /> Boleta Activa
@@ -366,9 +492,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                 </div>
               </CardContent>
               <CardFooter className="p-4 bg-accent/5 border-t">
-                {/* Ahora cualquier miembro del grupo puede finalizar una boleta */}
                 <Button 
-                  className="w-full bg-accent text-xs font-black uppercase tracking-widest h-11 rounded-xl shadow-lg shadow-accent/20" 
+                  className="w-full bg-accent text-xs font-black uppercase tracking-widest h-11 rounded-xl shadow-lg shadow-accent/20 text-white" 
                   onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, user!.uid)}
                   disabled={isActionLoading}
                 >
@@ -400,130 +525,269 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         </div>
       </div>
 
-      {/* DIALOG: Registrar Gasto */}
       <Dialog open={addingExpense} onOpenChange={setAddingExpense}>
         <DialogContent className="max-w-xl rounded-[2.5rem] p-8 border-none overflow-y-auto max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-headline font-bold">Registrar Gasto</DialogTitle>
-            <DialogDescription className="text-xs">Crea un cobro compartido eligiendo quién pagó y quiénes deben.</DialogDescription>
+            <DialogDescription className="text-xs">Crea un cobro compartido eligiendo el origen y la modalidad de división.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            <div className="grid grid-cols-2 gap-4 bg-muted/30 p-1 rounded-2xl">
+            <div className="grid grid-cols-3 gap-2 bg-muted/30 p-1 rounded-2xl">
               <Button 
                 variant={expenseMode === 'manual' ? 'default' : 'ghost'} 
-                className="rounded-xl h-10 text-xs font-bold"
+                className="rounded-xl h-10 text-[11px] font-bold px-1"
                 onClick={() => setExpenseMode('manual')}
               >
                 Gasto Manual
               </Button>
               <Button 
                 variant={expenseMode === 'event' ? 'default' : 'ghost'} 
-                className="rounded-xl h-10 text-xs font-bold"
+                className="rounded-xl h-10 text-[11px] font-bold px-1"
                 onClick={() => setExpenseMode('event')}
               >
-                Basado en Evento
+                Por Evento
+              </Button>
+              <Button 
+                variant={expenseMode === 'item' ? 'default' : 'ghost'} 
+                className="rounded-xl h-10 text-[11px] font-bold px-1"
+                onClick={() => setExpenseMode('item')}
+              >
+                Por Ítem (IA)
               </Button>
             </div>
 
             {expenseMode === 'event' && (
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest px-1">Seleccionar Evento</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest px-1">Seleccionar Evento Reciente</Label>
                 <Select onValueChange={handleEventSelect} value={selectedEventId || ""}>
                   <SelectTrigger className="h-12 rounded-xl">
-                    <SelectValue placeholder="Elegir un evento reciente..." />
+                    <SelectValue placeholder="Elegir un evento de este grupo..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {events?.map(ev => (
-                      <SelectItem key={ev.id} value={ev.id} className="text-xs">
-                        {ev.title} ({ev.date}) - ${ev.totalCost}
-                      </SelectItem>
-                    ))}
+                    {events && events.length > 0 ? (
+                      events.map(ev => (
+                        <SelectItem key={ev.id} value={ev.id} className="text-xs">
+                          {ev.title} ({ev.date}) - ${ev.totalCost}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="p-2 text-center text-xs opacity-40">No hay eventos para este grupo.</div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest px-1">Concepto del Gasto</Label>
-                <Input 
-                  placeholder="Ej: Pizza post-partido" 
-                  value={expenseTitle}
-                  onChange={e => setExpenseTitle(e.target.value)}
-                  className="h-12 rounded-xl"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest px-1">Monto Total ($)</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    type="number" 
-                    placeholder="0.00" 
-                    value={expenseAmount}
-                    onChange={e => setExpenseAmount(e.target.value)}
-                    className="h-12 pl-9 rounded-xl font-bold"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest px-1">¿Quién pagó? (Acreedor)</Label>
-              <Select value={creditorId} onValueChange={setCreditorId}>
-                <SelectTrigger className="h-12 rounded-xl">
-                  <SelectValue placeholder="Seleccionar acreedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {members.map(m => (
-                    <SelectItem key={m.uid} value={m.uid} className="text-xs">
-                      {m.displayName} {m.uid === user?.uid ? "(Tú)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between items-center px-1">
-                <Label className="text-[10px] font-black uppercase tracking-widest">¿Quiénes dividen?</Label>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-6 text-[9px] font-black uppercase text-accent"
-                  onClick={() => setSelectedMembers(members.map(m => m.uid))}
-                >
-                  Marcar Todos
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-2 bg-muted/20 p-4 rounded-[2rem] max-h-48 overflow-y-auto">
-                {members.map(m => (
-                  <div 
-                    key={m.uid} 
-                    className={cn(
-                      "flex items-center gap-2 p-2 rounded-xl border transition-all cursor-pointer",
-                      selectedMembers.includes(m.uid) ? "bg-primary/5 border-primary/20" : "bg-white border-transparent"
-                    )}
-                    onClick={() => {
-                      setSelectedMembers(prev => 
-                        prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid]
-                      );
-                    }}
-                  >
-                    <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md" />
-                    <span className="text-[11px] font-bold truncate">{m.displayName}</span>
+            {expenseMode !== 'item' ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Concepto del Gasto</Label>
+                    <Input 
+                      placeholder="Ej: Pizza post-partido" 
+                      value={expenseTitle}
+                      onChange={e => setExpenseTitle(e.target.value)}
+                      className="h-12 rounded-xl"
+                    />
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Monto Total ($)</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        type="number" 
+                        placeholder="0.00" 
+                        value={expenseAmount}
+                        onChange={e => setExpenseAmount(e.target.value)}
+                        className="h-12 pl-9 rounded-xl font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
 
-            {selectedMembers.length > 0 && expenseAmount && (
-              <div className="bg-primary/5 p-4 rounded-2xl flex justify-between items-center">
-                <span className="text-xs font-bold text-primary/70">Cuota estimada p/p:</span>
-                <span className="text-lg font-black text-primary">
-                  ${(parseFloat(expenseAmount) / selectedMembers.length).toFixed(2)}
-                </span>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest px-1">¿Quién pagó? (Acreedor)</Label>
+                  <Select value={creditorId} onValueChange={setCreditorId}>
+                    <SelectTrigger className="h-12 rounded-xl">
+                      <SelectValue placeholder="Seleccionar acreedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map(m => (
+                        <SelectItem key={m.uid} value={m.uid} className="text-xs">
+                          {m.displayName} {m.uid === user?.uid ? "(Tú)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-muted/40 rounded-2xl border">
+                  <div className="space-y-0.5">
+                    <Label className="text-xs font-bold">Dividir en partes iguales</Label>
+                    <p className="text-[10px] text-muted-foreground">Apágalo para asignar cuotas manuales asimétricas.</p>
+                  </div>
+                  <Switch checked={divideEqually} onCheckedChange={(val) => { setDivideEqually(val); setManualAmounts({}); }} />
+                </div>
+
+                {divideEqually ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center px-1">
+                      <Label className="text-[10px] font-black uppercase tracking-widest">¿Quiénes dividen en partes iguales?</Label>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 text-[9px] font-black uppercase text-accent"
+                        onClick={() => setSelectedMembers(members.map(m => m.uid))}
+                      >
+                        Marcar Todos
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 bg-muted/20 p-4 rounded-[2rem] max-h-48 overflow-y-auto">
+                      {members.map(m => (
+                        <div 
+                          key={m.uid} 
+                          className={cn(
+                            "flex items-center gap-2 p-2 rounded-xl border transition-all cursor-pointer",
+                            selectedMembers.includes(m.uid) ? "bg-primary/5 border-primary/20" : "bg-white border-transparent"
+                          )}
+                          onClick={() => {
+                            setSelectedMembers(prev => 
+                              prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid]
+                            );
+                          }}
+                        >
+                          <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md" />
+                          <span className="text-[11px] font-bold truncate">{m.displayName}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {selectedMembers.length > 0 && expenseAmount && (
+                      <div className="bg-primary/5 p-4 rounded-2xl flex justify-between items-center border">
+                        <span className="text-xs font-bold text-primary/70">Cuota estimada por cabeza:</span>
+                        <span className="text-lg font-black text-primary">
+                          ${(parseFloat(expenseAmount) / selectedMembers.length).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Asignar Monto Manual por Miembro</Label>
+                    <div className="space-y-2 bg-muted/20 p-4 rounded-[2rem] max-h-60 overflow-y-auto">
+                      {members.map(m => (
+                        <div key={m.uid} className="flex items-center justify-between bg-white p-3 rounded-xl border">
+                          <span className="text-xs font-bold truncate max-w-[180px]">{m.displayName}</span>
+                          <div className="relative w-32">
+                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+                            <Input 
+                              type="number" 
+                              placeholder="0.00" 
+                              className="h-9 pl-6 text-xs text-right font-bold rounded-lg"
+                              value={manualAmounts[m.uid] || ""}
+                              onChange={(e) => setManualAmounts({ ...manualAmounts, [m.uid]: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className={cn(
+                      "p-4 rounded-2xl flex justify-between items-center text-xs font-bold border",
+                      Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-orange-50 text-orange-700 border-orange-100"
+                    )}>
+                      <div>
+                        <p>Total Asignado: ${manualSum.toFixed(2)} / Objetivo: ${totalTarget.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        {Math.abs(difference) < 0.01 ? (
+                          <span>¡Monto Cuadra!</span>
+                        ) : difference > 0 ? (
+                          <span>Faltan asignar: ${difference.toFixed(2)}</span>
+                        ) : (
+                          <span>Sobran asignados: ${Math.abs(difference).toFixed(2)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="bg-accent/5 p-4 rounded-2xl border border-accent/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-accent block">Copia el prompt estructurado</span>
+                    <p className="text-[10px] text-muted-foreground">Pégalo junto a tu foto en ChatGPT o Gemini para obtener el texto formateado.</p>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" className="rounded-xl font-bold border-accent/40 text-accent hover:bg-accent/10 h-9" onClick={copyAiPrompt}>
+                    <TextCursorInput className="h-4 w-4 mr-1" /> Copiar prompt para IA
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest px-1">Resultados de la IA (Pegar Aquí)</Label>
+                  <Textarea 
+                    placeholder="nombre_item;cantidad;precio_unitario;precio_total&#10;Cerveza;4;2500;10000&#10;Papas;2;3500;7000"
+                    className="min-h-[110px] text-xs font-mono rounded-xl bg-muted/10"
+                    value={pastedText}
+                    onChange={(e) => setPastedText(e.target.value)}
+                  />
+                  <Button type="button" className="w-full h-10 rounded-xl" onClick={handleParseItems}>
+                    Procesar Texto de Boleta
+                  </Button>
+                </div>
+
+                {parsedItems.length > 0 && (
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Vista Previa y Ajuste de ítems</Label>
+                    <div className="border rounded-2xl overflow-hidden bg-white max-h-48 overflow-y-auto">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-muted text-[10px] font-black uppercase tracking-wider border-b">
+                          <tr>
+                            <th className="p-3">Ítem</th>
+                            <th className="p-3 text-right">Cant.</th>
+                            <th className="p-3 text-right">Total ($)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {parsedItems.map((item, idx) => (
+                            <tr key={idx}>
+                              <td className="p-2">
+                                <Input 
+                                  value={item.name} 
+                                  className="h-8 text-xs px-2 border-none focus-visible:ring-1" 
+                                  onChange={(e) => {
+                                    const copy = [...parsedItems];
+                                    copy[idx].name = e.target.value;
+                                    setParsedItems(copy);
+                                  }}
+                                />
+                              </td>
+                              <td className="p-2 text-right font-medium opacity-60 px-3">{item.quantity}</td>
+                              <td className="p-2">
+                                <Input 
+                                  type="number"
+                                  value={item.totalPrice || ""} 
+                                  className="h-8 text-xs text-right font-bold px-2 border-none focus-visible:ring-1"
+                                  onChange={(e) => {
+                                    const copy = [...parsedItems];
+                                    copy[idx].totalPrice = parseFloat(e.target.value) || 0;
+                                    setParsedItems(copy);
+                                    const sum = copy.reduce((acc, it) => acc + it.totalPrice, 0);
+                                    setExpenseAmount(sum.toString());
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="bg-primary/5 p-4 rounded-xl border flex justify-between font-bold text-xs text-primary">
+                      <span>Total acumulado de boleta:</span>
+                      <span>${expenseAmount}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -531,17 +795,16 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           <DialogFooter className="gap-2">
             <Button variant="ghost" className="rounded-xl" onClick={() => setAddingExpense(false)}>Cancelar</Button>
             <Button 
-              className="rounded-xl px-8 h-12 bg-primary shadow-lg shadow-primary/20" 
+              className="rounded-xl px-8 h-12 bg-primary text-white shadow-lg shadow-primary/20" 
               onClick={handleRegisterExpense}
-              disabled={isActionLoading}
+              disabled={isActionLoading || (expenseMode !== 'item' && !divideEqually && Math.abs(difference) > 0.01)}
             >
-              {isActionLoading ? <Loader2 className="animate-spin mr-2" /> : "Generar Cobros"}
+              {isActionLoading ? <Loader2 className="animate-spin mr-2" /> : expenseMode === 'item' ? "Crear Boleta Compartida" : "Generar Cobros"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* DIALOG: Datos Bancarios del Acreedor */}
       <Dialog open={!!creditorProfile} onOpenChange={() => setCreditorProfile(null)}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none text-center">
           <DialogHeader>
@@ -577,7 +840,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: Resumen IA */}
       <Dialog open={!!aiSummary} onOpenChange={(val) => !val && setAiSummary(null)}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none">
           <DialogHeader className="text-center pb-4">
@@ -596,7 +858,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: Invitar / QR */}
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
         <DialogContent className="max-w-sm rounded-[2.5rem] p-8 border-none text-center">
           <DialogHeader>
