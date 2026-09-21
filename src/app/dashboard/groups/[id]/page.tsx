@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
   UserPlus, ScanLine, Loader2, DollarSign, Users, 
-  CreditCard, Copy, BrainCircuit, ReceiptText, ChevronRight, User, TextCursorInput
+  CreditCard, Copy, BrainCircuit, ReceiptText, ChevronRight, User
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
@@ -46,6 +46,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   
   const [pastedText, setPastedText] = useState("");
   const [parsedItems, setParsedItems] = useState<Array<{ name: string; quantity: number; unitPrice: number; totalPrice: number }>>([]);
+  const [includeTip, setIncludeTip] = useState(false);
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [creditorId, setCreditorId] = useState<string>("");
@@ -155,6 +156,10 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const isAdmin = group?.adminId === user?.uid;
 
+  const aggregatedItemsTotal = useMemo(() => {
+    return parsedItems.reduce((acc, it) => acc + (it.totalPrice || 0), 0);
+  }, [parsedItems]);
+
   const groupedExpenses = useMemo(() => {
     if (!debts) return [];
     const groupsMap: Record<string, Debt[]> = {};
@@ -241,7 +246,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       }
       setIsActionLoading(true);
       try {
-        await createReceipt(params.id, parsedItems.map(it => ({ name: it.name, price: it.totalPrice })), creditorId || user!.uid);
+        await createReceipt(params.id, parsedItems.map(it => ({ name: it.name, price: it.totalPrice })), creditorId || user!.uid, includeTip);
         toast({ title: "Boleta Activa Creada" });
         setAddingExpense(false);
         resetExpenseForm();
@@ -309,6 +314,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     setManualAmounts({});
     setPastedText("");
     setParsedItems([]);
+    setIncludeTip(false);
   };
 
   const copyAiPrompt = () => {
@@ -461,7 +467,7 @@ Papas fritas;2;3500;7000`;
             <Card key={receipt.id} className="border-accent/30 shadow-lg rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
               <CardHeader className="bg-accent/5 pb-3 border-b px-4">
                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-accent flex items-center gap-2">
-                  <ScanLine className="h-4 w-4" /> Boleta Colaborativa
+                  <ScanLine className="h-4 w-4" /> Boleta Colaborativa {receipt.includeTip && " + 10% Propina"}
                 </CardTitle>
                 <p className="text-[9px] text-muted-foreground font-medium">Marca lo que consumiste, los cambios se ven al instante.</p>
               </CardHeader>
@@ -493,7 +499,7 @@ Papas fritas;2;3500;7000`;
                             >
                               <Checkbox 
                                 checked={isClaimed} 
-                                onCheckedChange={() => {}} // Se maneja en el div
+                                onCheckedChange={() => {}} 
                                 className="h-4 w-4 rounded pointer-events-none" 
                               />
                               <span className="font-bold text-[10px] truncate flex-1">{m.displayName?.split(' ')[0]}</span>
@@ -507,7 +513,7 @@ Papas fritas;2;3500;7000`;
               </CardContent>
               <CardFooter className="p-4 bg-accent/5 border-t">
                 {user?.uid === receipt.creditorId ? (
-                  <Button className="w-full bg-accent text-[10px] font-black uppercase tracking-widest h-11 rounded-xl shadow-lg" onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, receipt.claims, receipt.creditorId)}>Finalizar y Cobrar</Button>
+                  <Button className="w-full bg-accent text-[10px] font-black uppercase tracking-widest h-11 rounded-xl shadow-lg" onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, receipt.claims, receipt.creditorId, undefined, receipt.includeTip)}>Finalizar y Cobrar</Button>
                 ) : (
                   <div className="w-full text-center py-2 px-4 rounded-xl bg-muted/50 border border-dashed text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
                     Esperando que el acreedor finalice
@@ -641,9 +647,72 @@ Papas fritas;2;3500;7000`;
                 </div>
                 <Textarea placeholder="Pega aquí el resultado (ítem;cantidad;precio;total)" className="min-h-[150px] rounded-xl text-[11px] font-mono p-4" value={pastedText} onChange={(e) => setPastedText(e.target.value)} />
                 <Button type="button" className="w-full h-12 rounded-xl text-[11px] font-black uppercase" onClick={handleParseItems}>Procesar Texto de Boleta</Button>
+                
                 {parsedItems.length > 0 && (
-                  <div className="bg-emerald-50 p-4 rounded-xl text-[10px] font-bold text-emerald-700 text-center border border-emerald-200 animate-in fade-in zoom-in-95 duration-300">
-                    Se han extraído {parsedItems.length} ítems correctamente.
+                  <div className="space-y-4 mt-4 border-t pt-4">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Revisar ítems extraídos</Label>
+                    <div className="space-y-2 max-h-48 overflow-y-auto bg-muted/10 p-2 rounded-xl border">
+                      {parsedItems.map((item, idx) => (
+                        <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border shadow-sm">
+                          <div className="col-span-6">
+                            <Input 
+                              value={item.name} 
+                              onChange={(e) => {
+                                const updated = [...parsedItems];
+                                updated[idx].name = e.target.value;
+                                setParsedItems(updated);
+                              }}
+                              className="h-8 text-xs rounded-lg"
+                            />
+                          </div>
+                          <div className="col-span-2">
+                            <Input 
+                              type="number"
+                              value={item.quantity || ""} 
+                              onChange={(e) => {
+                                const updated = [...parsedItems];
+                                updated[idx].quantity = parseInt(e.target.value) || 0;
+                                updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
+                                setParsedItems(updated);
+                                setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString());
+                              }}
+                              className="h-8 text-xs p-1 text-center rounded-lg"
+                            />
+                          </div>
+                          <div className="col-span-4">
+                            <Input 
+                              type="number"
+                              value={item.totalPrice || ""} 
+                              onChange={(e) => {
+                                const updated = [...parsedItems];
+                                updated[idx].totalPrice = parseFloat(e.target.value) || 0;
+                                setParsedItems(updated);
+                                setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString());
+                              }}
+                              className="h-8 text-xs font-bold text-right rounded-lg"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex justify-between items-center bg-muted/30 p-3 rounded-xl font-bold text-sm">
+                      <span className="text-muted-foreground text-xs uppercase tracking-wider">Suma Total Boleta:</span>
+                      <span className="text-primary">${aggregatedItemsTotal.toFixed(2)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl border">
+                      <div className="space-y-0.5">
+                        <Label className="text-xs font-bold">¿Incluir propina?</Label>
+                      </div>
+                      <Switch checked={includeTip} onCheckedChange={setIncludeTip} />
+                    </div>
+
+                    {includeTip && (
+                      <p className="text-[11px] text-accent font-medium leading-relaxed bg-accent/5 p-3 rounded-xl border border-accent/20 animate-in fade-in duration-200">
+                        Total boleta + propina: ${(aggregatedItemsTotal * 1.10).toFixed(2)}. La propina se dividirá en proporción a lo que consuma cada participante.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

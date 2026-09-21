@@ -207,7 +207,7 @@ export const updateDebtStatusInGroup = (groupId: string, debtId: string, status:
   });
 };
 
-export const createReceipt = (groupId: string, items: any[], creditorId: string) => {
+export const createReceipt = (groupId: string, items: any[], creditorId: string, includeTip: boolean = false) => {
   const receiptCollection = collection(db, "groups", groupId, "receipts");
   const data = {
     groupId,
@@ -220,6 +220,7 @@ export const createReceipt = (groupId: string, items: any[], creditorId: string)
       claims: []
     })),
     claims: {},
+    includeTip,
     createdAt: Date.now()
   };
   return addDoc(receiptCollection, data);
@@ -232,19 +233,56 @@ export const claimReceiptItem = async (groupId: string, receiptId: string, itemI
   });
 };
 
-export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[], claims: Record<string, number> = {}, creditorId: string, description?: string) => {
+export const finalizeReceipt = async (
+  groupId: string, 
+  receiptId: string, 
+  items: ReceiptItem[], 
+  claims: Record<string, number> = {}, 
+  creditorId: string, 
+  description?: string,
+  includeTip: boolean = false
+) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   const chargeGroupId = Math.random().toString(36).substring(7);
   
+  const userBaseAmounts: Record<string, number> = {};
+  
   for (const item of items) {
-    for (const [key, percentage] of Object.entries(claims)) {
-      if (key.startsWith(`${item.id}_`) && percentage > 0) {
+    const itemClaimants = Object.keys(claims).filter(key => key.startsWith(`${item.id}_`) && claims[key] > 0);
+    
+    if (itemClaimants.length > 0) {
+      const splitPrice = item.price / itemClaimants.length;
+      for (const key of itemClaimants) {
         const userId = key.substring(item.id.length + 1);
-        const amount = (item.price * percentage) / 100;
-        if (amount > 0) {
-          await addDebt(groupId, userId, amount, description || `Consumo Boleta: ${item.name}`, creditorId, chargeGroupId, receiptId);
-        }
+        userBaseAmounts[userId] = (userBaseAmounts[userId] || 0) + splitPrice;
       }
+    }
+  }
+  
+  const totalBaseCost = Object.values(userBaseAmounts).reduce((sum, val) => sum + val, 0);
+  
+  for (const [userId, baseAmount] of Object.entries(userBaseAmounts)) {
+    if (baseAmount > 0) {
+      let finalAmount = baseAmount;
+      let extraDescription = "";
+      
+      if (includeTip && totalBaseCost > 0) {
+        const userRatio = baseAmount / totalBaseCost;
+        const totalTip = totalBaseCost * 0.10;
+        const userTipShare = totalTip * userRatio;
+        finalAmount += userTipShare;
+        extraDescription = ` (incluye 10% propina proporcional: $${userTipShare.toFixed(2)})`;
+      }
+      
+      await addDebt(
+        groupId, 
+        userId, 
+        finalAmount, 
+        description || `Consumo Boleta compartido${extraDescription}`, 
+        creditorId, 
+        chargeGroupId, 
+        receiptId
+      );
     }
   }
 
@@ -340,7 +378,7 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
-  const chargeGroupId = event.id; // Usamos el ID del evento como ID de grupo de cargos para agrupar en el historial
+  const chargeGroupId = event.id;
 
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
