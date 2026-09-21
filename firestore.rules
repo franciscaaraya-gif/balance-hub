@@ -14,13 +14,26 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && resource.data.adminId == request.auth.uid;
       
       match /debts/{debtId} {
-        allow read: if request.auth != null && (request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds || request.auth.uid == resource.data.debtorId);
-        allow create: if request.auth != null && request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.adminId;
-        allow update, delete: if request.auth != null && request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.adminId;
+        allow read: if request.auth != null && (
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds || 
+          request.auth.uid == resource.data.debtorId
+        );
+        // Permitir a cualquier miembro del grupo crear deudas (Registrar Gasto)
+        allow create: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
+        // Permitir al admin del grupo O al acreedor de la deuda marcar como pagado
+        allow update: if request.auth != null && (
+          request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.adminId || 
+          request.auth.uid == resource.data.creditorId
+        );
+        // La eliminación se mantiene restringida al admin del grupo por seguridad
+        allow delete: if request.auth != null && 
+          request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.adminId;
       }
       
       match /receipts/{receiptId} {
-         allow read, write: if request.auth != null && request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
+         allow read, write: if request.auth != null && 
+          request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberIds;
       }
     }
 

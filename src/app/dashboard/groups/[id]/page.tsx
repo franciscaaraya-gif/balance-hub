@@ -366,15 +366,14 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
                 </div>
               </CardContent>
               <CardFooter className="p-4 bg-accent/5 border-t">
-                {isAdmin && (
-                  <Button 
-                    className="w-full bg-accent text-xs font-black uppercase tracking-widest h-11 rounded-xl shadow-lg shadow-accent/20" 
-                    onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, user!.uid)}
-                    disabled={isActionLoading}
-                  >
-                    {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Finalizar y Generar Cobros"}
-                  </Button>
-                )}
+                {/* Ahora cualquier miembro del grupo puede finalizar una boleta */}
+                <Button 
+                  className="w-full bg-accent text-xs font-black uppercase tracking-widest h-11 rounded-xl shadow-lg shadow-accent/20" 
+                  onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, user!.uid)}
+                  disabled={isActionLoading}
+                >
+                  {isActionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : "Finalizar y Generar Cobros"}
+                </Button>
               </CardFooter>
             </Card>
           ))}
