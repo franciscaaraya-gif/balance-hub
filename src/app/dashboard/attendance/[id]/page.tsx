@@ -1,9 +1,17 @@
-
 "use client";
 
 import { useEffect, useState, use, useMemo } from "react";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
-import { addParticipantToEvent, toggleAttendance, getGroupMembersDetails, toggleGuestPresence, removeExternalGuest, chargeEventToGroup, addExternalGuest, removeParticipantFromEvent } from "@/lib/firebase/store";
+import { 
+  addParticipantToEvent, 
+  toggleAttendance, 
+  getGroupMembersDetails, 
+  toggleGuestPresence, 
+  removeExternalGuest, 
+  chargeEventToGroup, 
+  addExternalGuest, 
+  removeParticipantFromEvent 
+} from "@/lib/firebase/store";
 import { Event, UserProfile, ExternalGuest, Group } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -26,7 +34,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [addingNonEnrolled, setAddingNonEnrolled] = useState(false);
   const [isCharging, setIsCharging] = useState(false);
   const [showQr, setShowQr] = useState(false);
-  const [participants, setParticipants] = useState<UserProfile[]>([]);
+  
+  // Diccionario de perfiles para evitar el bug de "desaparición" si falla un perfil
+  const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
   
   const [newGuestName, setNewGuestName] = useState("");
   const [guestResponsibleUid, setGuestResponsibleUid] = useState("");
@@ -38,11 +48,14 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const { data: event, isLoading: eventLoading, error: eventError } = useDoc<Event>(eventRef);
 
+  // Cargar perfiles de forma robusta
   useEffect(() => {
     if (event?.participantIds?.length) {
-      getGroupMembersDetails(event.participantIds).then(setParticipants);
-    } else {
-      setParticipants([]);
+      getGroupMembersDetails(event.participantIds).then(details => {
+        const map: Record<string, UserProfile> = {};
+        details.forEach(p => map[p.uid] = p);
+        setProfilesMap(map);
+      });
     }
   }, [event?.participantIds]);
 
@@ -56,6 +69,16 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       setAddingNonEnrolled(false);
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
+    }
+  };
+
+  const handleRemoveParticipant = async (uid: string) => {
+    if (!event || event.isCharged) return;
+    try {
+      await removeParticipantFromEvent(event.id, uid);
+      toast({ title: "Participante eliminado" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al eliminar" });
     }
   };
 
@@ -96,6 +119,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     );
   }
 
+  // CÁLCULO DE LIQUIDACIÓN: Solo cuentan los presentes reales (Array presentIds + invitados con present:true)
   const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.filter(g => g.present).length || 0);
   const costPerPerson = totalPresent > 0 ? event.totalCost / totalPresent : 0;
   const isAdmin = event.creatorId === user?.uid;
@@ -118,7 +142,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <div className="bg-white/10 p-4 rounded-2xl text-center min-w-[150px]">
             <p className="text-[10px] uppercase font-bold opacity-70">Cuota p/p</p>
             <p className="text-3xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
-            <p className="text-[9px] mt-1 font-bold">{totalPresent} PRESENTES</p>
+            <p className="text-[9px] mt-1 font-bold uppercase">{totalPresent} PRESENTES PAGADORES</p>
           </div>
         </div>
       </div>
@@ -128,7 +152,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
             <div>
               <CardTitle className="text-lg font-headline">Asistencia</CardTitle>
-              <CardDescription className="text-xs">Marca quién llegó al lugar.</CardDescription>
+              <CardDescription className="text-xs">RSVP vs Llegadas reales.</CardDescription>
             </div>
             {isAdmin && !event.isCharged && (
               <div className="flex gap-2">
@@ -143,38 +167,65 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
-              {participants.map(p => {
-                const isPresent = event.presentIds?.includes(p.uid);
-                const userGuests = event.externalGuests?.filter(g => g.addedBy === p.uid) || [];
+              {/* ITERAMOS SOBRE participantIds PARA GARANTIZAR QUE NADIE FALTE (Fix Punto 6) */}
+              {event.participantIds.map(uid => {
+                const profile = profilesMap[uid];
+                const isPresent = event.presentIds?.includes(uid);
+                const userGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
+                
                 return (
-                  <div key={p.uid} className="space-y-2">
+                  <div key={uid} className="space-y-2">
                     <div className={cn(
-                      "flex items-center justify-between p-4 rounded-2xl border",
-                      isPresent ? "bg-emerald-50 border-emerald-100" : "bg-muted/10 border-transparent"
+                      "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                      isPresent ? "bg-emerald-50 border-emerald-100" : "bg-muted/10 border-transparent opacity-80"
                     )}>
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">{p.displayName?.[0]}</div>
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
+                          {profile?.displayName?.[0] || "?"}
+                        </div>
                         <div>
-                          <p className="text-sm font-bold">{p.displayName}</p>
-                          <p className="text-[10px] text-muted-foreground">{p.email}</p>
+                          <p className="text-sm font-bold">{profile?.displayName || `Usuario ${uid.substring(0,4)}...`}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter">
+                            {isPresent ? "Presente" : "Confirmado (RSVP)"}
+                          </p>
                         </div>
                       </div>
-                      <Button 
-                        variant={isPresent ? "default" : "outline"} 
-                        size="sm" 
-                        disabled={event.isCharged}
-                        className={cn("rounded-full text-[10px] font-black h-9", isPresent && "bg-emerald-500 hover:bg-emerald-600 border-none")}
-                        onClick={() => toggleAttendance(event.id, p.uid, !isPresent)}
-                      >
-                        {isPresent ? "Presente" : "Ausente"}
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        {isAdmin && !event.isCharged && (
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-destructive/40 hover:text-destructive" 
+                            onClick={() => handleRemoveParticipant(uid)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button 
+                          variant={isPresent ? "default" : "outline"} 
+                          size="sm" 
+                          disabled={event.isCharged}
+                          className={cn(
+                            "rounded-full text-[10px] font-black h-9 px-4", 
+                            isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none" : "border-primary/20 text-primary"
+                          )}
+                          onClick={() => toggleAttendance(event.id, uid, !isPresent)}
+                        >
+                          {isPresent ? "Presente" : "Marcar Llegada"}
+                        </Button>
+                      </div>
                     </div>
                     {userGuests.map((guest, idx) => (
                       <div key={idx} className={cn(
                         "flex items-center justify-between py-2 px-4 ml-10 rounded-xl border",
-                        guest.present ? "bg-emerald-50/50 border-emerald-100" : "bg-muted/5 border-transparent"
+                        guest.present ? "bg-emerald-50/50 border-emerald-100" : "bg-muted/5 border-transparent opacity-60"
                       )}>
-                        <span className="text-xs font-bold">{guest.name} (+1)</span>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold">{guest.name} (+1)</span>
+                          <span className="text-[8px] uppercase font-black opacity-30">
+                            {guest.present ? "Presente" : "RSVP"}
+                          </span>
+                        </div>
                         <div className="flex gap-2">
                           <Button 
                             variant="ghost" 
@@ -183,10 +234,10 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                             disabled={event.isCharged}
                             onClick={() => toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present)}
                           >
-                            {guest.present ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5" />}
+                            {guest.present ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 opacity-30" />}
                           </Button>
                           {!event.isCharged && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => removeExternalGuest(event.id, guest)}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/40" onClick={() => removeExternalGuest(event.id, guest)}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
@@ -196,9 +247,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </div>
                 );
               })}
-              {participants.length === 0 && (
+              {event.participantIds.length === 0 && (
                 <div className="text-center py-10 opacity-30 italic text-sm">
-                  Aún no hay participantes inscritos.
+                  Aún no hay participantes confirmados.
                 </div>
               )}
             </div>
@@ -209,17 +260,23 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <Card className="border-none shadow-sm rounded-[2rem]">
             <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-primary"><Zap className="inline mr-2 h-4 w-4 text-accent" /> Liquidación</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex justify-between text-xs font-bold"><span>Total:</span><span>${event.totalCost.toFixed(2)}</span></div>
-              <div className="flex justify-between text-xs font-bold text-accent"><span>Cuota p/p:</span><span>${costPerPerson.toFixed(2)}</span></div>
-              <div className="pt-4 border-t flex justify-between items-end">
-                <span className="text-[9px] font-black uppercase text-muted-foreground">Presentes</span>
-                <span className="text-3xl font-headline font-bold text-primary">{totalPresent}</span>
+              <div className="flex justify-between text-xs font-bold"><span>Total del Evento:</span><span>${event.totalCost.toFixed(2)}</span></div>
+              <div className="flex justify-between text-xs font-bold text-accent"><span>Cuota p/p (solo presentes):</span><span>${costPerPerson.toFixed(2)}</span></div>
+              <div className="pt-4 border-t space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[9px] font-black uppercase text-muted-foreground">Presentes</span>
+                  <span className="text-2xl font-headline font-bold text-primary">{totalPresent}</span>
+                </div>
+                <div className="flex justify-between items-center opacity-50">
+                  <span className="text-[9px] font-black uppercase text-muted-foreground">Confirmados (no llegaron)</span>
+                  <span className="text-sm font-bold">{event.participantIds.length - event.presentIds.length}</span>
+                </div>
               </div>
             </CardContent>
             {isAdmin && (
               <CardFooter>
                 <Button 
-                  disabled={event.isCharged || isCharging}
+                  disabled={event.isCharged || isCharging || totalPresent === 0}
                   className="w-full h-12 rounded-2xl bg-primary text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg" 
                   onClick={handleChargeToGroup}
                 >
@@ -239,6 +296,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         </div>
       </div>
 
+      {/* MODAL: Check-in QR */}
       <Dialog open={showQr} onOpenChange={setShowQr}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 text-center border-none">
           <DialogHeader><DialogTitle className="text-2xl font-headline">Check-in QR</DialogTitle></DialogHeader>
@@ -246,12 +304,13 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             <div className="bg-white p-4 rounded-3xl border-2 border-primary/10 shadow-xl">
               <img src={qrCodeUrl} alt="QR" className="w-64 h-64" />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-relaxed">Escanea esto al llegar para marcar tu asistencia automáticamente.</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-relaxed">Escanea esto al llegar para marcar tu asistencia automáticamente y entrar en el cobro.</p>
           </div>
           <Button className="w-full h-12 rounded-2xl" onClick={() => setShowQr(false)}>Cerrar</Button>
         </DialogContent>
       </Dialog>
 
+      {/* MODAL: Añadir Asistente */}
       <Dialog open={addingNonEnrolled} onOpenChange={setAddingNonEnrolled}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none">
           <DialogHeader><DialogTitle className="text-2xl font-headline">Añadir Asistente</DialogTitle></DialogHeader>
@@ -265,8 +324,13 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               <Select value={guestResponsibleUid} onValueChange={setGuestResponsibleUid}>
                 <SelectTrigger className="h-12 rounded-2xl"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                 <SelectContent>
-                  {participants.map(p => <SelectItem key={p.uid} value={p.uid}>{p.displayName}</SelectItem>)}
-                  {isAdmin && <SelectItem value={user!.uid}>{user?.displayName} (Admin)</SelectItem>}
+                  {/* Listamos a todos los participantes posibles responsables */}
+                  {event.participantIds.map(uid => (
+                    <SelectItem key={uid} value={uid}>{profilesMap[uid]?.displayName || `Usuario ${uid.substring(0,5)}`}</SelectItem>
+                  ))}
+                  {isAdmin && !event.participantIds.includes(user!.uid) && (
+                    <SelectItem value={user!.uid}>{user?.displayName} (Admin)</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>

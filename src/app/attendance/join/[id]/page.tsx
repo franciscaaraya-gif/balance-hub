@@ -3,13 +3,13 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
-import { addAndMarkPresent, addExternalGuest, removeExternalGuest, toggleGuestPresence, removeParticipantFromEvent } from "@/lib/firebase/store";
+import { addParticipantToEvent, addExternalGuest, removeExternalGuest, toggleGuestPresence, removeParticipantFromEvent } from "@/lib/firebase/store";
 import { Event, ExternalGuest } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Loader2, MapPin, Clock, Plus, CheckCircle2, UserPlus, Info, User, Trash2, CheckCircle, Circle, ArrowLeft } from "lucide-react";
+import { Calendar, Loader2, MapPin, Clock, Plus, CheckCircle2, UserPlus, User, Trash2, CheckCircle, Circle, ArrowLeft, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -41,8 +41,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     if (!user || !event) return;
     setJoining(true);
     try {
-      await addAndMarkPresent(event.id, user.uid);
-      toast({ title: "¡Listo!", description: `Has confirmado tu asistencia a: ${event.title}` });
+      // Cambio a RSVP Provisorio: Solo añade al evento, no marca presencia directamente
+      await addParticipantToEvent(event.id, user.uid);
+      toast({ title: "Asistencia Confirmada", description: `Te has anotado para: ${event.title}. Escanea el QR al llegar.` });
     } catch (error) {
       toast({ variant: "destructive", title: "Error al inscribirse" });
     } finally {
@@ -54,7 +55,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     if (!guestName || !user || !event || event.isCharged) return;
     try {
       await addExternalGuest(event.id, guestName, user.uid);
-      toast({ title: "Invitado añadido", description: `${guestName} se sumó a la cuenta.` });
+      toast({ title: "Invitado añadido", description: `${guestName} se sumó a tu RSVP.` });
       setGuestName("");
     } catch (e) {
       toast({ variant: "destructive", title: "Error" });
@@ -110,6 +111,8 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
   const isEnrolled = event.participantIds?.includes(user.uid) || false;
   const isPresent = event.presentIds?.includes(user.uid) || false;
   const myGuests = event.externalGuests?.filter(g => g.addedBy === user.uid) || [];
+  
+  // Solo los que están presentes cuentan para el dinero
   const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.filter(g => g.present).length || 0);
   const myPresentHeads = (isPresent ? 1 : 0) + myGuests.filter(g => g.present).length;
   
@@ -144,31 +147,31 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
             </div>
           )}
 
-          <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10 space-y-3 shadow-inner">
-             <div className="flex justify-between items-center text-sm">
-               <span className="text-muted-foreground font-medium">Presentes:</span>
-               <span className="font-bold text-primary">{totalPresent}</span>
-             </div>
-             {isEnrolled && (
-               <div className="pt-3 border-t border-primary/10 space-y-2 text-right">
-                 <p className="text-[10px] font-bold text-accent uppercase tracking-wider">Tu Cuota ({myPresentHeads} pers.)</p>
-                 <p className="text-2xl font-headline font-bold text-accent">${myTotalDebt.toFixed(2)}</p>
-               </div>
-             )}
-          </div>
-
           {!isEnrolled ? (
-            <Button className="w-full bg-primary h-14 text-lg font-bold rounded-2xl" onClick={handleJoin} disabled={joining}>
-              {joining ? <Loader2 className="animate-spin mr-2" /> : <><UserPlus className="mr-2 h-5 w-5" /> Confirmar Asistencia</>}
-            </Button>
+            <div className="space-y-4">
+              <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10 text-center">
+                <p className="text-sm font-medium text-primary">Confirma tu asistencia para ser parte del evento.</p>
+              </div>
+              <Button className="w-full bg-primary h-14 text-lg font-bold rounded-2xl shadow-lg shadow-primary/20" onClick={handleJoin} disabled={joining}>
+                {joining ? <Loader2 className="animate-spin mr-2" /> : <><Send className="mr-2 h-5 w-5" /> Confirmar Asistencia</>}
+              </Button>
+            </div>
           ) : (
             <div className="space-y-6">
               <div className={cn(
-                "flex flex-col items-center justify-center gap-2 p-6 rounded-[2rem] font-bold border text-center",
-                isPresent ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-amber-600 bg-amber-50 border-amber-100"
+                "flex flex-col items-center justify-center gap-2 p-6 rounded-[2rem] font-bold border text-center shadow-inner",
+                isPresent ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-primary bg-primary/5 border-primary/10"
               )}>
-                {isPresent ? <CheckCircle2 className="h-8 w-8" /> : <Circle className="h-8 w-8" />}
-                <span className="text-lg leading-tight">{isPresent ? "Estás Presente" : "Escanea el QR al llegar"}</span>
+                {isPresent ? <CheckCircle2 className="h-8 w-8" /> : <div className="h-8 w-8 rounded-full border-2 border-primary/30 flex items-center justify-center text-[10px]">RSVP</div>}
+                <span className="text-lg leading-tight">
+                  {isPresent ? "¡Ya estás Presente!" : "¡Anotado! Escanea el QR al llegar"}
+                </span>
+                {isPresent && isEnrolled && (
+                  <div className="mt-2 pt-2 border-t border-emerald-100 w-full">
+                     <p className="text-[10px] font-black uppercase text-emerald-600/60">Tu Cuota Actual</p>
+                     <p className="text-xl font-headline">${myTotalDebt.toFixed(2)}</p>
+                  </div>
+                )}
               </div>
               
               <div className="space-y-4 border-t pt-6">
@@ -202,9 +205,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                       g.present ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-muted/5 text-muted-foreground border-transparent"
                     )}>
                       <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleToggleGuest(g)} disabled={event.isCharged}>
-                          {g.present ? <CheckCircle className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
-                        </Button>
+                        <div className="h-6 w-6">
+                          {g.present ? <CheckCircle className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 opacity-30" />}
+                        </div>
                         <span>{g.name}</span>
                       </div>
                       {!event.isCharged && (
@@ -214,6 +217,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                       )}
                     </div>
                   ))}
+                  {myGuests.length === 0 && !event.isCharged && (
+                    <p className="text-[10px] text-center text-muted-foreground opacity-50 italic">¿Vienes con alguien más? Sumalo arriba.</p>
+                  )}
                 </div>
               </div>
             </div>
