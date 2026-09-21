@@ -81,15 +81,14 @@ export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserP
   return profiles;
 };
 
-export const createGroup = async (name: string, type: 'fixed' | 'variable', adminId: string, fixedAmount?: number) => {
+export const createGroup = async (name: string, adminId: string) => {
   const inviteToken = Math.random().toString(36).substring(2, 15);
   const inviteLink = `${window.location.origin}/join/${inviteToken}`;
   const groupCollection = collection(db, "groups");
   
   const data = {
     name,
-    type,
-    fixedAmount: fixedAmount || null,
+    type: 'variable',
     adminId,
     memberIds: [adminId],
     memberStatuses: {
@@ -212,7 +211,7 @@ export const createReceipt = (groupId: string, items: any[], creditorId: string)
   const receiptCollection = collection(db, "groups", groupId, "receipts");
   const data = {
     groupId,
-    status: 'open',
+    status: 'active',
     creditorId,
     items: items.map((it, idx) => ({
       id: String(idx),
@@ -341,7 +340,7 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
-  const chargeGroupId = event.id;
+  const chargeGroupId = event.id; // Usamos el ID del evento como ID de grupo de cargos para agrupar en el historial
 
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
@@ -385,7 +384,7 @@ export const chargeEventToGroup = async (eventId: string) => {
     }
   }
 
-  updateDoc(eventRef, { isCharged: true }).catch(error => {
+  return updateDoc(eventRef, { isCharged: true }).catch(error => {
     errorEmitter.emit('permission-error', new FirestorePermissionError({
       path: eventRef.path,
       operation: 'update',

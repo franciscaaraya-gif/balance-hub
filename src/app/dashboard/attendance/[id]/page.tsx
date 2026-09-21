@@ -10,7 +10,8 @@ import {
   removeExternalGuest, 
   addExternalGuest, 
   removeParticipantFromEvent,
-  updateEventSettings
+  updateEventSettings,
+  chargeEventToGroup
 } from "@/lib/firebase/store";
 import { Event, UserProfile, ExternalGuest } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, Trash2, Plus } from "lucide-react";
+import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, Trash2, Plus, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [newGuestName, setNewGuestName] = useState("");
   const [selectedResponsibleId, setSelectedResponsibleId] = useState<string>("");
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
+  const [isCharging, setIsCharging] = useState(false);
 
   const eventRef = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
@@ -137,8 +139,20 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
-  const handleGoToConsolidatedCharge = () => {
-    // Redirige al panel del grupo activando los query params estructurados
+  const handleOneClickCharge = async () => {
+    if (event.isCharged) return;
+    setIsCharging(true);
+    try {
+      await chargeEventToGroup(event.id);
+      toast({ title: "Evento Liquidado", description: "Las deudas se han generado correctamente." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al liquidar", description: error.message });
+    } finally {
+      setIsCharging(false);
+    }
+  };
+
+  const handleGoToAdjustments = () => {
     router.push(`/dashboard/groups/${event.groupId}?openExpense=true&eventId=${event.id}`);
   };
 
@@ -205,10 +219,10 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                     )}>
                       <div className="flex items-center gap-3">
                         <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
-                          {profile?.displayName?.[0] || "U"}
+                          {profile?.displayName?.[0] || profile?.email?.[0] || "U"}
                         </div>
-                        <div>
-                          <p className="text-sm font-bold">{profile?.displayName || profile?.email || `Usuario (${uid.substring(0, 5)})`}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold truncate pr-2">{profile?.displayName || profile?.email || `Usuario (${uid.substring(0, 5)})`}</p>
                           <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter inline-block mt-0.5", badgeStyle)}>
                             {statusLabel}
                           </span>
@@ -271,7 +285,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                             const p = profilesMap[uid];
                             return (
                               <SelectItem key={uid} value={uid} className="text-xs">
-                                {p?.displayName || `Usuario (${uid.substring(0, 5)})`}
+                                {p?.displayName || p?.email || `Usuario (${uid.substring(0, 5)})`}
                               </SelectItem>
                             );
                           })}
@@ -295,10 +309,10 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                       <div className="h-9 w-9 rounded-full bg-secondary/10 flex items-center justify-center font-bold text-secondary text-sm">
                         {guest.name[0]}
                       </div>
-                      <div>
-                        <p className="text-sm font-bold">{guest.name}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold truncate pr-2">{guest.name}</p>
                         <p className="text-[8px] text-muted-foreground uppercase font-black">
-                          Traído por: {profilesMap[guest.addedBy]?.displayName || `Usuario (${guest.addedBy.substring(0, 5)})`}
+                          Traído por: {profilesMap[guest.addedBy]?.displayName || profilesMap[guest.addedBy]?.email || `Usuario (${guest.addedBy.substring(0, 5)})`}
                         </p>
                       </div>
                     </div>
@@ -379,14 +393,24 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               </div>
             </CardContent>
             {isAdmin && (
-              <CardFooter className="bg-muted/5 pt-4">
+              <CardFooter className="bg-muted/5 pt-4 flex flex-col gap-2">
                 <Button 
-                  disabled={event.isCharged}
+                  disabled={event.isCharged || isCharging}
                   className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
-                  onClick={handleGoToConsolidatedCharge}
+                  onClick={handleOneClickCharge}
                 >
-                  {event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar en Grupo</>}
+                  {isCharging ? <Loader2 className="animate-spin" /> : (event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar</>)}
                 </Button>
+                
+                {!event.isCharged && (
+                  <Button 
+                    variant="ghost" 
+                    className="w-full h-10 text-[9px] font-black uppercase tracking-widest gap-2 text-muted-foreground hover:text-primary" 
+                    onClick={handleGoToAdjustments}
+                  >
+                    <Settings2 className="h-3 w-3" /> Ajustar antes de cobrar
+                  </Button>
+                )}
               </CardFooter>
             )}
           </Card>
