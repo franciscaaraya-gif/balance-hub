@@ -5,6 +5,7 @@ export interface UserProfile {
   email: string | null;
   displayName: string | null;
   role: UserRole;
+  transferDetails?: string; // New: personal payment info
   createdAt: number;
 }
 
@@ -32,6 +33,8 @@ export interface Debt {
   id: string;
   groupId: string;
   debtorId: string;
+  creditorId: string; // New: who receives the money
+  chargeGroupId: string; // New: links multiple debts to one expense
   amount: number;
   description: string;
   status: DebtStatus;
@@ -41,7 +44,7 @@ export interface Debt {
   groupName?: string;
   eventName?: string;
   eventId?: string;
-  transferDetails?: string;
+  transferDetails?: string; // Legacy/Fallback
   createdAt: number;
   updatedAt: number;
 }

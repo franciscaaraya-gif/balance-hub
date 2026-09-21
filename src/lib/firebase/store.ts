@@ -38,6 +38,18 @@ export const createUserProfile = async (uid: string, email: string, displayName:
   });
 };
 
+export const updateUserProfile = async (uid: string, data: Partial<UserProfile>) => {
+  const userRef = doc(db, "userProfiles", uid);
+  return updateDoc(userRef, data).catch(error => {
+    errorEmitter.emit('permission-error', new FirestorePermissionError({
+      path: userRef.path,
+      operation: 'update',
+      requestResourceData: data
+    }));
+    throw error;
+  });
+};
+
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   const userRef = doc(db, "userProfiles", uid);
   try {
@@ -49,10 +61,9 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         email: data.email || "",
         displayName: data.displayName || "Usuario",
         role: data.role || "user",
+        transferDetails: data.transferDetails || "",
         createdAt: data.createdAt || Date.now()
       };
-    } else {
-      console.error(`[getUserProfile] No se encontró el perfil de usuario para el uid: ${uid}`);
     }
   } catch (error) {
     console.error(`[getUserProfile] Error al leer perfil para uid: ${uid}`, error);
@@ -115,6 +126,8 @@ export const addDebt = async (
   debtorId: string, 
   amount: number, 
   description: string, 
+  creditorId?: string,
+  chargeGroupId?: string,
   receiptId?: string,
   extraData?: { eventId?: string; eventName?: string }
 ) => {
@@ -127,6 +140,8 @@ export const addDebt = async (
   const data = {
     groupId,
     debtorId,
+    creditorId: creditorId || group.adminId,
+    chargeGroupId: chargeGroupId || Math.random().toString(36).substring(7),
     amount,
     description,
     status: 'pending',
@@ -134,14 +149,14 @@ export const addDebt = async (
     groupAdminId: group.adminId,
     groupMemberIds: group.memberIds,
     groupName: group.name,
-    transferDetails: group.transferDetails || null,
+    transferDetails: group.transferDetails || null, // Legacy support
     eventId: extraData?.eventId || null,
     eventName: extraData?.eventName || null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
 
-  addDoc(debtCollection, data).catch(error => {
+  return addDoc(debtCollection, data).catch(error => {
     errorEmitter.emit('permission-error', new FirestorePermissionError({
       path: debtCollection.path,
       operation: 'create',
@@ -150,18 +165,21 @@ export const addDebt = async (
   });
 };
 
-export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[]) => {
+export const addFixedDebtToAll = async (groupId: string, amount: number, description: string, memberIds: string[], creditorId: string) => {
   const batch = writeBatch(db);
   const groupRef = doc(db, "groups", groupId);
   const groupSnap = await getDoc(groupRef);
   if (!groupSnap.exists()) return;
   const group = groupSnap.data() as Group;
+  const chargeGroupId = Math.random().toString(36).substring(7);
 
   memberIds.forEach(uid => {
     const debtRef = doc(collection(db, "groups", groupId, "debts"));
     batch.set(debtRef, {
       groupId,
       debtorId: uid,
+      creditorId,
+      chargeGroupId,
       amount,
       description,
       status: 'pending',
@@ -221,14 +239,15 @@ export const claimReceiptItem = async (groupId: string, receiptId: string, itemI
   return updateDoc(docRef, { items: updatedItems });
 };
 
-export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[]) => {
+export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[], creditorId: string, description?: string) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
+  const chargeGroupId = Math.random().toString(36).substring(7);
   
   for (const item of items) {
     for (const claim of item.claims) {
       const amount = (item.price * claim.percentage) / 100;
       if (amount > 0) {
-        await addDebt(groupId, claim.userId, amount, `Consumo: ${item.name}`, receiptId);
+        await addDebt(groupId, claim.userId, amount, description || `Consumo: ${item.name}`, creditorId, chargeGroupId, receiptId);
       }
     }
   }
@@ -248,8 +267,8 @@ export const getGroupByToken = async (inviteToken: string): Promise<Group | null
   const q = query(collection(db, "groups"), where("inviteToken", "==", inviteToken), limit(1));
   const snap = await getDocs(q);
   if (snap.empty) return null;
-  const doc = snap.docs[0];
-  return { ...doc.data(), id: doc.id } as Group;
+  const docSnap = snap.docs[0];
+  return { ...docSnap.data(), id: docSnap.id } as Group;
 };
 
 export const joinGroupByInvite = async (userId: string, inviteToken: string) => {
@@ -325,6 +344,7 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
+  const chargeGroupId = event.id; // Use eventId as chargeGroupId
 
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
@@ -343,6 +363,8 @@ export const chargeEventToGroup = async (eventId: string) => {
         uid, 
         finalAmount, 
         descriptionText, 
+        event.creatorId,
+        chargeGroupId,
         undefined,
         { eventId: event.id, eventName: event.title }
       );
@@ -357,6 +379,8 @@ export const chargeEventToGroup = async (eventId: string) => {
           uid, 
           costPerHead, 
           `${event.title}: ${conceptText} (Ausencia autorizada con cargo)`, 
+          event.creatorId,
+          chargeGroupId,
           undefined,
           { eventId: event.id, eventName: event.title }
         );
