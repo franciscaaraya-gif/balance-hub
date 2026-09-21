@@ -41,10 +41,14 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
   return snap.exists() ? (snap.data() as UserProfile) : null;
 };
 
-export const getAllUsers = async (): Promise<UserProfile[]> => {
-  const q = query(collection(db, "userProfiles"), limit(100));
-  const snap = await getDocs(q);
-  return snap.docs.map(doc => doc.data() as UserProfile);
+export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserProfile[]> => {
+  if (!memberIds || memberIds.length === 0) return [];
+  const profiles: UserProfile[] = [];
+  for (const id of memberIds) {
+    const p = await getUserProfile(id);
+    if (p) profiles.push(p);
+  }
+  return profiles;
 };
 
 export const createGroup = async (name: string, type: 'fixed' | 'variable', adminId: string, fixedAmount?: number) => {
@@ -161,6 +165,37 @@ export const updateDebtStatusInGroup = (groupId: string, debtId: string, status:
   });
 };
 
+export const createReceipt = (groupId: string, items: any[]) => {
+  const receiptCollection = collection(db, "groups", groupId, "receipts");
+  const data = {
+    groupId,
+    status: 'open',
+    items: items.map((it, idx) => ({
+      id: String(idx),
+      name: it.name,
+      price: it.price,
+      claims: []
+    })),
+    createdAt: Date.now()
+  };
+  return addDoc(receiptCollection, data);
+};
+
+export const claimReceiptItem = async (groupId: string, receiptId: string, itemId: string, userId: string, percentage: number, currentItems: ReceiptItem[]) => {
+  const docRef = doc(db, "groups", groupId, "receipts", receiptId);
+  const updatedItems = currentItems.map(item => {
+    if (item.id === itemId) {
+      const filteredClaims = item.claims.filter(c => c.userId !== userId);
+      if (percentage > 0) {
+        filteredClaims.push({ userId, percentage });
+      }
+      return { ...item, claims: filteredClaims };
+    }
+    return item;
+  });
+  return updateDoc(docRef, { items: updatedItems });
+};
+
 export const finalizeReceipt = async (groupId: string, receiptId: string, items: ReceiptItem[]) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   
@@ -207,16 +242,6 @@ export const joinGroupByInvite = async (userId: string, inviteToken: string) => 
   return group.id;
 };
 
-export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserProfile[]> => {
-  if (!memberIds || memberIds.length === 0) return [];
-  const profiles: UserProfile[] = [];
-  for (const id of memberIds) {
-    const p = await getUserProfile(id);
-    if (p) profiles.push(p);
-  }
-  return profiles;
-};
-
 export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantIds' | 'presentIds' | 'externalGuests' | 'shareLink' | 'isCharged'>) => {
   const eventCollection = collection(db, "events");
   const eventRef = doc(eventCollection);
@@ -244,6 +269,11 @@ export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantI
   return eventRef;
 };
 
+export const updateEventSettings = (eventId: string, chargeAbsentees: boolean) => {
+  const eventRef = doc(db, "events", eventId);
+  return updateDoc(eventRef, { chargeAbsentees });
+};
+
 export const chargeEventToGroup = async (eventId: string) => {
   const eventRef = doc(db, "events", eventId);
   const eventSnap = await getDoc(eventRef);
@@ -254,12 +284,18 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   const totalPresentParticipants = event.presentIds?.length || 0;
   const totalPresentGuests = event.externalGuests?.filter(g => g.present).length || 0;
-  const totalHeads = totalPresentParticipants + totalPresentGuests;
+  
+  const absentIds = event.participantIds.filter(id => !event.presentIds.includes(id));
+  const totalAbsents = absentIds.length;
 
-  if (totalHeads === 0) throw new Error("No hay asistentes para cobrar.");
+  const totalHeads = totalPresentParticipants + totalPresentGuests + (event.chargeAbsentees ? totalAbsents : 0);
+
+  if (totalHeads === 0) throw new Error("No hay asistentes ni ausentes configurados para cobrar.");
 
   const costPerHead = event.totalCost / totalHeads;
+  const conceptText = event.costConcept || "Gasto de Evento";
 
+  // Cobrar a los presentes
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
     const multiplier = 1 + myGuests.length;
@@ -270,10 +306,26 @@ export const chargeEventToGroup = async (eventId: string) => {
         event.groupId, 
         uid, 
         finalAmount, 
-        `Asistencia: ${event.title} (${multiplier} cabezas)`, 
+        `${event.title}: ${conceptText} (Presente + ${myGuests.length} invitados)`, 
         undefined,
         { eventId: event.id, eventName: event.title }
       );
+    }
+  }
+
+  // Cobrar a los ausentes sólo si aplica el switch
+  if (event.chargeAbsentees) {
+    for (const uid of absentIds) {
+      if (costPerHead > 0) {
+        await addDebt(
+          event.groupId, 
+          uid, 
+          costPerHead, 
+          `${event.title}: ${conceptText} (Ausencia autorizada con cargo)`, 
+          undefined,
+          { eventId: event.id, eventName: event.title }
+        );
+      }
     }
   }
 
@@ -286,19 +338,41 @@ export const chargeEventToGroup = async (eventId: string) => {
   });
 };
 
-export const addParticipantToEvent = (eventId: string, userId: string) => {
+export const addParticipantToEvent = async (eventId: string, userId: string) => {
   const eventRef = doc(db, "events", eventId);
-  return updateDoc(eventRef, {
+  await updateDoc(eventRef, {
     participantIds: arrayUnion(userId)
   });
+  
+  const eventSnap = await getDoc(eventRef);
+  if (eventSnap.exists()) {
+    const ev = eventSnap.data() as Event;
+    const groupRef = doc(db, "groups", ev.groupId);
+    await updateDoc(groupRef, {
+      members: arrayUnion(userId),
+      memberIds: arrayUnion(userId),
+      [`memberStatuses.${userId}`]: 'active'
+    }).catch(() => {});
+  }
 };
 
-export const addAndMarkPresent = (eventId: string, userId: string) => {
+export const addAndMarkPresent = async (eventId: string, userId: string) => {
   const eventRef = doc(db, "events", eventId);
-  return updateDoc(eventRef, {
+  await updateDoc(eventRef, {
     participantIds: arrayUnion(userId),
     presentIds: arrayUnion(userId)
   });
+
+  const eventSnap = await getDoc(eventRef);
+  if (eventSnap.exists()) {
+    const ev = eventSnap.data() as Event;
+    const groupRef = doc(db, "groups", ev.groupId);
+    await updateDoc(groupRef, {
+      members: arrayUnion(userId),
+      memberIds: arrayUnion(userId),
+      [`memberStatuses.${userId}`]: 'active'
+    }).catch(() => {});
+  }
 };
 
 export const toggleAttendance = (eventId: string, userId: string, isPresent: boolean) => {
@@ -311,7 +385,7 @@ export const toggleAttendance = (eventId: string, userId: string, isPresent: boo
 export const addExternalGuest = (eventId: string, name: string, addedBy: string) => {
   const eventRef = doc(db, "events", eventId);
   return updateDoc(eventRef, {
-    externalGuests: arrayUnion({ name, addedBy, present: false })
+    externalGuests: arrayUnion({ name, addedBy, present: true })
   });
 };
 
@@ -338,14 +412,8 @@ export const toggleGuestPresence = async (eventId: string, guestName: string, ad
 
 export const removeParticipantFromEvent = async (eventId: string, userId: string) => {
   const eventRef = doc(db, "events", eventId);
-  const snap = await getDoc(eventRef);
-  if (!snap.exists()) return;
-  const event = snap.data() as Event;
-  if (event.isCharged) return;
-  
   return updateDoc(eventRef, {
     participantIds: arrayRemove(userId),
-    presentIds: arrayRemove(userId),
-    externalGuests: event.externalGuests.filter(g => g.addedBy !== userId)
+    presentIds: arrayRemove(userId)
   });
 };

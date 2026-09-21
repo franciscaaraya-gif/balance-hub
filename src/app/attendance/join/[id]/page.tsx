@@ -3,16 +3,13 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
-import { addParticipantToEvent, addExternalGuest, removeExternalGuest, toggleGuestPresence, removeParticipantFromEvent } from "@/lib/firebase/store";
-import { Event, ExternalGuest } from "@/lib/types";
+import { addParticipantToEvent } from "@/lib/firebase/store";
+import { Event } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Calendar, Loader2, MapPin, Clock, Plus, CheckCircle2, UserPlus, User, Trash2, CheckCircle, Circle, ArrowLeft, Send } from "lucide-react";
+import { Calendar, Loader2, MapPin, Clock, User, Send, ArrowLeft, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
-import { cn } from "@/lib/utils";
 
 export default function JoinEvent({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -22,7 +19,6 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
   const firestore = useFirestore();
 
   const [joining, setJoining] = useState(false);
-  const [guestName, setGuestName] = useState("");
 
   const eventRef = useMemoFirebase(() => {
     if (!firestore || !params.id) return null;
@@ -41,9 +37,8 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     if (!user || !event) return;
     setJoining(true);
     try {
-      // Cambio a RSVP Provisorio: Solo añade al evento, no marca presencia directamente
       await addParticipantToEvent(event.id, user.uid);
-      toast({ title: "Asistencia Confirmada", description: `Te has anotado para: ${event.title}. Escanea el QR al llegar.` });
+      toast({ title: "RSVP Confirmado", description: "Te has anotado al evento y eres miembro oficial del grupo de cobro." });
     } catch (error) {
       toast({ variant: "destructive", title: "Error al inscribirse" });
     } finally {
@@ -51,41 +46,11 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
     }
   };
 
-  const handleAddGuest = async () => {
-    if (!guestName || !user || !event || event.isCharged) return;
-    try {
-      await addExternalGuest(event.id, guestName, user.uid);
-      toast({ title: "Invitado añadido", description: `${guestName} se sumó a tu RSVP.` });
-      setGuestName("");
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
-  const handleRemoveGuest = async (guest: ExternalGuest) => {
-    if (!event || event.isCharged) return;
-    try {
-      await removeExternalGuest(event.id, guest);
-      toast({ title: "Invitado eliminado" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
-  const handleToggleGuest = async (guest: ExternalGuest) => {
-    if (!event || event.isCharged) return;
-    try {
-      await toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
   if (isUserLoading || eventLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4 bg-background">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground animate-pulse font-medium">Cargando evento...</p>
+        <p className="text-muted-foreground animate-pulse font-medium">Cargando detalles del evento...</p>
       </div>
     );
   }
@@ -98,10 +63,10 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
         <Card className="max-w-md w-full text-center py-10 shadow-lg border-none">
           <CardHeader>
             <CardTitle className="text-2xl font-headline">Evento no encontrado</CardTitle>
-            <CardDescription>El enlace parece no ser válido o el evento fue eliminado.</CardDescription>
+            <CardDescription>El enlace parece inválido o fue dado de baja.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => router.push("/dashboard")} className="w-full">Volver al Dashboard</Button>
+            <Button onClick={() => router.push("/dashboard")} className="w-full">Ir al Dashboard</Button>
           </CardContent>
         </Card>
       </div>
@@ -109,18 +74,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
   }
 
   const isEnrolled = event.participantIds?.includes(user.uid) || false;
-  const isPresent = event.presentIds?.includes(user.uid) || false;
-  const myGuests = event.externalGuests?.filter(g => g.addedBy === user.uid) || [];
-  
-  // Solo los que están presentes cuentan para el dinero
-  const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.filter(g => g.present).length || 0);
-  const myPresentHeads = (isPresent ? 1 : 0) + myGuests.filter(g => g.present).length;
-  
-  const costPerHead = totalPresent > 0 ? event.totalCost / totalPresent : 0;
-  const myTotalDebt = costPerHead * myPresentHeads;
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-muted/30 p-2 sm:p-4">
+    <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
       <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-white rounded-[2rem]">
         <div className="h-2 bg-accent" />
         <CardHeader className="text-center space-y-3 pb-6 pt-8">
@@ -130,104 +86,46 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
           <div>
             <CardTitle className="text-2xl sm:text-3xl font-headline font-bold text-primary px-2 leading-tight">{event.title}</CardTitle>
             <p className="text-[10px] text-muted-foreground font-bold flex items-center justify-center gap-1 mt-2">
-              <User className="h-3 w-3" /> Organizado por: {event.creatorName}
+              <User className="h-3 w-3" /> Organizado por: {event.creatorName || "Administrador"}
             </p>
             <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground font-medium mt-3 px-4">
-              <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-full"><MapPin className="h-3.5 w-3.5" /> {event.location}</span>
+              <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-full"><MapPin className="h-3.5 w-3.5" /> {event.location || "Presencial"}</span>
               <span className="flex items-center gap-1 bg-muted px-2 py-1 rounded-full"><Clock className="h-3.5 w-3.5" /> {event.time}</span>
             </div>
           </div>
         </CardHeader>
         
         <CardContent className="space-y-6 px-6 pb-10">
-          {event.isCharged && (
-            <div className="bg-emerald-50 text-emerald-700 p-4 rounded-2xl flex items-center gap-3 border border-emerald-100 mb-2">
-              <CheckCircle2 className="h-5 w-5 shrink-0" />
-              <p className="text-[11px] font-bold uppercase leading-tight">Este evento ya ha sido liquidado.</p>
-            </div>
-          )}
+          <div className="bg-muted/40 p-4 rounded-xl text-center text-xs text-muted-foreground">
+            Concepto del Costo: <span className="font-bold text-primary">{event.costConcept || "Gasto general"}</span>
+          </div>
 
           {!isEnrolled ? (
             <div className="space-y-4">
-              <div className="bg-primary/5 p-5 rounded-3xl border border-primary/10 text-center">
-                <p className="text-sm font-medium text-primary">Confirma tu asistencia para ser parte del evento.</p>
+              <div className="bg-primary/5 p-5 rounded-2xl border border-primary/10 text-center">
+                <p className="text-xs text-muted-foreground">
+                  Al confirmar quedarás agendado en el evento e ingresarás automáticamente como miembro con acceso total al grupo de pagos.
+                </p>
               </div>
-              <Button className="w-full bg-primary h-14 text-lg font-bold rounded-2xl shadow-lg shadow-primary/20" onClick={handleJoin} disabled={joining}>
-                {joining ? <Loader2 className="animate-spin mr-2" /> : <><Send className="mr-2 h-5 w-5" /> Confirmar Asistencia</>}
+              <Button className="w-full bg-accent hover:bg-accent/90 h-14 text-lg font-bold rounded-2xl shadow-lg text-white" onClick={handleJoin} disabled={joining}>
+                {joining ? <Loader2 className="animate-spin mr-2" /> : <><Send className="mr-2 h-5 w-5" /> Confirmar Asistencia (RSVP)</>}
               </Button>
             </div>
           ) : (
-            <div className="space-y-6">
-              <div className={cn(
-                "flex flex-col items-center justify-center gap-2 p-6 rounded-[2rem] font-bold border text-center shadow-inner",
-                isPresent ? "text-emerald-600 bg-emerald-50 border-emerald-100" : "text-primary bg-primary/5 border-primary/10"
-              )}>
-                {isPresent ? <CheckCircle2 className="h-8 w-8" /> : <div className="h-8 w-8 rounded-full border-2 border-primary/30 flex items-center justify-center text-[10px]">RSVP</div>}
-                <span className="text-lg leading-tight">
-                  {isPresent ? "¡Ya estás Presente!" : "¡Anotado! Escanea el QR al llegar"}
-                </span>
-                {isPresent && isEnrolled && (
-                  <div className="mt-2 pt-2 border-t border-emerald-100 w-full">
-                     <p className="text-[10px] font-black uppercase text-emerald-600/60">Tu Cuota Actual</p>
-                     <p className="text-xl font-headline">${myTotalDebt.toFixed(2)}</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="space-y-4 border-t pt-6">
-                <div className="flex justify-between items-end">
-                  <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Tus Invitados (+1)</Label>
-                  {!event.isCharged && (
-                    <Button variant="ghost" size="sm" className="h-7 text-[9px] font-black uppercase text-destructive" onClick={() => removeParticipantFromEvent(event.id, user.uid)}>
-                      Darse de baja
-                    </Button>
-                  )}
-                </div>
-
-                {!event.isCharged && (
-                  <div className="flex gap-2">
-                    <Input 
-                      placeholder="Nombre del acompañante" 
-                      value={guestName} 
-                      onChange={e => setGuestName(e.target.value)} 
-                      className="h-12 rounded-2xl bg-muted/50 border-none" 
-                    />
-                    <Button size="icon" className="h-12 w-12 bg-accent rounded-2xl" onClick={handleAddGuest} disabled={!guestName}>
-                      <Plus className="h-6 w-6 text-white" />
-                    </Button>
-                  </div>
-                )}
-                
-                <div className="space-y-2 mt-4">
-                  {myGuests.map((g, i) => (
-                    <div key={i} className={cn(
-                      "text-sm font-bold px-4 py-3 rounded-2xl flex justify-between items-center border",
-                      g.present ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-muted/5 text-muted-foreground border-transparent"
-                    )}>
-                      <div className="flex items-center gap-3">
-                        <div className="h-6 w-6">
-                          {g.present ? <CheckCircle className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 opacity-30" />}
-                        </div>
-                        <span>{g.name}</span>
-                      </div>
-                      {!event.isCharged && (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 hover:text-destructive" onClick={() => handleRemoveGuest(g)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                  {myGuests.length === 0 && !event.isCharged && (
-                    <p className="text-[10px] text-center text-muted-foreground opacity-50 italic">¿Vienes con alguien más? Sumalo arriba.</p>
-                  )}
-                </div>
+            <div className="space-y-4 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 p-6 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold">
+                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                <span className="text-base">¡Ya estás confirmado para esta fecha!</span>
+                <p className="text-[10px] text-emerald-600/80 font-medium font-body pt-1">
+                  {event.isCharged ? "Este evento ya ha sido liquidado." : "Escanea el código QR del administrador al llegar para registrar tu presencia física."}
+                </p>
               </div>
             </div>
           )}
 
           <div className="pt-2">
             <Button variant="ghost" className="w-full text-muted-foreground text-[10px] font-black uppercase tracking-widest gap-2" onClick={() => router.push("/dashboard/attendance")}>
-              <ArrowLeft className="h-3 w-3" /> Mis eventos
+              <ArrowLeft className="h-3 w-3" /> Ver mis eventos
             </Button>
           </div>
         </CardContent>

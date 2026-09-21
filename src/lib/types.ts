@@ -1,4 +1,3 @@
-
 export type UserRole = 'admin' | 'user';
 
 export interface UserProfile {
@@ -39,7 +38,6 @@ export interface Debt {
   receiptId?: string;
   groupAdminId: string;
   groupMemberIds: string[];
-  // Campos denormalizados para acceso autónomo (Nivel 2)
   groupName?: string;
   eventName?: string;
   eventId?: string;
@@ -82,6 +80,8 @@ export interface Event {
   time: string;
   location: string;
   totalCost: number;
+  costConcept: string;
+  chargeAbsentees: boolean;
   creatorId: string;
   creatorName?: string;
   groupId: string;

@@ -5,7 +5,7 @@ import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebas
 import { createGroup } from "@/lib/firebase/store";
 import { Group, Debt } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -36,25 +36,20 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
 
-  const myGroupIds = useMemo(() => new Set(myGroups?.map(g => g.id) || []), [myGroups]);
   const pendingDebts = useMemo(() => myDebts?.filter(d => d.status !== 'paid') || [], [myDebts]);
-  
-  const externalEventDebts = useMemo(() => pendingDebts.filter(d => !myGroupIds.has(d.groupId) && d.eventId), [pendingDebts, myGroupIds]);
-  const memberDebts = useMemo(() => pendingDebts.filter(d => myGroupIds.has(d.groupId)), [pendingDebts, myGroupIds]);
 
   const handleCreateGroup = async () => {
     if (!newGroupName || !user) return;
     try {
       await createGroup(newGroupName, newGroupType, user.uid);
-      toast({ title: "Grupo creado", description: "El grupo se ha guardado correctamente en el servidor." });
+      toast({ title: "Grupo creado", description: "El grupo se ha guardado correctamente." });
       setNewGroupName("");
       setOpen(false);
     } catch (e: any) {
-      console.error("Error detallado al crear grupo:", e);
       toast({ 
         variant: "destructive", 
         title: "Error al crear grupo", 
-        description: e.message || "Asegúrate de tener permisos para crear grupos." 
+        description: e.message || "Asegúrate de tener permisos." 
       });
     }
   };
@@ -74,27 +69,27 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName}!</h1>
-          <p className="text-muted-foreground">Gestiona tus cobros y pagos desde aquí.</p>
+          <p className="text-muted-foreground">Monitorea deudas, saldos grupales e ingresos transparentes.</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="bg-accent h-12 px-6 shadow-lg shadow-accent/20 rounded-2xl">
-              <PlusCircle className="h-5 w-5 mr-2" /> Nuevo Cobro Grupal
+              <PlusCircle className="h-5 w-5 mr-2" /> Nuevo Grupo de Cobro
             </Button>
           </DialogTrigger>
           <DialogContent className="rounded-[2.5rem] border-none p-8">
             <DialogHeader><DialogTitle className="text-2xl font-headline">Crear Grupo</DialogTitle></DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="space-y-1"><Label>Nombre</Label><Input placeholder="Ej: Asado Familiar" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} className="rounded-xl h-12" /></div>
+              <div className="space-y-1"><Label>Nombre del Grupo</Label><Input placeholder="Ej: Amigos del Padel / Asados" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} className="rounded-xl h-12" /></div>
               <div className="space-y-1">
-                <Label>Tipo</Label>
+                <Label>Modalidad predeterminada de división</Label>
                 <div className="grid grid-cols-2 gap-4">
                   <Button variant={newGroupType === 'fixed' ? 'default' : 'outline'} onClick={() => setNewGroupType('fixed')} className="h-20 flex-col rounded-2xl">Partes Iguales</Button>
-                  <Button variant={newGroupType === 'variable' ? 'default' : 'outline'} onClick={() => setNewGroupType('variable')} className="h-20 flex-col rounded-2xl">Variable</Button>
+                  <Button variant={newGroupType === 'variable' ? 'default' : 'outline'} onClick={() => setNewGroupType('variable')} className="h-20 flex-col rounded-2xl">Por Consumo (Variable)</Button>
                 </div>
               </div>
             </div>
-            <DialogFooter><Button onClick={handleCreateGroup} className="w-full h-12 rounded-xl">Crear</Button></DialogFooter>
+            <DialogFooter><Button onClick={handleCreateGroup} className="w-full h-12 rounded-xl">Crear Grupo</Button></DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
@@ -102,63 +97,48 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-10">
           <section className="space-y-6">
-            <h2 className="text-xl font-headline font-bold flex items-center gap-2"><Calendar className="h-5 w-5 text-accent" /> Pagos de Eventos (Externos)</h2>
-            {externalEventDebts.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {externalEventDebts.map(debt => (
-                  <Card key={debt.id} className="border-none shadow-sm bg-white rounded-[2rem] overflow-hidden hover:shadow-md transition-all">
-                    <div className="h-1 bg-accent w-full" />
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                         <div>
-                           <p className="text-[9px] font-black text-muted-foreground uppercase tracking-wider">{debt.groupName}</p>
-                           <CardTitle className="text-base font-headline">{debt.eventName}</CardTitle>
-                         </div>
-                         {getStatusBadge(debt.status)}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="flex justify-between items-end"><span className="text-[9px] font-black uppercase text-muted-foreground">Monto</span><span className="text-2xl font-headline font-bold text-accent">${debt.amount.toFixed(2)}</span></div>
-                      <Button variant="outline" className="w-full h-11 rounded-xl text-xs font-bold gap-2 border-accent text-accent" onClick={() => setSelectedDebt(debt)}><CreditCard className="h-4 w-4" /> Pagar Ahora</Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <Card className="border-dashed bg-transparent py-10 rounded-[2rem] flex flex-col items-center opacity-20"><Calendar className="h-10 w-10 mb-2" /><p className="text-[10px] font-bold uppercase tracking-widest">Sin deudas externas</p></Card>
-            )}
-          </section>
-
-          <section className="space-y-6">
-            <h2 className="text-xl font-headline font-bold flex items-center gap-2"><ReceiptText className="h-5 w-5 text-primary" /> Mis Grupos</h2>
+            <h2 className="text-xl font-headline font-bold flex items-center gap-2"><ReceiptText className="h-5 w-5 text-primary" /> Mis Grupos Activos</h2>
             <div className="grid gap-6 sm:grid-cols-2">
               {myGroupsLoading ? [1,2].map(i => <div key={i} className="h-40 rounded-[2rem] bg-muted animate-pulse" />) : myGroups?.map(g => (
                 <Link key={g.id} href={`/dashboard/groups/${g.id}`}>
                   <Card className="hover:shadow-lg transition-all border-none bg-white rounded-[2rem] overflow-hidden group">
                     <div className="h-1.5 bg-primary w-full" />
                     <CardHeader className="pb-4"><CardTitle className="mt-2 text-lg font-headline group-hover:text-primary transition-colors">{g.name}</CardTitle></CardHeader>
-                    <CardContent><div className="flex justify-between text-[10px] text-muted-foreground pt-4 border-t font-bold uppercase tracking-wider"><span><Users className="h-3 w-3 inline mr-1" /> {g.memberIds.length} MIEMBROS</span><span className="text-primary group-hover:translate-x-1 transition-transform">IR <ChevronRight className="h-3 w-3 inline" /></span></div></CardContent>
+                    <CardContent><div className="flex justify-between text-[10px] text-muted-foreground pt-4 border-t font-bold uppercase tracking-wider"><span><Users className="h-3 w-3 inline mr-1" /> {g.memberIds.length} MIEMBROS</span><span className="text-primary group-hover:translate-x-1 transition-transform">VER PANEL <ChevronRight className="h-3 w-3 inline" /></span></div></CardContent>
                   </Card>
                 </Link>
               ))}
+              {myGroups?.length === 0 && (
+                <p className="text-xs italic text-muted-foreground opacity-60">Aún no eres miembro de ningún grupo. Crea uno arriba o únete por enlace.</p>
+              )}
             </div>
           </section>
         </div>
 
+        {/* Billetera integrada unificada */}
         <div className="space-y-6">
-          <h2 className="text-xl font-headline font-bold flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" /> Billetera</h2>
+          <h2 className="text-xl font-headline font-bold flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" /> Billetera Consolidada</h2>
           <Card className="border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden">
             <div className="bg-primary p-8 text-primary-foreground text-center">
-               <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-2">Total Pendiente</p>
+               <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-2">Total que Debes Settlear</p>
                <p className="text-5xl font-headline font-bold">${pendingDebts.reduce((sum, d) => sum + d.amount, 0).toFixed(2)}</p>
             </div>
             <CardContent className="p-6 space-y-3">
-              {myDebtsLoading ? [1,2].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-xl" />) : memberDebts.length === 0 ? (
-                <div className="py-6 text-center opacity-30"><CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" /><p className="text-[10px] font-bold uppercase tracking-widest">Al día</p></div>
-              ) : memberDebts.map(debt => (
+              {myDebtsLoading ? [1,2].map(i => <div key={i} className="h-12 bg-muted animate-pulse rounded-xl" />) : pendingDebts.length === 0 ? (
+                <div className="py-6 text-center opacity-30"><CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" /><p className="text-[10px] font-bold uppercase tracking-widest">Al día con todos tus grupos</p></div>
+              ) : pendingDebts.map(debt => (
                 <div key={debt.id} className="flex flex-col p-4 bg-muted/10 rounded-2xl gap-2">
-                  <div className="flex justify-between items-start"><div className="space-y-0.5"><p className="text-[8px] font-black uppercase text-muted-foreground">{debt.groupName}</p><p className="text-xs font-bold truncate max-w-[120px]">{debt.eventName || debt.description}</p></div><span className="text-sm font-bold text-primary">${debt.amount.toFixed(2)}</span></div>
-                  <div className="flex justify-between items-center">{getStatusBadge(debt.status)}<Button variant="ghost" size="sm" className="h-6 text-[8px] font-black uppercase" onClick={() => setSelectedDebt(debt)}>Ver Pago</Button></div>
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-0.5">
+                      <p className="text-[8px] font-black uppercase text-muted-foreground">{debt.groupName || "Grupo"}</p>
+                      <p className="text-xs font-bold truncate max-w-[140px]">{debt.description}</p>
+                    </div>
+                    <span className="text-sm font-bold text-accent">${debt.amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    {getStatusBadge(debt.status)}
+                    <Button variant="ghost" size="sm" className="h-6 text-[8px] font-black uppercase" onClick={() => setSelectedDebt(debt)}>Instrucciones de Pago</Button>
+                  </div>
                 </div>
               ))}
             </CardContent>
@@ -168,13 +148,13 @@ export default function Dashboard() {
 
       <Dialog open={!!selectedDebt} onOpenChange={val => !val && setSelectedDebt(null)}>
         <DialogContent className="max-w-md rounded-[2.5rem] border-none p-8">
-          <DialogHeader className="text-center pb-6"><div className="bg-accent/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><CreditCard className="h-8 w-8 text-accent" /></div><DialogTitle className="text-2xl font-headline font-bold">Detalle de Pago</DialogTitle><p className="text-[10px] font-black uppercase tracking-widest opacity-50">{selectedDebt?.groupName}</p></DialogHeader>
+          <DialogHeader className="text-center pb-6"><div className="bg-accent/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"><CreditCard className="h-8 w-8 text-accent" /></div><DialogTitle className="text-2xl font-headline font-bold">Detalle de Depósito</DialogTitle><p className="text-[10px] font-black uppercase tracking-widest opacity-50">{selectedDebt?.groupName}</p></DialogHeader>
           {selectedDebt && (
             <div className="space-y-6 text-center">
-              <div className="bg-muted/30 p-8 rounded-[2rem] space-y-1"><p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Monto a Transferir</p><p className="text-5xl font-headline font-bold text-primary">${selectedDebt.amount.toFixed(2)}</p></div>
+              <div className="bg-muted/30 p-8 rounded-[2rem] space-y-1"><p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Monto Neto a Transferir</p><p className="text-5xl font-headline font-bold text-primary">${selectedDebt.amount.toFixed(2)}</p></div>
               <div className="space-y-3 text-left">
-                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Datos para el depósito</Label>
-                <div className="bg-primary/5 p-5 rounded-2xl font-mono text-xs text-primary border border-primary/10 whitespace-pre-wrap">{selectedDebt.transferDetails || "Sin datos."}</div>
+                <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Datos Bancarios del Administrador</Label>
+                <div className="bg-primary/5 p-5 rounded-2xl font-mono text-xs text-primary border border-primary/10 whitespace-pre-wrap">{selectedDebt.transferDetails || "El administrador del grupo no ha cargado datos de transferencia todavía."}</div>
               </div>
               <Button className="w-full h-14 rounded-2xl font-bold text-lg shadow-xl shadow-primary/20" onClick={() => setSelectedDebt(null)}>Entendido</Button>
             </div>

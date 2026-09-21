@@ -1,26 +1,24 @@
 "use client";
 
-import { useEffect, useState, use, useMemo } from "react";
+import { useEffect, useState, use } from "react";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { 
-  addParticipantToEvent, 
   toggleAttendance, 
   getGroupMembersDetails, 
   toggleGuestPresence, 
   removeExternalGuest, 
   chargeEventToGroup, 
   addExternalGuest, 
-  removeParticipantFromEvent 
+  removeParticipantFromEvent,
+  updateEventSettings
 } from "@/lib/firebase/store";
-import { Event, UserProfile, ExternalGuest, Group } from "@/lib/types";
+import { Event, UserProfile, ExternalGuest } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, MapPin, Clock, Users, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Plus, Coins, ArrowLeft, User, Trash2, XCircle, ShieldCheck } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, User, Trash2, XCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -31,15 +29,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const [addingNonEnrolled, setAddingNonEnrolled] = useState(false);
   const [isCharging, setIsCharging] = useState(false);
   const [showQr, setShowQr] = useState(false);
-  
-  // Diccionario de perfiles para evitar el bug de "desaparición" si falla un perfil
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
-  
-  const [newGuestName, setNewGuestName] = useState("");
-  const [guestResponsibleUid, setGuestResponsibleUid] = useState("");
 
   const eventRef = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
@@ -48,7 +40,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const { data: event, isLoading: eventLoading, error: eventError } = useDoc<Event>(eventRef);
 
-  // Cargar perfiles de forma robusta
   useEffect(() => {
     if (event?.participantIds?.length) {
       getGroupMembersDetails(event.participantIds).then(details => {
@@ -59,47 +50,11 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   }, [event?.participantIds]);
 
-  const handleAddQuickGuest = async () => {
-    if (!newGuestName || !guestResponsibleUid || !event) return;
-    try {
-      await addExternalGuest(event.id, newGuestName, guestResponsibleUid);
-      await toggleGuestPresence(event.id, newGuestName, guestResponsibleUid, true);
-      toast({ title: "Persona añadida" });
-      setNewGuestName("");
-      setAddingNonEnrolled(false);
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error" });
-    }
-  };
-
-  const handleRemoveParticipant = async (uid: string) => {
-    if (!event || event.isCharged) return;
-    try {
-      await removeParticipantFromEvent(event.id, uid);
-      toast({ title: "Participante eliminado" });
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error al eliminar" });
-    }
-  };
-
-  const handleChargeToGroup = async () => {
-    if (!event) return;
-    setIsCharging(true);
-    try {
-      await chargeEventToGroup(event.id);
-      toast({ title: "¡Éxito!", description: "Deudas cargadas al grupo." });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    } finally {
-      setIsCharging(false);
-    }
-  };
-
   if (eventLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground font-medium animate-pulse">Cargando detalles del evento...</p>
+        <p className="text-muted-foreground font-medium animate-pulse">Cargando panel de asistencia...</p>
       </div>
     );
   }
@@ -110,7 +65,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         <AlertCircle className="mx-auto h-16 w-16 opacity-20 text-destructive" />
         <div>
           <h2 className="text-2xl font-headline font-bold">Evento no encontrado</h2>
-          <p className="text-muted-foreground">El evento que buscas no existe o ha sido eliminado.</p>
         </div>
         <Button variant="outline" className="rounded-2xl" onClick={() => window.history.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" /> Volver
@@ -119,223 +73,244 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     );
   }
 
-  // CÁLCULO DE LIQUIDACIÓN: Solo cuentan los presentes reales (Array presentIds + invitados con present:true)
-  const totalPresent = (event.presentIds?.length || 0) + (event.externalGuests?.filter(g => g.present).length || 0);
-  const costPerPerson = totalPresent > 0 ? event.totalCost / totalPresent : 0;
+  const absentIds = event.participantIds.filter(id => !event.presentIds.includes(id));
+  const totalPresentParticipants = event.presentIds?.length || 0;
+  const totalPresentGuests = event.externalGuests?.filter(g => g.present).length || 0;
+  const totalAbsents = absentIds.length;
+
+  // Fórmula unificada de liquidación
+  const totalHeads = totalPresentParticipants + totalPresentGuests + (event.chargeAbsentees ? totalAbsents : 0);
+  const costPerPerson = totalHeads > 0 ? event.totalCost / totalHeads : 0;
+  
   const isAdmin = event.creatorId === user?.uid;
+
+  const handleToggleChargeAbsentees = async (checked: boolean) => {
+    try {
+      await updateEventSettings(event.id, checked);
+      toast({ title: "Configuración actualizada", description: checked ? "Se cobrará a los ausentes." : "Costo exclusivo para los presentes." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al actualizar" });
+    }
+  };
+
+  const handleRemoveUser = async (uid: string) => {
+    if (event.isCharged) return;
+    try {
+      await removeParticipantFromEvent(event.id, uid);
+      toast({ title: "Participante eliminado del evento" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al eliminar" });
+    }
+  };
+
+  const handleChargeToGroup = async () => {
+    setIsCharging(true);
+    try {
+      await chargeEventToGroup(event.id);
+      toast({ title: "¡Liquidación Exitosa!", description: "Las deudas se han cargado transparentemente al grupo." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error al liquidar", description: error.message });
+    } finally {
+      setIsCharging(false);
+    }
+  };
 
   const checkInUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/attendance/check-in/${event.id}?token=${event.checkInToken}`;
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(checkInUrl)}`;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20 px-2 sm:px-4">
+      {/* Header card */}
       <div className="bg-primary p-6 sm:p-8 rounded-[2rem] text-primary-foreground shadow-xl">
         <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center">
           <div className="space-y-2">
             <Badge className="bg-accent text-white px-3 font-bold">{event.date}</Badge>
             <h1 className="text-3xl font-headline font-bold">{event.title}</h1>
-            <div className="flex gap-4 text-xs opacity-70">
-              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location}</span>
+            <p className="text-sm opacity-80 font-medium">Concepto del Costo: <span className="underline font-bold">{event.costConcept || "No especificado"}</span></p>
+            <div className="flex gap-4 text-xs opacity-60 pt-2">
+              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location || "Presencial"}</span>
               <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {event.time}</span>
             </div>
           </div>
-          <div className="bg-white/10 p-4 rounded-2xl text-center min-w-[150px]">
-            <p className="text-[10px] uppercase font-bold opacity-70">Cuota p/p</p>
-            <p className="text-3xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
-            <p className="text-[9px] mt-1 font-bold uppercase">{totalPresent} PRESENTES PAGADORES</p>
+          <div className="bg-white/10 p-5 rounded-2xl text-center min-w-[160px]">
+            <p className="text-[10px] uppercase font-black opacity-70 tracking-widest">Cuota p/p</p>
+            <p className="text-4xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
+            <p className="text-[9px] mt-1 font-bold uppercase tracking-tight text-white/90">Dividido en {totalHeads} Cabezas</p>
           </div>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
+        {/* Lista de Asistencia */}
         <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[2rem]">
           <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
             <div>
-              <CardTitle className="text-lg font-headline">Asistencia</CardTitle>
-              <CardDescription className="text-xs">RSVP vs Llegadas reales.</CardDescription>
+              <CardTitle className="text-lg font-headline">Lista de Control</CardTitle>
+              <CardDescription className="text-xs">Todos los anotados por el link y sus estados.</CardDescription>
             </div>
             {isAdmin && !event.isCharged && (
-              <div className="flex gap-2">
-                 <Button variant="outline" size="sm" className="rounded-xl h-10" onClick={() => setAddingNonEnrolled(true)}>
-                   <Plus className="h-4 w-4 mr-2" /> Añadir
-                 </Button>
-                 <Button variant="default" size="sm" className="bg-accent rounded-xl h-10" onClick={() => setShowQr(true)}>
-                   <QrCode className="h-4 w-4 mr-2" /> QR
-                 </Button>
-              </div>
+              <Button variant="outline" size="sm" className="rounded-xl h-10 border-2" onClick={() => setShowQr(true)}>
+                <QrCode className="h-4 w-4 mr-2" /> Mostrar QR
+              </Button>
             )}
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-4">
-              {/* ITERAMOS SOBRE participantIds PARA GARANTIZAR QUE NADIE FALTE (Fix Punto 6) */}
+              {/* Iteración de Verdad Absoluta sobre participantIds */}
               {event.participantIds.map(uid => {
                 const profile = profilesMap[uid];
                 const isPresent = event.presentIds?.includes(uid);
-                const userGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
                 
+                // Determinar el estado exacto según la liquidación
+                let statusLabel = "Confirmado (RSVP)";
+                let badgeStyle = "bg-muted/60 text-muted-foreground";
+                
+                if (isPresent) {
+                  statusLabel = "Presente";
+                  badgeStyle = "bg-emerald-500 text-white";
+                } else if (event.isCharged) {
+                  statusLabel = "Ausente";
+                  badgeStyle = "bg-destructive/10 text-destructive border border-destructive/20";
+                }
+
                 return (
                   <div key={uid} className="space-y-2">
                     <div className={cn(
                       "flex items-center justify-between p-4 rounded-2xl border transition-all",
-                      isPresent ? "bg-emerald-50 border-emerald-100" : "bg-muted/10 border-transparent opacity-80"
+                      isPresent ? "bg-emerald-50/60 border-emerald-100" : "bg-muted/10 border-transparent"
                     )}>
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                          {profile?.displayName?.[0] || "?"}
+                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
+                          {profile?.displayName?.[0] || "U"}
                         </div>
                         <div>
-                          <p className="text-sm font-bold">{profile?.displayName || `Usuario ${uid.substring(0,4)}...`}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter">
-                            {isPresent ? "Presente" : "Confirmado (RSVP)"}
-                          </p>
+                          <p className="text-sm font-bold">{profile?.displayName || `Usuario (${uid.substring(0, 5)})`}</p>
+                          <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter inline-block mt-0.5", badgeStyle)}>
+                            {statusLabel}
+                          </span>
                         </div>
                       </div>
+                      
                       <div className="flex items-center gap-2">
+                        {/* Botón de eliminar sólo para Admin antes de liquidar */}
                         {isAdmin && !event.isCharged && (
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-destructive/40 hover:text-destructive" 
-                            onClick={() => handleRemoveParticipant(uid)}
+                            className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-xl"
+                            onClick={() => handleRemoveUser(uid)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         )}
-                        <Button 
-                          variant={isPresent ? "default" : "outline"} 
-                          size="sm" 
-                          disabled={event.isCharged}
-                          className={cn(
-                            "rounded-full text-[10px] font-black h-9 px-4", 
-                            isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none" : "border-primary/20 text-primary"
-                          )}
-                          onClick={() => toggleAttendance(event.id, uid, !isPresent)}
-                        >
-                          {isPresent ? "Presente" : "Marcar Llegada"}
-                        </Button>
+                        
+                        {!event.isCharged && (
+                          <Button 
+                            variant={isPresent ? "default" : "outline"} 
+                            size="sm"
+                            className={cn(
+                              "rounded-xl text-[10px] font-black h-9 px-3", 
+                              isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none" : "border-primary/20 text-primary"
+                            )}
+                            onClick={() => toggleAttendance(event.id, uid, !isPresent)}
+                          >
+                            {isPresent ? "Quitar Asistencia" : "Marcar Llegada"}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    {userGuests.map((guest, idx) => (
-                      <div key={idx} className={cn(
-                        "flex items-center justify-between py-2 px-4 ml-10 rounded-xl border",
-                        guest.present ? "bg-emerald-50/50 border-emerald-100" : "bg-muted/5 border-transparent opacity-60"
-                      )}>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold">{guest.name} (+1)</span>
-                          <span className="text-[8px] uppercase font-black opacity-30">
-                            {guest.present ? "Presente" : "RSVP"}
-                          </span>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8" 
-                            disabled={event.isCharged}
-                            onClick={() => toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present)}
-                          >
-                            {guest.present ? <CheckCircle2 className="h-5 w-5 text-emerald-500" /> : <Circle className="h-5 w-5 opacity-30" />}
-                          </Button>
-                          {!event.isCharged && (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/40" onClick={() => removeExternalGuest(event.id, guest)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 );
               })}
+
               {event.participantIds.length === 0 && (
                 <div className="text-center py-10 opacity-30 italic text-sm">
-                  Aún no hay participantes confirmados.
+                  Nadie se ha anotado todavía a esta fecha.
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
 
+        {/* Panel lateral de Control Financiero */}
         <div className="space-y-6">
-          <Card className="border-none shadow-sm rounded-[2rem]">
-            <CardHeader><CardTitle className="text-xs font-black uppercase tracking-widest text-primary"><Zap className="inline mr-2 h-4 w-4 text-accent" /> Liquidación</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between text-xs font-bold"><span>Total del Evento:</span><span>${event.totalCost.toFixed(2)}</span></div>
-              <div className="flex justify-between text-xs font-bold text-accent"><span>Cuota p/p (solo presentes):</span><span>${costPerPerson.toFixed(2)}</span></div>
-              <div className="pt-4 border-t space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-black uppercase text-muted-foreground">Presentes</span>
-                  <span className="text-2xl font-headline font-bold text-primary">{totalPresent}</span>
+          <Card className="border-none shadow-sm rounded-[2rem] bg-white overflow-hidden">
+            <CardHeader className="border-b bg-muted/10">
+              <CardTitle className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                <Zap className="h-4 w-4 text-accent" /> Regla de Cobro
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className="flex items-center justify-between p-3 bg-primary/5 rounded-2xl">
+                <div className="space-y-0.5 pr-2">
+                  <span className="text-xs font-bold block">Cobrar a Ausentes</span>
+                  <p className="text-[9px] text-muted-foreground">Si faltan, ¿pagan igual la cuota del arriendo?</p>
                 </div>
-                <div className="flex justify-between items-center opacity-50">
-                  <span className="text-[9px] font-black uppercase text-muted-foreground">Confirmados (no llegaron)</span>
-                  <span className="text-sm font-bold">{event.participantIds.length - event.presentIds.length}</span>
+                <Switch 
+                  disabled={event.isCharged}
+                  checked={event.chargeAbsentees} 
+                  onCheckedChange={handleToggleChargeAbsentees} 
+                />
+              </div>
+
+              <div className="pt-2 border-t space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Presentes (Asistieron):</span>
+                  <span className="font-bold text-primary">{totalPresentParticipants}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Ausentes (No llegaron):</span>
+                  <span className="font-bold text-orange-600">{totalAbsents}</span>
+                </div>
+                <div className="flex justify-between border-t pt-2 font-bold">
+                  <span>Costo Total:</span>
+                  <span className="text-primary font-headline">${event.totalCost.toFixed(2)}</span>
                 </div>
               </div>
             </CardContent>
             {isAdmin && (
-              <CardFooter>
+              <CardFooter className="bg-muted/5 pt-4">
                 <Button 
-                  disabled={event.isCharged || isCharging || totalPresent === 0}
-                  className="w-full h-12 rounded-2xl bg-primary text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg" 
+                  disabled={event.isCharged || isCharging || totalHeads === 0}
+                  className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
                   onClick={handleChargeToGroup}
                 >
-                  {isCharging ? <Loader2 className="animate-spin" /> : event.isCharged ? "Liquidado" : <><Coins className="h-4 w-4" /> Cargar al Grupo</>}
+                  {isCharging ? <Loader2 className="animate-spin" /> : event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar</>}
                 </Button>
               </CardFooter>
             )}
           </Card>
           
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-4">
-             <div className="flex items-center gap-2 text-primary font-bold"><Share2 className="h-4 w-4 text-accent" /><span className="text-xs font-black uppercase tracking-widest">Link RSVP</span></div>
-             <p className="text-[10px] text-muted-foreground">Para que los amigos confirmen y sumen sus +1.</p>
-             <Button variant="outline" className="w-full h-12 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 border-primary" onClick={() => { navigator.clipboard.writeText(event.shareLink); toast({ title: "Copiado" }); }}>
-               Copiar Link WhatsApp
+          <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-3 border">
+             <div className="flex items-center gap-2 text-primary font-bold">
+               <Share2 className="h-4 w-4 text-accent" />
+               <span className="text-xs font-black uppercase tracking-widest">Enlace RSVP WhatsApp</span>
+             </div>
+             <p className="text-[10px] text-muted-foreground">Comparte este link. Al anotarse quedarán unidos automáticamente como miembros oficiales del grupo.</p>
+             <Button 
+               variant="outline" 
+               className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
+               onClick={() => { navigator.clipboard.writeText(event.shareLink); toast({ title: "Link copiado", description: "Listo para pegar en tu grupo de WhatsApp." }); }}
+             >
+               Copiar Enlace de Invitación
              </Button>
           </div>
         </div>
       </div>
 
-      {/* MODAL: Check-in QR */}
+      {/* MODAL: QR Check-in */}
       <Dialog open={showQr} onOpenChange={setShowQr}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 text-center border-none">
-          <DialogHeader><DialogTitle className="text-2xl font-headline">Check-in QR</DialogTitle></DialogHeader>
-          <div className="py-6 flex flex-col items-center gap-6">
+          <DialogHeader><DialogTitle className="text-2xl font-headline">Check-in QR en Vivo</DialogTitle></DialogHeader>
+          <div className="py-4 flex flex-col items-center gap-4">
             <div className="bg-white p-4 rounded-3xl border-2 border-primary/10 shadow-xl">
-              <img src={qrCodeUrl} alt="QR" className="w-64 h-64" />
+              <img src={qrCodeUrl} alt="QR de asistencia" className="w-60 h-60" />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground leading-relaxed">Escanea esto al llegar para marcar tu asistencia automáticamente y entrar en el cobro.</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground max-w-xs leading-relaxed">
+              Los integrantes pueden escanear esto al llegar para registrar su presencia y entrar en la cuota automáticamente.
+            </p>
           </div>
           <Button className="w-full h-12 rounded-2xl" onClick={() => setShowQr(false)}>Cerrar</Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL: Añadir Asistente */}
-      <Dialog open={addingNonEnrolled} onOpenChange={setAddingNonEnrolled}>
-        <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none">
-          <DialogHeader><DialogTitle className="text-2xl font-headline">Añadir Asistente</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase">Nombre</Label>
-              <Input placeholder="Ej: Invitado Sorpresa" value={newGuestName} onChange={e => setNewGuestName(e.target.value)} className="h-12 rounded-2xl" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase">Responsable del Pago</Label>
-              <Select value={guestResponsibleUid} onValueChange={setGuestResponsibleUid}>
-                <SelectTrigger className="h-12 rounded-2xl"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                <SelectContent>
-                  {/* Listamos a todos los participantes posibles responsables */}
-                  {event.participantIds.map(uid => (
-                    <SelectItem key={uid} value={uid}>{profilesMap[uid]?.displayName || `Usuario ${uid.substring(0,5)}`}</SelectItem>
-                  ))}
-                  {isAdmin && !event.participantIds.includes(user!.uid) && (
-                    <SelectItem value={user!.uid}>{user?.displayName} (Admin)</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Button className="w-full h-14 rounded-2xl font-bold" onClick={handleAddQuickGuest} disabled={!newGuestName || !guestResponsibleUid}>Registrar Llegada</Button>
         </DialogContent>
       </Dialog>
     </div>
