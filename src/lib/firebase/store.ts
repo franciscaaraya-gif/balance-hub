@@ -20,35 +20,41 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 export const createUserProfile = async (uid: string, email: string, displayName: string) => {
   const userRef = doc(db, "userProfiles", uid);
-  setDoc(userRef, {
+  const data = {
     uid,
     email,
     displayName,
     role: 'user',
     createdAt: Date.now(),
-  }, { merge: true }).catch(error => {
+  };
+  
+  return setDoc(userRef, data, { merge: true }).catch(error => {
     errorEmitter.emit('permission-error', new FirestorePermissionError({
       path: userRef.path,
       operation: 'write',
-      requestResourceData: { uid, email, displayName, role: 'user' }
+      requestResourceData: data
     }));
+    throw error;
   });
 };
 
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   const userRef = doc(db, "userProfiles", uid);
-  const snap = await getDoc(userRef);
-  if (snap.exists()) {
-    const data = snap.data();
-    return {
-      uid: data.uid || snap.id,
-      email: data.email || "",
-      displayName: data.displayName || "Usuario",
-      role: data.role || "user",
-      createdAt: data.createdAt || Date.now()
-    };
+  try {
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        uid: data.uid || snap.id,
+        email: data.email || "",
+        displayName: data.displayName || "Usuario",
+        role: data.role || "user",
+        createdAt: data.createdAt || Date.now()
+      };
+    }
+  } catch (error) {
+    console.error(`[getUserProfile] Error al leer perfil para uid: ${uid}`, error);
   }
-  console.error(`[getUserProfile] No se encontró el perfil de usuario para el uid: ${uid}`);
   return null;
 };
 
@@ -72,7 +78,6 @@ export const createGroup = async (name: string, type: 'fixed' | 'variable', admi
     type,
     fixedAmount: fixedAmount || null,
     adminId,
-    members: [adminId],
     memberIds: [adminId],
     memberStatuses: {
       [adminId]: 'active'
@@ -253,7 +258,6 @@ export const joinGroupByInvite = async (userId: string, inviteToken: string) => 
 
   const groupRef = doc(db, "groups", group.id);
   await updateDoc(groupRef, {
-    members: arrayUnion(userId),
     memberIds: arrayUnion(userId),
     [`memberStatuses.${userId}`]: 'active'
   }).catch(error => {
@@ -371,7 +375,6 @@ export const addParticipantToEvent = async (eventId: string, userId: string) => 
   const batch = writeBatch(db);
   batch.update(eventRef, { participantIds: arrayUnion(userId) });
   batch.update(groupRef, {
-    members: arrayUnion(userId),
     memberIds: arrayUnion(userId),
     [`memberStatuses.${userId}`]: 'active'
   });
@@ -399,7 +402,6 @@ export const addAndMarkPresent = async (eventId: string, userId: string) => {
     presentIds: arrayUnion(userId)
   });
   batch.update(groupRef, {
-    members: arrayUnion(userId),
     memberIds: arrayUnion(userId),
     [`memberStatuses.${userId}`]: 'active'
   });

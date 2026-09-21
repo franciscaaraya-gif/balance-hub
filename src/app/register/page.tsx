@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import {
   createUserWithEmailAndPassword,
   updateProfile,
@@ -9,7 +10,7 @@ import {
 } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { useUser } from "@/firebase";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createUserProfile } from "@/lib/firebase/store";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -19,29 +20,36 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Wallet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-export default function Register() {
+function RegisterContent() {
   const { user, isUserLoading } = useUser();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
+
   useEffect(() => {
-    if (user && !isUserLoading) {
-      router.push("/dashboard");
+    if (user && !isUserLoading && !isSubmitting) {
+      router.push(redirectTo);
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, router, redirectTo, isSubmitting]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Actualizamos perfil en Auth
       await updateProfile(userCredential.user, { displayName: name });
+      // Y lo creamos en Firestore esperando a que termine
       await createUserProfile(userCredential.user.uid, email, name);
+      
       toast({ title: "¡Bienvenido!", description: "Cuenta creada con éxito." });
+      // La redirección ocurrirá por el useEffect al detectar el cambio de auth
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
       setIsSubmitting(false);
@@ -133,10 +141,23 @@ export default function Register() {
         </CardContent>
         <CardFooter className="flex justify-center">
           <p className="text-sm text-muted-foreground">
-            ¿Ya tienes cuenta? <Link href="/register" className="text-primary font-semibold hover:underline">Inicia sesión</Link>
+            ¿Ya tienes cuenta? <Link href={`/login${redirectTo !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-primary font-semibold hover:underline">Inicia sesión</Link>
           </p>
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function Register() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-muted-foreground">Cargando...</p>
+      </div>
+    }>
+      <RegisterContent />
+    </Suspense>
   );
 }

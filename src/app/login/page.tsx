@@ -39,10 +39,11 @@ function LoginContent() {
   }, [isUserLoading]);
 
   useEffect(() => {
-    if (user && !isUserLoading) {
+    // Solo redirigir automáticamente si no estamos procesando un envío
+    if (user && !isUserLoading && !isSubmitting) {
       router.push(redirectTo);
     }
-  }, [user, isUserLoading, router, redirectTo]);
+  }, [user, isUserLoading, router, redirectTo, isSubmitting]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,6 +51,7 @@ function LoginContent() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
+      // La redirección ocurrirá mediante el useEffect
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
       setIsSubmitting(false);
@@ -62,6 +64,7 @@ function LoginContent() {
     try {
       const result = await signInWithPopup(auth, provider);
       if (result.user) {
+        // Aseguramos que el perfil se cree antes de continuar
         await createUserProfile(
           result.user.uid,
           result.user.email || "",
@@ -69,6 +72,7 @@ function LoginContent() {
         );
       }
       toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
+      // El useEffect manejará la redirección final
     } catch (error: any) {
       console.error(error);
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
@@ -148,7 +152,7 @@ function LoginContent() {
         </CardContent>
         <CardFooter className="flex flex-col gap-2 text-center">
           <p className="text-sm text-muted-foreground">
-            ¿No tienes cuenta? <Link href="/register" className="text-accent font-semibold hover:underline">Regístrate</Link>
+            ¿No tienes cuenta? <Link href={`/register${redirectTo !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-accent font-semibold hover:underline">Regístrate</Link>
           </p>
           <Link href="/" className="text-xs text-muted-foreground hover:underline">Volver al inicio</Link>
         </CardFooter>
