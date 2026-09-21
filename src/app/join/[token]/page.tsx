@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Wallet, Loader2, Users, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 
 export default function JoinGroup({ params: paramsPromise }: { params: Promise<{ token: string }> }) {
   const params = use(paramsPromise);
@@ -159,5 +160,3 @@ export default function JoinGroup({ params: paramsPromise }: { params: Promise<{
     </div>
   );
 }
-
-import { Label } from "@/components/ui/label";

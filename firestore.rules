@@ -47,6 +47,7 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
     }
     
+    // Regla crucial para la Billetera Consolidada (collectionGroup query)
     match /{path=**}/debts/{debtId} {
       allow read, list: if request.auth != null && resource.data.debtorId == request.auth.uid;
     }
