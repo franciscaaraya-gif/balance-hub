@@ -39,7 +39,7 @@ function LoginContent() {
   }, [isUserLoading]);
 
   useEffect(() => {
-    // Solo redirigir automáticamente si no estamos procesando un envío
+    // Redirección automática si ya hay un usuario logueado
     if (user && !isUserLoading && !isSubmitting) {
       router.push(redirectTo);
     }
@@ -51,9 +51,11 @@ function LoginContent() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: "¡Bienvenido!", description: "Sesión iniciada correctamente." });
-      // La redirección ocurrirá mediante el useEffect
+      router.push(redirectTo);
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      console.error("Error en login:", error);
+      toast({ variant: "destructive", title: "Error de acceso", description: error.message });
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -64,7 +66,6 @@ function LoginContent() {
     try {
       const result = await signInWithPopup(auth, provider);
       if (result.user) {
-        // Aseguramos que el perfil se cree antes de continuar
         await createUserProfile(
           result.user.uid,
           result.user.email || "",
@@ -72,10 +73,11 @@ function LoginContent() {
         );
       }
       toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
-      // El useEffect manejará la redirección final
+      router.push(redirectTo);
     } catch (error: any) {
-      console.error(error);
+      console.error("Error en Google Login:", error);
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
+    } finally {
       setIsSubmitting(false);
     }
   };

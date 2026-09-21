@@ -49,9 +49,11 @@ function RegisterContent() {
       await createUserProfile(userCredential.user.uid, email, name);
       
       toast({ title: "¡Bienvenido!", description: "Cuenta creada con éxito." });
-      // La redirección ocurrirá por el useEffect al detectar el cambio de auth
+      router.push(redirectTo);
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      console.error("Error en registro:", error);
+      toast({ variant: "destructive", title: "Error al crear cuenta", description: error.message });
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -69,9 +71,11 @@ function RegisterContent() {
         );
       }
       toast({ title: "¡Éxito!", description: "Sesión iniciada con Google." });
+      router.push(redirectTo);
     } catch (error: any) {
-      console.error(error);
+      console.error("Error en Google Register:", error);
       toast({ variant: "destructive", title: "Error con Google", description: error.message });
+    } finally {
       setIsSubmitting(false);
     }
   };
