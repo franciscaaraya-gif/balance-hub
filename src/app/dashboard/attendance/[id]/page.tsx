@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
+import { useRouter } from "next/navigation";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { 
   toggleAttendance, 
   getGroupMembersDetails, 
   toggleGuestPresence, 
   removeExternalGuest, 
-  chargeEventToGroup, 
   addExternalGuest, 
   removeParticipantFromEvent,
   updateEventSettings
@@ -21,18 +21,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, User, Trash2, XCircle, Plus, Users } from "lucide-react";
+import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, Trash2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
 export default function EventAttendanceDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
+  const router = useRouter();
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const [isCharging, setIsCharging] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [newGuestName, setNewGuestName] = useState("");
   const [selectedResponsibleId, setSelectedResponsibleId] = useState<string>("");
@@ -137,16 +137,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
-  const handleChargeToGroup = async () => {
-    setIsCharging(true);
-    try {
-      await chargeEventToGroup(event.id);
-      toast({ title: "¡Liquidación Exitosa!", description: "Las deudas se han cargado transparentemente al grupo." });
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error al liquidar", description: error.message });
-    } finally {
-      setIsCharging(false);
-    }
+  const handleGoToConsolidatedCharge = () => {
+    // Redirige al panel del grupo activando los query params estructurados
+    router.push(`/dashboard/groups/${event.groupId}?openExpense=true&eventId=${event.id}`);
   };
 
   const checkInUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/attendance/check-in/${event.id}?token=${event.checkInToken}`;
@@ -166,7 +159,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             </div>
           </div>
           <div className="bg-white/10 p-5 rounded-2xl text-center min-w-[160px]">
-            <p className="text-[10px] uppercase font-black opacity-70 tracking-widest">Cuota p/p</p>
+            <p className="text-[10px] uppercase font-black opacity-70 tracking-widest">Cuota p/p (Estimada)</p>
             <p className="text-4xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
             <p className="text-[9px] mt-1 font-bold uppercase tracking-tight text-white/90">Dividido en {totalHeads} Cabezas</p>
           </div>
@@ -215,7 +208,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                           {profile?.displayName?.[0] || "U"}
                         </div>
                         <div>
-                          <p className="text-sm font-bold">{profile?.displayName || `Usuario (${uid.substring(0, 5)})`}</p>
+                          <p className="text-sm font-bold">{profile?.displayName || profile?.email || `Usuario (${uid.substring(0, 5)})`}</p>
                           <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter inline-block mt-0.5", badgeStyle)}>
                             {statusLabel}
                           </span>
@@ -388,11 +381,11 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             {isAdmin && (
               <CardFooter className="bg-muted/5 pt-4">
                 <Button 
-                  disabled={event.isCharged || isCharging || totalHeads === 0}
+                  disabled={event.isCharged}
                   className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
-                  onClick={handleChargeToGroup}
+                  onClick={handleGoToConsolidatedCharge}
                 >
-                  {isCharging ? <Loader2 className="animate-spin" /> : event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar</>}
+                  {event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar en Grupo</>}
                 </Button>
               </CardFooter>
             )}

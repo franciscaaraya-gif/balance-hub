@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Users, Wallet, ChevronRight, Loader2, ReceiptText, AlertCircle, Clock, CheckCircle2, CreditCard, Calendar } from "lucide-react";
+import { PlusCircle, Users, Wallet, ChevronRight, Loader2, ReceiptText, AlertCircle, Clock, CheckCircle2, CreditCard } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
@@ -19,7 +19,6 @@ export default function Dashboard() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const [newGroupName, setNewGroupName] = useState("");
-  const [newGroupType, setNewGroupType] = useState<'fixed' | 'variable'>("variable");
   const [open, setOpen] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
   const { toast } = useToast();
@@ -41,7 +40,7 @@ export default function Dashboard() {
   const handleCreateGroup = async () => {
     if (!newGroupName || !user) return;
     try {
-      await createGroup(newGroupName, newGroupType, user.uid);
+      await createGroup(newGroupName, 'variable', user.uid);
       toast({ title: "Grupo creado", description: "El grupo se ha guardado correctamente." });
       setNewGroupName("");
       setOpen(false);
@@ -81,13 +80,6 @@ export default function Dashboard() {
             <DialogHeader><DialogTitle className="text-2xl font-headline">Crear Grupo</DialogTitle></DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-1"><Label>Nombre del Grupo</Label><Input placeholder="Ej: Amigos del Padel / Asados" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} className="rounded-xl h-12" /></div>
-              <div className="space-y-1">
-                <Label>Modalidad predeterminada de división</Label>
-                <div className="grid grid-cols-2 gap-4">
-                  <Button variant={newGroupType === 'fixed' ? 'default' : 'outline'} onClick={() => setNewGroupType('fixed')} className="h-20 flex-col rounded-2xl">Partes Iguales</Button>
-                  <Button variant={newGroupType === 'variable' ? 'default' : 'outline'} onClick={() => setNewGroupType('variable')} className="h-20 flex-col rounded-2xl">Por Consumo (Variable)</Button>
-                </div>
-              </div>
             </div>
             <DialogFooter><Button onClick={handleCreateGroup} className="w-full h-12 rounded-xl">Crear Grupo</Button></DialogFooter>
           </DialogContent>
@@ -115,7 +107,6 @@ export default function Dashboard() {
           </section>
         </div>
 
-        {/* Billetera integrada unificada */}
         <div className="space-y-6">
           <h2 className="text-xl font-headline font-bold flex items-center gap-2"><Wallet className="h-5 w-5 text-primary" /> Billetera Consolidada</h2>
           <Card className="border-none shadow-sm bg-white rounded-[2.5rem] overflow-hidden">
