@@ -108,7 +108,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       setExpenseAmount(event.totalCost.toString());
       setCreditorId(event.creatorId);
 
-      // Lógica de candidatos consolidados: Presentes + Ausentes (si aplica)
       const absentIds = event.participantIds.filter(id => !event.presentIds.includes(id));
       const candidates = [...(event.presentIds || [])];
       if (event.chargeAbsentees) {
@@ -118,7 +117,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       }
       setSelectedMembers(candidates);
 
-      // Precarga precisa de manualAmounts mapeando cabezas + invitados
       const totalPresentParticipants = event.presentIds?.length || 0;
       const totalPresentGuests = event.externalGuests?.filter(g => g.present).length || 0;
       const totalAbsents = absentIds.length;
@@ -141,14 +139,12 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     }
   };
 
-  // Intercepta los query params del Punto 2 para abrir automáticamente el Registrar Gasto basado en Evento
   useEffect(() => {
     if (typeof window !== 'undefined' && events && events.length > 0) {
       const urlParams = new URLSearchParams(window.location.search);
       const openExpense = urlParams.get('openExpense');
       const evId = urlParams.get('eventId');
       if (openExpense === 'true' && evId) {
-        // Limpiamos los query params para evitar loops
         window.history.replaceState({}, document.title, window.location.pathname);
         setAddingExpense(true);
         setExpenseMode('event');
@@ -287,7 +283,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         }
       }
 
-      // Cumplimiento del Punto 2: Si el gasto provino de un evento, se congela y liquida dicho evento
       if (expenseMode === 'event' && selectedEventId) {
         await updateDoc(doc(firestore, 'events', selectedEventId), { isCharged: true });
         toast({ title: "¡Evento Liquidado con Éxito!", description: "El evento quedó cerrado y las deudas asignadas." });
@@ -336,186 +331,202 @@ Papas fritas;2;3500;7000`;
   if (!group) return <div className="p-8 text-center"><AlertCircle className="mx-auto h-12 w-12 opacity-50 mb-4" /><p>Grupo no encontrado.</p></div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-20 px-2 sm:px-4">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-headline font-bold text-primary">{group.name}</h1>
-          <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Badge variant="secondary" className="rounded-lg">Balance BalanceHub</Badge>
-            • {group.memberIds.length} Miembros
-          </p>
+    <div className="space-y-6 max-w-5xl mx-auto pb-20 px-0 sm:px-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4 sm:px-0">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary truncate">{group.name}</h1>
+          <div className="flex items-center gap-2 text-[10px] sm:text-sm text-muted-foreground font-medium mt-1">
+            <Badge variant="secondary" className="rounded-lg text-[9px] uppercase font-black">Activo</Badge>
+            <span>• {group.memberIds.length} Miembros</span>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" className="gap-2 rounded-xl h-10" onClick={handleGenerateAiSummary} disabled={isGeneratingSummary}>
+          <Button variant="outline" size="sm" className="flex-1 md:flex-none gap-2 rounded-xl h-10 text-[10px] font-black uppercase" onClick={handleGenerateAiSummary} disabled={isGeneratingSummary}>
             {isGeneratingSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4 text-accent" />}
             Resumen IA
           </Button>
-          <Button variant="outline" size="sm" className="gap-2 rounded-xl h-10" onClick={() => setShowInviteModal(true)}>
+          <Button variant="outline" size="sm" className="flex-1 md:flex-none gap-2 rounded-xl h-10 text-[10px] font-black uppercase" onClick={() => setShowInviteModal(true)}>
             <UserPlus className="h-4 w-4" /> Invitar
           </Button>
-          <Button size="sm" onClick={() => setAddingExpense(true)} className="bg-primary hover:bg-primary/90 gap-2 rounded-xl h-10 shadow-lg shadow-primary/20">
+          <Button size="sm" onClick={() => setAddingExpense(true)} className="w-full md:w-auto bg-primary hover:bg-primary/90 gap-2 rounded-xl h-11 shadow-lg shadow-primary/20 text-[10px] font-black uppercase">
             <Plus className="h-4 w-4" /> Registrar Gasto
           </Button>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
-          <CardHeader className="border-b pb-6">
-            <CardTitle className="text-lg font-headline">Historial de Gastos</CardTitle>
-            <CardDescription className="text-xs">Cobros agrupados por evento o registro manual colaborativo.</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y">
-              {groupedExpenses.map(expense => (
-                <div key={expense.id} className="group">
-                  <div 
-                    className={cn(
-                      "flex items-center justify-between p-5 hover:bg-muted/30 cursor-pointer transition-colors",
-                      expandedGastoId === expense.id && "bg-muted/20"
-                    )}
-                    onClick={() => setExpandedGastoId(expandedGastoId === expense.id ? null : expense.id)}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                        <ReceiptText className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-primary">{expense.description}</p>
-                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 font-medium">
-                          <User className="h-2.5 w-2.5" /> Acreedor: {members.find(m => m.uid === expense.creditorId)?.displayName || '...'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <p className="text-sm font-black text-primary">${expense.totalAmount.toFixed(2)}</p>
-                        <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter">
-                          {expense.paidCount}/{expense.totalCount} PAGADOS
-                        </p>
-                      </div>
-                      <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", expandedGastoId === expense.id && "rotate-90")} />
-                    </div>
-                  </div>
-                  
-                  {expandedGastoId === expense.id && (
-                    <div className="bg-muted/10 p-4 space-y-3 border-t">
-                      <div className="flex justify-between items-center px-2 mb-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Desglose Individual</span>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-7 text-[10px] font-bold text-accent hover:text-accent hover:bg-accent/10 rounded-lg"
-                          onClick={() => showCreditorDetails(expense.creditorId)}
-                        >
-                          <CreditCard className="h-3 w-3 mr-1" /> Ver Datos de Pago
-                        </Button>
-                      </div>
-                      {expense.debts.map(debt => (
-                        <div key={debt.id} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-primary/5 shadow-sm">
-                          <div className="flex items-center gap-3">
-                            <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold">
-                              {members.find(m => m.uid === debt.debtorId)?.displayName?.[0] || '?'}
-                            </div>
-                            <span className="text-xs font-bold">{members.find(m => m.uid === debt.debtorId)?.displayName || 'Usuario'}</span>
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+          <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
+            <CardHeader className="border-b pb-6 px-4 sm:px-6">
+              <CardTitle className="text-lg font-headline">Historial de Cobros</CardTitle>
+              <CardDescription className="text-xs">Cobros agrupados por gasto o evento.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y">
+                {groupedExpenses.map(expense => (
+                  <div key={expense.id} className="group">
+                    <div 
+                      className={cn(
+                        "flex items-center justify-between p-4 sm:p-5 hover:bg-muted/30 cursor-pointer transition-colors active:bg-muted/50",
+                        expandedGastoId === expense.id && "bg-muted/20"
+                      )}
+                      onClick={() => setExpandedGastoId(expandedGastoId === expense.id ? null : expense.id)}
+                    >
+                      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                        <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl sm:rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                          <ReceiptText className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs sm:text-sm font-bold text-primary truncate pr-2">{expense.description}</p>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] text-muted-foreground font-medium flex items-center gap-1 shrink-0">
+                              <User className="h-2.5 w-2.5" /> {members.find(m => m.uid === expense.creditorId)?.displayName?.split(' ')[0] || '...'}
+                            </span>
+                            <span className="text-[8px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-black uppercase tracking-tighter shrink-0">
+                              {expense.paidCount}/{expense.totalCount} Pagos
+                            </span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <span className="text-xs font-black text-primary">${debt.amount.toFixed(2)}</span>
-                            {debt.status === 'paid' ? (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                            ) : (
-                              <div className="flex items-center gap-1">
-                                <Badge variant="outline" className="text-[8px] border-orange-200 text-orange-600 bg-orange-50 font-bold px-1.5">Pendiente</Badge>
-                                {(isAdmin || expense.creditorId === user?.uid) && (
-                                  <Button 
-                                    size="icon" 
-                                    variant="ghost" 
-                                    className="h-7 w-7 text-emerald-600 hover:bg-emerald-50 rounded-lg"
-                                    onClick={() => updateDebtStatusInGroup(params.id, debt.id, 'paid')}
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" />
-                                  </Button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 sm:gap-6 shrink-0 ml-2">
+                        <div className="text-right">
+                          <p className="text-sm sm:text-base font-black text-primary font-headline">${expense.totalAmount.toFixed(2)}</p>
+                        </div>
+                        <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", expandedGastoId === expense.id && "rotate-90")} />
+                      </div>
+                    </div>
+                    
+                    {expandedGastoId === expense.id && (
+                      <div className="bg-muted/10 p-4 space-y-3 border-t">
+                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 px-2 mb-2">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Desglose Individual</span>
+                          <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="h-9 text-[10px] font-bold text-accent hover:text-accent hover:bg-accent/10 rounded-xl w-full sm:w-auto"
+                            onClick={() => showCreditorDetails(expense.creditorId)}
+                          >
+                            <CreditCard className="h-3 w-3 mr-2" /> Datos de Pago Acreedor
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          {expense.debts.map(debt => (
+                            <div key={debt.id} className="flex items-center justify-between bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-primary/5 shadow-sm">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0">
+                                  {members.find(m => m.uid === debt.debtorId)?.displayName?.[0] || '?'}
+                                </div>
+                                <span className="text-xs font-bold truncate pr-2">{members.find(m => m.uid === debt.debtorId)?.displayName || 'Usuario'}</span>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="text-xs font-black text-primary">${debt.amount.toFixed(2)}</span>
+                                {debt.status === 'paid' ? (
+                                  <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <Badge variant="outline" className="text-[8px] border-orange-200 text-orange-600 bg-orange-50 font-bold px-1.5 py-0.5">Pendiente</Badge>
+                                    {(isAdmin || expense.creditorId === user?.uid) && (
+                                      <Button 
+                                        size="icon" 
+                                        variant="ghost" 
+                                        className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 rounded-lg shrink-0 border border-emerald-100"
+                                        onClick={() => updateDebtStatusInGroup(params.id, debt.id, 'paid')}
+                                      >
+                                        <CheckCircle2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {groupedExpenses.length === 0 && (
-                <div className="text-center py-20 opacity-30 flex flex-col items-center">
-                  <ReceiptText className="h-12 w-12 mb-2" />
-                  <p className="font-bold text-xs uppercase tracking-widest">Sin gastos registrados</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {groupedExpenses.length === 0 && (
+                  <div className="text-center py-20 opacity-30 flex flex-col items-center">
+                    <ReceiptText className="h-12 w-12 mb-2" />
+                    <p className="font-bold text-[10px] uppercase tracking-widest">Sin gastos registrados</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-        <div className="space-y-6">
-           {receipts?.filter(r => r.status === 'open').map(receipt => (
-            <Card key={receipt.id} className="border-accent/30 shadow-md rounded-[2rem] overflow-hidden bg-white">
-              <CardHeader className="bg-accent/5 pb-3 border-b">
-                <CardTitle className="text-xs font-black uppercase tracking-widest text-accent flex items-center gap-2">
-                  <ScanLine className="h-4 w-4" /> Boleta Activa
+        <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
+           {receipts?.filter(r => r.status === 'active').map(receipt => (
+            <Card key={receipt.id} className="border-accent/30 shadow-lg rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
+              <CardHeader className="bg-accent/5 pb-3 border-b px-4">
+                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-accent flex items-center gap-2">
+                  <ScanLine className="h-4 w-4" /> Boleta Colaborativa
                 </CardTitle>
+                <p className="text-[9px] text-muted-foreground font-medium">Marca lo que consumiste, los cambios se ven al instante.</p>
               </CardHeader>
-              <CardContent className="p-0 max-h-[400px] overflow-y-auto">
+              <CardContent className="p-0 max-h-[350px] sm:max-h-[450px] overflow-y-auto">
                 <div className="divide-y">
                   {receipt.items.map(item => (
-                    <div key={item.id} className="p-4 space-y-3 hover:bg-muted/10 transition-colors">
-                      <div>
-                        <p className="text-xs font-bold text-primary">{item.name}</p>
-                        <p className="text-[10px] text-muted-foreground">${item.price.toFixed(2)}</p>
+                    <div key={item.id} className="p-4 space-y-3 hover:bg-muted/5 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <div className="min-w-0 pr-2">
+                          <p className="text-xs font-bold text-primary truncate">{item.name}</p>
+                          <p className="text-[10px] text-muted-foreground font-medium">${item.price.toFixed(2)}</p>
+                        </div>
                       </div>
                       
-                      <div className="space-y-2 bg-muted/20 p-2.5 rounded-xl text-[11px]">
-                        <div className="grid grid-cols-1 gap-2">
-                          {members.map(m => {
-                            const claimKey = `${item.id}_${m.uid}`;
-                            const currentPercentage = receipt.claims?.[claimKey] || 0;
-                            const isClaimed = currentPercentage > 0;
-                            
-                            return (
-                              <div key={m.uid} className="flex items-center justify-between bg-white p-2 rounded-lg border border-transparent">
-                                <div className="flex items-center gap-2 truncate max-w-[150px]">
-                                  <Checkbox 
-                                    checked={isClaimed} 
-                                    onCheckedChange={(val) => {
-                                      claimReceiptItem(params.id, receipt.id, item.id, m.uid, val ? 100 : 0);
-                                    }} 
-                                    className="h-4 w-4 rounded" 
-                                  />
-                                  <span className="font-bold text-xs truncate">{m.displayName}</span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {members.map(m => {
+                          const claimKey = `${item.id}_${m.uid}`;
+                          const currentPercentage = receipt.claims?.[claimKey] || 0;
+                          const isClaimed = currentPercentage > 0;
+                          
+                          return (
+                            <div 
+                              key={m.uid} 
+                              className={cn(
+                                "flex items-center gap-2 p-2 rounded-xl border transition-all active:scale-[0.98]",
+                                isClaimed ? "bg-accent/5 border-accent/20" : "bg-muted/20 border-transparent"
+                              )}
+                              onClick={() => claimReceiptItem(params.id, receipt.id, item.id, m.uid, isClaimed ? 0 : 100)}
+                            >
+                              <Checkbox 
+                                checked={isClaimed} 
+                                onCheckedChange={() => {}} // Se maneja en el div
+                                className="h-4 w-4 rounded pointer-events-none" 
+                              />
+                              <span className="font-bold text-[10px] truncate flex-1">{m.displayName?.split(' ')[0]}</span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
                 </div>
               </CardContent>
-              <CardFooter className="p-4 bg-accent/5 border-t flex flex-col gap-2">
-                <Button className="w-full bg-accent text-xs font-black uppercase" onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, receipt.claims, receipt.creditorId)}>Finalizar Boleta</Button>
+              <CardFooter className="p-4 bg-accent/5 border-t">
+                {user?.uid === receipt.creditorId ? (
+                  <Button className="w-full bg-accent text-[10px] font-black uppercase tracking-widest h-11 rounded-xl shadow-lg" onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, receipt.claims, receipt.creditorId)}>Finalizar y Cobrar</Button>
+                ) : (
+                  <div className="w-full text-center py-2 px-4 rounded-xl bg-muted/50 border border-dashed text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                    Esperando que el acreedor finalice
+                  </div>
+                )}
               </CardFooter>
             </Card>
           ))}
 
-          <Card className="border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
-            <CardHeader className="pb-3 border-b">
-              <CardTitle className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-primary">
-                <Users className="h-4 w-4" /> Miembros ({members.length})
+          <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
+            <CardHeader className="pb-3 border-b px-4">
+              <CardTitle className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2 text-primary">
+                <Users className="h-4 w-4" /> Miembros del Grupo ({members.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 space-y-3">
+            <CardContent className="pt-4 space-y-2 px-4">
               {members.map(m => (
-                <div key={m.uid} className="flex items-center gap-3 text-xs p-2.5 rounded-2xl bg-muted/20">
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">{m.displayName?.[0] || 'U'}</div>
+                <div key={m.uid} className="flex items-center gap-3 text-xs p-2.5 rounded-xl bg-muted/30 border border-transparent hover:border-primary/5">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary shrink-0">{m.displayName?.[0] || 'U'}</div>
                   <div className="flex-1 min-w-0"><p className="font-bold truncate text-primary/80">{m.displayName}</p></div>
                 </div>
               ))}
@@ -525,29 +536,29 @@ Papas fritas;2;3500;7000`;
       </div>
 
       <Dialog open={addingExpense} onOpenChange={setAddingExpense}>
-        <DialogContent className="max-w-xl rounded-[2.5rem] p-8 border-none overflow-y-auto max-h-[90vh]">
+        <DialogContent className="w-[95vw] sm:max-w-xl rounded-[2rem] p-6 sm:p-8 border-none overflow-y-auto max-h-[90vh] mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-headline font-bold">Registrar Gasto</DialogTitle>
+            <DialogTitle className="text-xl sm:text-2xl font-headline font-bold text-primary">Registrar Gasto</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            <div className="grid grid-cols-3 gap-2 bg-muted/30 p-1 rounded-2xl">
-              <Button variant={expenseMode === 'manual' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[11px] font-bold" onClick={() => setExpenseMode('manual')}>Manual</Button>
-              <Button variant={expenseMode === 'event' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[11px] font-bold" onClick={() => setExpenseMode('event')}>Por Evento</Button>
-              <Button variant={expenseMode === 'item' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[11px] font-bold" onClick={() => setExpenseMode('item')}>Por Ítem (IA)</Button>
+            <div className="grid grid-cols-3 gap-2 bg-muted/30 p-1.5 rounded-2xl">
+              <Button variant={expenseMode === 'manual' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('manual')}>Manual</Button>
+              <Button variant={expenseMode === 'event' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('event')}>Evento</Button>
+              <Button variant={expenseMode === 'item' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('item')}>Boleta IA</Button>
             </div>
 
             {expenseMode === 'event' && (
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest px-1">Seleccionar Evento</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Vincular a Evento</Label>
                 <Select onValueChange={handleEventSelect} value={selectedEventId || ""}>
-                  <SelectTrigger className="h-12 rounded-xl">
-                    <SelectValue placeholder="Elegir un evento..." />
+                  <SelectTrigger className="h-12 rounded-xl text-xs">
+                    <SelectValue placeholder="Elegir un evento reciente..." />
                   </SelectTrigger>
                   <SelectContent>
                     {events?.map(ev => (
                       <SelectItem key={ev.id} value={ev.id} className="text-xs">
-                        {ev.title} ({ev.date}) - ${ev.totalCost}
+                        {ev.title} ({ev.date})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -556,9 +567,9 @@ Papas fritas;2;3500;7000`;
             )}
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest px-1">Acreedor (Quién pagó)</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">¿Quién pagó el gasto?</Label>
               <Select value={creditorId} onValueChange={setCreditorId}>
-                <SelectTrigger className="h-12 rounded-xl">
+                <SelectTrigger className="h-12 rounded-xl text-xs">
                   <SelectValue placeholder="Seleccionar acreedor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -571,16 +582,16 @@ Papas fritas;2;3500;7000`;
 
             {expenseMode !== 'item' ? (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Concepto del Gasto</Label>
-                    <Input placeholder="Ej: Pizza post-partido" value={expenseTitle} onChange={e => setExpenseTitle(e.target.value)} className="h-12 rounded-xl" />
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Concepto</Label>
+                    <Input placeholder="Ej: Pizza / Cancha / Luces" value={expenseTitle} onChange={e => setExpenseTitle(e.target.value)} className="h-12 rounded-xl text-sm" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Monto Total ($)</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Monto Total</Label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input type="number" placeholder="0.00" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} className="h-12 pl-9 rounded-xl font-bold" />
+                      <Input type="number" placeholder="0.00" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} className="h-12 pl-9 rounded-xl font-bold text-sm" />
                     </div>
                   </div>
                 </div>
@@ -592,10 +603,11 @@ Papas fritas;2;3500;7000`;
 
                 {divideEqually ? (
                   <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2 bg-muted/20 p-4 rounded-[2rem] max-h-48 overflow-y-auto">
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">¿Quiénes entran en la división?</Label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-muted/20 p-4 rounded-2xl max-h-48 overflow-y-auto">
                       {members.map(m => (
-                        <div key={m.uid} className={cn("flex items-center gap-2 p-2 rounded-xl border transition-all cursor-pointer", selectedMembers.includes(m.uid) ? "bg-primary/5 border-primary/20" : "bg-white")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
-                          <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md" />
+                        <div key={m.uid} className={cn("flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98]", selectedMembers.includes(m.uid) ? "bg-white border-primary/20 shadow-sm" : "bg-transparent border-transparent")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
+                          <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md pointer-events-none" />
                           <span className="text-[11px] font-bold truncate">{m.displayName}</span>
                         </div>
                       ))}
@@ -603,48 +615,77 @@ Papas fritas;2;3500;7000`;
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="space-y-2 bg-muted/20 p-4 rounded-[2rem] max-h-60 overflow-y-auto">
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Montos Manuales</Label>
+                    <div className="space-y-2 bg-muted/20 p-3 sm:p-4 rounded-2xl max-h-60 overflow-y-auto border border-dashed">
                       {members.map(m => (
-                        <div key={m.uid} className="flex items-center justify-between bg-white p-3 rounded-xl border">
-                          <span className="text-xs font-bold truncate">{m.displayName}</span>
-                          <Input type="number" placeholder="0.00" className="h-9 w-32 font-bold" value={manualAmounts[m.uid] || ""} onChange={(e) => setManualAmounts({ ...manualAmounts, [m.uid]: e.target.value })} />
+                        <div key={m.uid} className="flex items-center justify-between bg-white p-3 rounded-xl border shadow-sm">
+                          <span className="text-[11px] font-bold truncate pr-2">{m.displayName?.split(' ')[0]}</span>
+                          <Input type="number" placeholder="0.00" className="h-9 w-24 sm:w-32 font-bold text-xs" value={manualAmounts[m.uid] || ""} onChange={(e) => setManualAmounts({ ...manualAmounts, [m.uid]: e.target.value })} />
                         </div>
                       ))}
                     </div>
-                    <div className={cn("p-4 rounded-2xl text-xs font-bold flex justify-between", Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")}>
-                      <span>Total Asignado: ${manualSum.toFixed(2)} / Objetivo: ${totalTarget.toFixed(2)}</span>
+                    <div className={cn("p-4 rounded-xl text-[10px] font-bold flex justify-between items-center shadow-inner", Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")}>
+                      <span>Asignado: ${manualSum.toFixed(2)}</span>
+                      <span>{Math.abs(difference) < 0.01 ? <CheckCircle2 className="h-4 w-4" /> : `Falta: $${difference.toFixed(2)}`}</span>
                     </div>
                   </div>
                 )}
               </>
             ) : (
               <div className="space-y-4">
-                <Button type="button" onClick={copyAiPrompt} className="w-full">Copiar prompt para IA</Button>
-                <Textarea placeholder="Pega el resultado estructurado aquí" className="min-h-[110px]" value={pastedText} onChange={(e) => setPastedText(e.target.value)} />
-                <Button type="button" className="w-full" onClick={handleParseItems}>Procesar Texto de Boleta</Button>
+                <div className="bg-primary/5 p-5 rounded-2xl border border-primary/10 space-y-3 text-center">
+                  <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">Usa una IA para escanear tu boleta y pega aquí el resultado estructurado para que cada miembro pueda marcar sus ítems.</p>
+                  <Button type="button" onClick={copyAiPrompt} variant="outline" className="w-full h-11 text-[10px] font-black uppercase rounded-xl gap-2">
+                    <Copy className="h-4 w-4" /> Copiar Prompt para IA
+                  </Button>
+                </div>
+                <Textarea placeholder="Pega aquí el resultado (ítem;cantidad;precio;total)" className="min-h-[150px] rounded-xl text-[11px] font-mono p-4" value={pastedText} onChange={(e) => setPastedText(e.target.value)} />
+                <Button type="button" className="w-full h-12 rounded-xl text-[11px] font-black uppercase" onClick={handleParseItems}>Procesar Texto de Boleta</Button>
+                {parsedItems.length > 0 && (
+                  <div className="bg-emerald-50 p-4 rounded-xl text-[10px] font-bold text-emerald-700 text-center border border-emerald-200 animate-in fade-in zoom-in-95 duration-300">
+                    Se han extraído {parsedItems.length} ítems correctamente.
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          <DialogFooter>
-            <Button className="rounded-xl px-8 h-12" onClick={handleRegisterExpense} disabled={isActionLoading || (!divideEqually && expenseMode !== 'item' && Math.abs(difference) > 0.01)}>Confirmar Gasto</Button>
+          <DialogFooter className="flex-col sm:flex-row gap-3">
+            <Button variant="ghost" className="rounded-xl h-12 w-full sm:w-auto" onClick={() => setAddingExpense(false)}>Cancelar</Button>
+            <Button className="rounded-xl px-10 h-12 w-full sm:w-auto font-bold shadow-lg" onClick={handleRegisterExpense} disabled={isActionLoading || (!divideEqually && expenseMode !== 'item' && Math.abs(difference) > 0.01)}>
+              {isActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar Gasto"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!creditorProfile} onOpenChange={() => setCreditorProfile(null)}>
-        <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none text-center">
-          <DialogHeader><DialogTitle className="text-2xl font-headline font-bold">Datos de Pago</DialogTitle></DialogHeader>
-          <div className="bg-muted/30 p-6 rounded-[2rem] font-mono text-left whitespace-pre-wrap">
-            {creditorProfile?.transferDetails || "El acreedor no cargó sus instrucciones bancarias."}
+        <DialogContent className="w-[90vw] max-w-md rounded-[2rem] p-6 sm:p-8 border-none text-center mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl sm:text-2xl font-headline font-bold text-primary">Datos de Transferencia</DialogTitle>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{creditorProfile?.displayName}</p>
+          </DialogHeader>
+          <div className="bg-muted/30 p-6 rounded-[1.5rem] font-mono text-xs sm:text-sm text-left whitespace-pre-wrap border border-dashed mt-4 leading-relaxed">
+            {creditorProfile?.transferDetails || "El acreedor no ha configurado sus instrucciones bancarias."}
           </div>
+          <Button className="w-full h-12 rounded-xl mt-6 font-bold" onClick={() => setCreditorProfile(null)}>Entendido</Button>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
-        <DialogContent className="max-w-sm rounded-[2.5rem] p-8 text-center border-none">
-          <DialogHeader><DialogTitle>Enlace de Invitación</DialogTitle></DialogHeader>
-          <Input readOnly value={group.inviteLink} className="text-center h-11" />
+        <DialogContent className="w-[90vw] max-w-sm rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
+          <DialogHeader className="pb-4"><DialogTitle className="text-xl font-headline">Compartir Invitación</DialogTitle></DialogHeader>
+          <div className="space-y-6">
+            <div className="p-4 bg-muted/30 rounded-2xl border-2 border-dashed text-xs font-mono break-all leading-relaxed">
+              {group.inviteLink}
+            </div>
+            <Button 
+              className="w-full h-12 rounded-xl font-bold gap-2" 
+              onClick={() => { navigator.clipboard.writeText(group.inviteLink); toast({ title: "Enlace Copiado", description: "Envíalo por WhatsApp a tus amigos." }); }}
+            >
+              <Copy className="h-4 w-4" /> Copiar Enlace
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
