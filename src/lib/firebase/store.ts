@@ -51,6 +51,8 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         role: data.role || "user",
         createdAt: data.createdAt || Date.now()
       };
+    } else {
+      console.error(`[getUserProfile] No se encontró el perfil de usuario para el uid: ${uid}`);
     }
   } catch (error) {
     console.error(`[getUserProfile] Error al leer perfil para uid: ${uid}`, error);
@@ -326,6 +328,12 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
+    
+    let descriptionText = `${event.title}: ${conceptText} (Presente)`;
+    if (myGuests.length > 0) {
+      descriptionText = `${event.title}: ${conceptText} (Presente + invitados: ${myGuests.map(g => g.name).join(', ')})`;
+    }
+
     const multiplier = 1 + myGuests.length;
     const finalAmount = costPerHead * multiplier;
 
@@ -334,7 +342,7 @@ export const chargeEventToGroup = async (eventId: string) => {
         event.groupId, 
         uid, 
         finalAmount, 
-        `${event.title}: ${conceptText} (Presente + ${myGuests.length} invitados)`, 
+        descriptionText, 
         undefined,
         { eventId: event.id, eventName: event.title }
       );
