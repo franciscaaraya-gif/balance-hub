@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useMemo, useRef } from "react";
+import { useEffect, useState, use, useMemo } from "react";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { 
   getGroupMembersDetails, 
@@ -10,7 +10,8 @@ import {
   claimReceiptItem, 
   finalizeReceipt, 
   updateDebtStatusInGroup, 
-  getUserProfile
+  getUserProfile,
+  generateDebtSummary
 } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile, Receipt, ReceiptItem, Event } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -80,15 +81,20 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   }, [firestore, params.id, user?.uid]);
   const { data: receipts } = useCollection<Receipt>(receiptsQuery);
 
+  // Carga de eventos del grupo con filtro y ordenamiento
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
-    return query(collection(firestore, 'events'), where('groupId', '==', params.id), orderBy('createdAt', 'desc'));
+    return query(
+      collection(firestore, 'events'), 
+      where('groupId', '==', params.id), 
+      orderBy('createdAt', 'desc')
+    );
   }, [firestore, params.id, user?.uid]);
   const { data: events, error: eventsError } = useCollection<Event>(eventsQuery);
 
   useEffect(() => {
     if (eventsError) {
-      console.error("Error cargando eventos de este grupo:", eventsError);
+      console.error("Error en query de eventos (posible falta de índice):", eventsError);
     }
   }, [eventsError]);
 
@@ -105,21 +111,21 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const groupedExpenses = useMemo(() => {
     if (!debts) return [];
-    const groups: Record<string, Debt[]> = {};
+    const groupsMap: Record<string, Debt[]> = {};
     debts.forEach(debt => {
       const gid = debt.chargeGroupId || debt.id;
-      if (!groups[gid]) groups[gid] = [];
-      groups[gid].push(debt);
+      if (!groupsMap[gid]) groupsMap[gid] = [];
+      groupsMap[gid].push(debt);
     });
-    return Object.entries(groups).map(([id, debts]) => ({
+    return Object.entries(groupsMap).map(([id, debtsList]) => ({
       id,
-      creditorId: debts[0].creditorId,
-      description: debts[0].description,
-      totalAmount: debts.reduce((sum, d) => sum + d.amount, 0),
-      createdAt: debts[0].createdAt,
-      debts: debts,
-      paidCount: debts.filter(d => d.status === 'paid').length,
-      totalCount: debts.length
+      creditorId: debtsList[0].creditorId,
+      description: debtsList[0].description,
+      totalAmount: debtsList.reduce((sum, d) => sum + d.amount, 0),
+      createdAt: debtsList[0].createdAt,
+      debts: debtsList,
+      paidCount: debtsList.filter(d => d.status === 'paid').length,
+      totalCount: debtsList.length
     })).sort((a, b) => b.createdAt - a.createdAt);
   }, [debts]);
 
@@ -168,7 +174,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         toast({
           variant: "destructive",
           title: "Error de formato",
-          description: `La línea ${i + 1} no cumple el formato 'nombre;cantidad;precio_unitario;precio_total'`
+          description: `La línea ${i + 1} debe ser: nombre;cantidad;precio_unitario;precio_total`
         });
         return;
       }
@@ -180,8 +186,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       if (!name || isNaN(totalPrice)) {
         toast({
           variant: "destructive",
-          title: "Error de formato",
-          description: `Monto o nombre inválido en la línea ${i + 1}`
+          title: "Datos inválidos",
+          description: `Error en línea ${i + 1}`
         });
         return;
       }
@@ -189,30 +195,26 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     }
     
     if (items.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Texto vacío",
-        description: "No se encontraron ítems válidos para procesar."
-      });
+      toast({ variant: "destructive", title: "Vacío", description: "No se encontraron ítems." });
       return;
     }
     
     setParsedItems(items);
     const sum = items.reduce((acc, item) => acc + item.totalPrice, 0);
     setExpenseAmount(sum.toString());
-    toast({ title: "Texto Procesado", description: `Se extrajeron ${items.length} ítems correctamente.` });
+    toast({ title: "Boleta Procesada", description: `Extraídos ${items.length} ítems.` });
   };
 
   const handleRegisterExpense = async () => {
     if (expenseMode === 'item') {
       if (parsedItems.length === 0) {
-        toast({ variant: "destructive", title: "Faltan datos", description: "Por favor, ingresa y procesa el texto de la boleta primero." });
+        toast({ variant: "destructive", title: "Faltan datos", description: "Procesa el texto de la boleta primero." });
         return;
       }
       setIsActionLoading(true);
       try {
         await createReceipt(params.id, parsedItems.map(it => ({ name: it.name, price: it.totalPrice })));
-        toast({ title: "Boleta Creada", description: "Se ha cargado como Boleta Activa para que los miembros reclamen sus consumos." });
+        toast({ title: "Boleta Activa Creada", description: "Ahora cada miembro puede reclamar lo que consumió." });
         setAddingExpense(false);
         resetExpenseForm();
       } catch (error: any) {
@@ -228,30 +230,23 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       return;
     }
 
-    if (divideEqually) {
-      if (selectedMembers.length === 0) {
-        toast({ variant: "destructive", title: "Selecciona participantes", description: "Debes marcar al menos a un miembro para dividir." });
-        return;
-      }
-      setIsActionLoading(true);
-      try {
-        const amount = parseFloat(expenseAmount) / selectedMembers.length;
-        await addFixedDebtToAll(params.id, amount, expenseTitle, selectedMembers, creditorId);
-        toast({ title: "Gasto Registrado", description: "Se han generado las deudas compartidas equitativamente." });
-        setAddingExpense(false);
-        resetExpenseForm();
-      } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: error.message });
-      } finally {
-        setIsActionLoading(false);
-      }
-    } else {
-      if (Math.abs(difference) > 0.01) {
-        toast({ variant: "destructive", title: "El monto no cuadra", description: `La suma de los montos individuales debe ser igual al total. Diferencia actual: $${difference.toFixed(2)}` });
-        return;
-      }
-      setIsActionLoading(true);
-      try {
+    setIsActionLoading(true);
+    try {
+      if (divideEqually) {
+        if (selectedMembers.length === 0) {
+          toast({ variant: "destructive", title: "Selecciona participantes" });
+          setIsActionLoading(false);
+          return;
+        }
+        const amountPerPerson = parseFloat(expenseAmount) / selectedMembers.length;
+        await addFixedDebtToAll(params.id, amountPerPerson, expenseTitle, selectedMembers, creditorId);
+        toast({ title: "Gastos Generados", description: "División equitativa completada." });
+      } else {
+        if (Math.abs(difference) > 0.01) {
+          toast({ variant: "destructive", title: "Monto no cuadra", description: `Diferencia: $${difference.toFixed(2)}` });
+          setIsActionLoading(false);
+          return;
+        }
         const chargeGroupId = Math.random().toString(36).substring(7);
         for (const uid of Object.keys(manualAmounts)) {
           const amt = parseFloat(manualAmounts[uid]) || 0;
@@ -259,14 +254,14 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
             await addDebt(params.id, uid, amt, expenseTitle, creditorId, chargeGroupId);
           }
         }
-        toast({ title: "Gasto Registrado", description: "Se han guardado los cobros con montos asimétricos." });
-        setAddingExpense(false);
-        resetExpenseForm();
-      } catch (error: any) {
-        toast({ variant: "destructive", title: "Error", description: error.message });
-      } finally {
-        setIsActionLoading(false);
+        toast({ title: "Gastos Registrados", description: "División manual completada." });
       }
+      setAddingExpense(false);
+      resetExpenseForm();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -512,7 +507,7 @@ Papas fritas;2;3500;7000`;
             <CardContent className="pt-4 space-y-3">
               {members.map(m => (
                 <div key={m.uid} className="flex items-center gap-3 text-xs p-2.5 rounded-2xl bg-muted/20 border border-transparent hover:border-primary/10 transition-all">
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">{m.displayName?.[0]}</div>
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">{m.displayName?.[0] || 'U'}</div>
                   <div className="flex-1 min-w-0">
                     <p className="font-bold truncate text-primary/80">{m.displayName}</p>
                     <p className="text-[8px] text-muted-foreground uppercase font-black">{m.uid === group.adminId ? 'Fundador' : 'Miembro'}</p>
@@ -529,7 +524,7 @@ Papas fritas;2;3500;7000`;
         <DialogContent className="max-w-xl rounded-[2.5rem] p-8 border-none overflow-y-auto max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-headline font-bold">Registrar Gasto</DialogTitle>
-            <DialogDescription className="text-xs">Crea un cobro compartido eligiendo el origen y la modalidad de división.</DialogDescription>
+            <DialogDescription className="text-xs">Elige cómo quieres dividir la cuenta entre los miembros del grupo.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
@@ -539,7 +534,7 @@ Papas fritas;2;3500;7000`;
                 className="rounded-xl h-10 text-[11px] font-bold px-1"
                 onClick={() => setExpenseMode('manual')}
               >
-                Gasto Manual
+                Manual
               </Button>
               <Button 
                 variant={expenseMode === 'event' ? 'default' : 'ghost'} 
@@ -559,10 +554,10 @@ Papas fritas;2;3500;7000`;
 
             {expenseMode === 'event' && (
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest px-1">Seleccionar Evento Reciente</Label>
+                <Label className="text-[10px] font-black uppercase tracking-widest px-1">Seleccionar Evento</Label>
                 <Select onValueChange={handleEventSelect} value={selectedEventId || ""}>
                   <SelectTrigger className="h-12 rounded-xl">
-                    <SelectValue placeholder="Elegir un evento de este grupo..." />
+                    <SelectValue placeholder="Elegir un evento..." />
                   </SelectTrigger>
                   <SelectContent>
                     {events && events.length > 0 ? (
@@ -572,7 +567,7 @@ Papas fritas;2;3500;7000`;
                         </SelectItem>
                       ))
                     ) : (
-                      <div className="p-2 text-center text-xs opacity-40">No hay eventos para este grupo.</div>
+                      <div className="p-4 text-center text-xs opacity-40">No hay eventos para este grupo.</div>
                     )}
                   </SelectContent>
                 </Select>
@@ -607,7 +602,7 @@ Papas fritas;2;3500;7000`;
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest px-1">¿Quién pagó? (Acreedor)</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest px-1">Acreedor (Quién pagó)</Label>
                   <Select value={creditorId} onValueChange={setCreditorId}>
                     <SelectTrigger className="h-12 rounded-xl">
                       <SelectValue placeholder="Seleccionar acreedor" />
@@ -615,7 +610,7 @@ Papas fritas;2;3500;7000`;
                     <SelectContent>
                       {members.map(m => (
                         <SelectItem key={m.uid} value={m.uid} className="text-xs">
-                          {m.displayName} {m.uid === user?.uid ? "(Tú)" : ""}
+                          {m.displayName || 'Usuario'} {m.uid === user?.uid ? "(Tú)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -625,7 +620,7 @@ Papas fritas;2;3500;7000`;
                 <div className="flex items-center justify-between p-4 bg-muted/40 rounded-2xl border">
                   <div className="space-y-0.5">
                     <Label className="text-xs font-bold">Dividir en partes iguales</Label>
-                    <p className="text-[10px] text-muted-foreground">Apágalo para asignar cuotas manuales asimétricas.</p>
+                    <p className="text-[10px] text-muted-foreground">Activa para cuotas idénticas o desactiva para montos variables.</p>
                   </div>
                   <Switch checked={divideEqually} onCheckedChange={(val) => { setDivideEqually(val); setManualAmounts({}); }} />
                 </div>
@@ -633,7 +628,7 @@ Papas fritas;2;3500;7000`;
                 {divideEqually ? (
                   <div className="space-y-3">
                     <div className="flex justify-between items-center px-1">
-                      <Label className="text-[10px] font-black uppercase tracking-widest">¿Quiénes dividen en partes iguales?</Label>
+                      <Label className="text-[10px] font-black uppercase tracking-widest">Participantes</Label>
                       <Button 
                         variant="ghost" 
                         size="sm" 
@@ -658,13 +653,13 @@ Papas fritas;2;3500;7000`;
                           }}
                         >
                           <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md" />
-                          <span className="text-[11px] font-bold truncate">{m.displayName}</span>
+                          <span className="text-[11px] font-bold truncate">{m.displayName || 'Usuario'}</span>
                         </div>
                       ))}
                     </div>
                     {selectedMembers.length > 0 && expenseAmount && (
                       <div className="bg-primary/5 p-4 rounded-2xl flex justify-between items-center border">
-                        <span className="text-xs font-bold text-primary/70">Cuota estimada por cabeza:</span>
+                        <span className="text-xs font-bold text-primary/70">Cuota p/p:</span>
                         <span className="text-lg font-black text-primary">
                           ${(parseFloat(expenseAmount) / selectedMembers.length).toFixed(2)}
                         </span>
@@ -673,11 +668,11 @@ Papas fritas;2;3500;7000`;
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Asignar Monto Manual por Miembro</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Asignar Monto Individual</Label>
                     <div className="space-y-2 bg-muted/20 p-4 rounded-[2rem] max-h-60 overflow-y-auto">
                       {members.map(m => (
                         <div key={m.uid} className="flex items-center justify-between bg-white p-3 rounded-xl border">
-                          <span className="text-xs font-bold truncate max-w-[180px]">{m.displayName}</span>
+                          <span className="text-xs font-bold truncate max-w-[180px]">{m.displayName || 'Usuario'}</span>
                           <div className="relative w-32">
                             <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
                             <Input 
@@ -696,15 +691,15 @@ Papas fritas;2;3500;7000`;
                       Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700 border-emerald-100" : "bg-orange-50 text-orange-700 border-orange-100"
                     )}>
                       <div>
-                        <p>Total Asignado: ${manualSum.toFixed(2)} / Objetivo: ${totalTarget.toFixed(2)}</p>
+                        <p>Total: ${manualSum.toFixed(2)} / Objetivo: ${totalTarget.toFixed(2)}</p>
                       </div>
-                      <div>
+                      <div className="text-right">
                         {Math.abs(difference) < 0.01 ? (
-                          <span>¡Monto Cuadra!</span>
+                          <span>¡Perfecto!</span>
                         ) : difference > 0 ? (
-                          <span>Faltan asignar: ${difference.toFixed(2)}</span>
+                          <span>Faltan: ${difference.toFixed(2)}</span>
                         ) : (
-                          <span>Sobran asignados: ${Math.abs(difference).toFixed(2)}</span>
+                          <span>Sobran: ${Math.abs(difference).toFixed(2)}</span>
                         )}
                       </div>
                     </div>
@@ -713,77 +708,54 @@ Papas fritas;2;3500;7000`;
               </>
             ) : (
               <div className="space-y-4">
-                <div className="bg-accent/5 p-4 rounded-2xl border border-accent/20 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div className="bg-accent/5 p-4 rounded-2xl border border-accent/20 flex flex-col sm:flex-row justify-between items-center gap-3">
                   <div className="space-y-0.5">
-                    <span className="text-xs font-bold text-accent block">Copia el prompt estructurado</span>
-                    <p className="text-[10px] text-muted-foreground">Pégalo junto a tu foto en ChatGPT o Gemini para obtener el texto formateado.</p>
+                    <span className="text-xs font-bold text-accent block">IA Copy-Paste</span>
+                    <p className="text-[10px] text-muted-foreground">Copia el prompt estructurado para procesar tu boleta.</p>
                   </div>
-                  <Button type="button" size="sm" variant="outline" className="rounded-xl font-bold border-accent/40 text-accent hover:bg-accent/10 h-9" onClick={copyAiPrompt}>
-                    <TextCursorInput className="h-4 w-4 mr-1" /> Copiar prompt para IA
+                  <Button type="button" size="sm" variant="outline" className="rounded-xl font-bold border-accent/40 text-accent h-9" onClick={copyAiPrompt}>
+                    <TextCursorInput className="h-4 w-4 mr-1" /> Copiar prompt
                   </Button>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest px-1">Resultados de la IA (Pegar Aquí)</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest px-1">Pegar Resultados de la IA</Label>
                   <Textarea 
-                    placeholder="nombre_item;cantidad;precio_unitario;precio_total&#10;Cerveza;4;2500;10000&#10;Papas;2;3500;7000"
+                    placeholder="nombre;cantidad;unitario;total"
                     className="min-h-[110px] text-xs font-mono rounded-xl bg-muted/10"
                     value={pastedText}
                     onChange={(e) => setPastedText(e.target.value)}
                   />
                   <Button type="button" className="w-full h-10 rounded-xl" onClick={handleParseItems}>
-                    Procesar Texto de Boleta
+                    Procesar Boleta
                   </Button>
                 </div>
 
                 {parsedItems.length > 0 && (
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Vista Previa y Ajuste de ítems</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest px-1">Ítems Detectados</Label>
                     <div className="border rounded-2xl overflow-hidden bg-white max-h-48 overflow-y-auto">
                       <table className="w-full text-xs text-left">
                         <thead className="bg-muted text-[10px] font-black uppercase tracking-wider border-b">
                           <tr>
-                            <th className="p-3">Ítem</th>
+                            <th className="p-3">Nombre</th>
                             <th className="p-3 text-right">Cant.</th>
-                            <th className="p-3 text-right">Total ($)</th>
+                            <th className="p-3 text-right">Monto ($)</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y">
                           {parsedItems.map((item, idx) => (
                             <tr key={idx}>
-                              <td className="p-2">
-                                <Input 
-                                  value={item.name} 
-                                  className="h-8 text-xs px-2 border-none focus-visible:ring-1" 
-                                  onChange={(e) => {
-                                    const copy = [...parsedItems];
-                                    copy[idx].name = e.target.value;
-                                    setParsedItems(copy);
-                                  }}
-                                />
-                              </td>
-                              <td className="p-2 text-right font-medium opacity-60 px-3">{item.quantity}</td>
-                              <td className="p-2">
-                                <Input 
-                                  type="number"
-                                  value={item.totalPrice || ""} 
-                                  className="h-8 text-xs text-right font-bold px-2 border-none focus-visible:ring-1"
-                                  onChange={(e) => {
-                                    const copy = [...parsedItems];
-                                    copy[idx].totalPrice = parseFloat(e.target.value) || 0;
-                                    setParsedItems(copy);
-                                    const sum = copy.reduce((acc, it) => acc + it.totalPrice, 0);
-                                    setExpenseAmount(sum.toString());
-                                  }}
-                                />
-                              </td>
+                              <td className="p-2 px-3 font-medium">{item.name}</td>
+                              <td className="p-2 text-right opacity-60 px-3">{item.quantity}</td>
+                              <td className="p-2 text-right font-bold px-3">${item.totalPrice.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
                     <div className="bg-primary/5 p-4 rounded-xl border flex justify-between font-bold text-xs text-primary">
-                      <span>Total acumulado de boleta:</span>
+                      <span>Total acumulado:</span>
                       <span>${expenseAmount}</span>
                     </div>
                   </div>
@@ -795,30 +767,30 @@ Papas fritas;2;3500;7000`;
           <DialogFooter className="gap-2">
             <Button variant="ghost" className="rounded-xl" onClick={() => setAddingExpense(false)}>Cancelar</Button>
             <Button 
-              className="rounded-xl px-8 h-12 bg-primary text-white shadow-lg shadow-primary/20" 
+              className="rounded-xl px-8 h-12 bg-primary text-white" 
               onClick={handleRegisterExpense}
               disabled={isActionLoading || (expenseMode !== 'item' && !divideEqually && Math.abs(difference) > 0.01)}
             >
-              {isActionLoading ? <Loader2 className="animate-spin mr-2" /> : expenseMode === 'item' ? "Crear Boleta Compartida" : "Generar Cobros"}
+              {isActionLoading ? <Loader2 className="animate-spin mr-2" /> : "Confirmar Gasto"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Diálogos de Resumen IA e Invitación... (Sin cambios) */}
       <Dialog open={!!creditorProfile} onOpenChange={() => setCreditorProfile(null)}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 border-none text-center">
           <DialogHeader>
             <div className="bg-accent/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
               <CreditCard className="h-8 w-8 text-accent" />
             </div>
-            <DialogTitle className="text-2xl font-headline font-bold">Datos de Transferencia</DialogTitle>
-            <DialogDescription className="text-xs">Transfiere a {creditorProfile?.displayName} para liquidar tu deuda.</DialogDescription>
+            <DialogTitle className="text-2xl font-headline font-bold">Datos de Pago</DialogTitle>
+            <DialogDescription className="text-xs">Transfiere a {creditorProfile?.displayName} para liquidar.</DialogDescription>
           </DialogHeader>
-          
           <div className="py-6 space-y-4">
             {creditorProfile?.transferDetails ? (
               <>
-                <div className="bg-muted/30 p-6 rounded-[2rem] font-mono text-xs text-primary leading-relaxed text-left whitespace-pre-wrap border border-primary/5">
+                <div className="bg-muted/30 p-6 rounded-[2rem] font-mono text-xs text-primary text-left whitespace-pre-wrap border border-primary/5">
                   {creditorProfile.transferDetails}
                 </div>
                 <Button 
@@ -826,16 +798,13 @@ Papas fritas;2;3500;7000`;
                   className="w-full h-12 rounded-xl text-[10px] font-black uppercase tracking-widest gap-2 border-2"
                   onClick={() => copyTransfer(creditorProfile.transferDetails!)}
                 >
-                  <Copy className="h-4 w-4" /> Copiar CBU / Alias
+                  <Copy className="h-4 w-4" /> Copiar Datos
                 </Button>
               </>
             ) : (
-              <div className="py-10 opacity-40 italic text-sm">
-                Este usuario no ha cargado sus datos bancarios todavía.
-              </div>
+              <div className="py-10 opacity-40 italic text-sm">El acreedor no ha configurado sus datos.</div>
             )}
           </div>
-          
           <Button className="w-full h-12 rounded-2xl" onClick={() => setCreditorProfile(null)}>Cerrar</Button>
         </DialogContent>
       </Dialog>
@@ -846,15 +815,14 @@ Papas fritas;2;3500;7000`;
             <div className="bg-accent/10 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
               <BrainCircuit className="h-8 w-8 text-accent" />
             </div>
-            <DialogTitle className="text-2xl font-headline font-bold">Resumen Financiero IA</DialogTitle>
-            <DialogDescription className="text-[10px] font-black uppercase tracking-widest opacity-60">Análisis inteligente de saldos</DialogDescription>
+            <DialogTitle className="text-2xl font-headline font-bold">Resumen IA</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-             <div className="bg-muted/30 p-6 rounded-[2rem] text-sm leading-relaxed whitespace-pre-wrap font-body text-primary/90">
+             <div className="bg-muted/30 p-6 rounded-[2rem] text-sm leading-relaxed whitespace-pre-wrap text-primary/90">
                {aiSummary}
              </div>
           </div>
-          <Button className="w-full h-14 rounded-2xl font-bold text-lg shadow-xl shadow-primary/20" onClick={() => setAiSummary(null)}>Entendido</Button>
+          <Button className="w-full h-14 rounded-2xl font-bold text-lg" onClick={() => setAiSummary(null)}>Entendido</Button>
         </DialogContent>
       </Dialog>
 
@@ -862,17 +830,15 @@ Papas fritas;2;3500;7000`;
         <DialogContent className="max-w-sm rounded-[2.5rem] p-8 border-none text-center">
           <DialogHeader>
             <DialogTitle className="text-2xl font-headline">Invitar al Grupo</DialogTitle>
-            <DialogDescription className="text-xs">Comparte el enlace o escanea el QR.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-6 py-6">
             <div className="bg-white p-4 rounded-[2rem] border-2 border-primary/10 shadow-xl">
               <QrCode className="h-40 w-40 text-primary" />
             </div>
             <div className="w-full space-y-3">
-              <Label className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Enlace de Invitación</Label>
               <div className="flex gap-2">
                 <Input readOnly value={group.inviteLink} className="text-xs h-11 rounded-xl bg-muted/50 border-none" />
-                <Button size="icon" variant="outline" className="h-11 w-11 rounded-xl border-2" onClick={() => { navigator.clipboard.writeText(group.inviteLink); toast({ title: "¡Copiado!" }); }}>
+                <Button size="icon" variant="outline" className="h-11 w-11 rounded-xl border-2" onClick={() => { navigator.clipboard.writeText(group.inviteLink); toast({ title: "Copiado" }); }}>
                   <Share2 className="h-4 w-4" />
                 </Button>
               </div>
