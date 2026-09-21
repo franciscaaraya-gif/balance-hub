@@ -38,7 +38,18 @@ export const createUserProfile = async (uid: string, email: string, displayName:
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   const userRef = doc(db, "userProfiles", uid);
   const snap = await getDoc(userRef);
-  return snap.exists() ? (snap.data() as UserProfile) : null;
+  if (snap.exists()) {
+    const data = snap.data();
+    return {
+      uid: data.uid || snap.id,
+      email: data.email || "",
+      displayName: data.displayName || "Usuario",
+      role: data.role || "user",
+      createdAt: data.createdAt || Date.now()
+    };
+  }
+  console.error(`[getUserProfile] No se encontró el perfil de usuario para el uid: ${uid}`);
+  return null;
 };
 
 export const getGroupMembersDetails = async (memberIds: string[]): Promise<UserProfile[]> => {
@@ -309,7 +320,6 @@ export const chargeEventToGroup = async (eventId: string) => {
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
 
-  // Cobrar a los presentes
   for (const uid of event.presentIds) {
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
     const multiplier = 1 + myGuests.length;
@@ -327,7 +337,6 @@ export const chargeEventToGroup = async (eventId: string) => {
     }
   }
 
-  // Cobrar a los ausentes sólo si aplica el switch
   if (event.chargeAbsentees) {
     for (const uid of absentIds) {
       if (costPerHead > 0) {

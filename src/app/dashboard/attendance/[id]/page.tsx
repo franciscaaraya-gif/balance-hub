@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Circle, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, User, Trash2, XCircle, Plus, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
@@ -34,6 +35,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [isCharging, setIsCharging] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [newGuestName, setNewGuestName] = useState("");
+  const [selectedResponsibleId, setSelectedResponsibleId] = useState<string>("");
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
 
   const eventRef = useMemoFirebase(() => {
@@ -44,14 +46,32 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const { data: event, isLoading: eventLoading, error: eventError } = useDoc<Event>(eventRef);
 
   useEffect(() => {
-    if (event?.participantIds?.length) {
-      getGroupMembersDetails(event.participantIds).then(details => {
+    if (user?.uid && !selectedResponsibleId) {
+      setSelectedResponsibleId(user.uid);
+    }
+  }, [user, selectedResponsibleId]);
+
+  useEffect(() => {
+    const uids = new Set<string>();
+    if (event?.participantIds) {
+      event.participantIds.forEach(id => uids.add(id));
+    }
+    if (event?.externalGuests) {
+      event.externalGuests.forEach(g => uids.add(g.addedBy));
+    }
+
+    if (uids.size > 0) {
+      getGroupMembersDetails(Array.from(uids)).then(details => {
         const map: Record<string, UserProfile> = {};
-        details.forEach(p => map[p.uid] = p);
+        details.forEach(p => {
+          if (p.uid) map[p.uid] = p;
+        });
         setProfilesMap(map);
+      }).catch(err => {
+        console.error("Error cargando perfiles de asistencia:", err);
       });
     }
-  }, [event?.participantIds]);
+  }, [event?.participantIds, event?.externalGuests]);
 
   if (eventLoading) {
     return (
@@ -107,8 +127,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const handleAddGuest = async () => {
     if (!newGuestName.trim() || !user) return;
+    const responsibleId = selectedResponsibleId || user.uid;
     try {
-      await addExternalGuest(event.id, newGuestName.trim(), user.uid);
+      await addExternalGuest(event.id, newGuestName.trim(), responsibleId);
       setNewGuestName("");
       toast({ title: "Invitado agregado" });
     } catch (e) {
@@ -133,7 +154,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20 px-2 sm:px-4">
-      {/* Header card */}
       <div className="bg-primary p-6 sm:p-8 rounded-[2rem] text-primary-foreground shadow-xl">
         <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center">
           <div className="space-y-2">
@@ -154,7 +174,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">
-        {/* Lista de Asistencia */}
         <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[2rem]">
           <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
             <div>
@@ -169,7 +188,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           </CardHeader>
           <CardContent className="pt-6">
             <div className="space-y-8">
-              {/* Participantes Registrados */}
               <div className="space-y-4">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-accent pl-2">Usuarios Registrados</h3>
                 {event.participantIds.map(uid => {
@@ -235,21 +253,43 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 })}
               </div>
 
-              {/* Invitados Externos (+1) */}
               <div className="space-y-4">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-secondary pl-2">Invitados (+1)</h3>
                 
                 {isAdmin && !event.isCharged && (
-                  <div className="flex gap-2 p-2 bg-muted/20 rounded-2xl">
-                    <Input 
-                      placeholder="Nombre del invitado" 
-                      value={newGuestName}
-                      onChange={(e) => setNewGuestName(e.target.value)}
-                      className="h-10 rounded-xl bg-white text-xs"
-                    />
-                    <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 px-4">
-                      <Plus className="h-4 w-4 mr-1" /> Agregar
-                    </Button>
+                  <div className="flex flex-col sm:flex-row gap-2 p-3 bg-muted/20 rounded-2xl space-y-2 sm:space-y-0">
+                    <div className="flex-1">
+                      <Label className="text-[9px] uppercase font-black mb-1 block px-1">Nombre del Invitado</Label>
+                      <Input 
+                        placeholder="Nombre del invitado" 
+                        value={newGuestName}
+                        onChange={(e) => setNewGuestName(e.target.value)}
+                        className="h-10 rounded-xl bg-white text-xs"
+                      />
+                    </div>
+                    <div className="w-full sm:w-48">
+                      <Label className="text-[9px] uppercase font-black mb-1 block px-1">Responsable del Pago</Label>
+                      <Select value={selectedResponsibleId} onValueChange={setSelectedResponsibleId}>
+                        <SelectTrigger className="h-10 rounded-xl bg-white text-xs">
+                          <SelectValue placeholder="Seleccionar responsable" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {event.participantIds.map(uid => {
+                            const p = profilesMap[uid];
+                            return (
+                              <SelectItem key={uid} value={uid} className="text-xs">
+                                {p?.displayName || `Usuario (${uid.substring(0, 5)})`}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-end">
+                      <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 w-full sm:w-auto px-4">
+                        <Plus className="h-4 w-4 mr-1" /> Agregar
+                      </Button>
+                    </div>
                   </div>
                 )}
 
@@ -264,7 +304,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                       </div>
                       <div>
                         <p className="text-sm font-bold">{guest.name}</p>
-                        <p className="text-[8px] text-muted-foreground uppercase font-black">Traído por: {profilesMap[guest.addedBy]?.displayName || "Usuario"}</p>
+                        <p className="text-[8px] text-muted-foreground uppercase font-black">
+                          Traído por: {profilesMap[guest.addedBy]?.displayName || `Usuario (${guest.addedBy.substring(0, 5)})`}
+                        </p>
                       </div>
                     </div>
                     
@@ -304,9 +346,8 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           </CardContent>
         </Card>
 
-        {/* Panel lateral de Control Financiero */}
         <div className="space-y-6">
-          <Card className="border-none shadow-sm rounded-[2rem] bg-white overflow-hidden">
+          <Card className="border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
             <CardHeader className="border-b bg-muted/10">
               <CardTitle className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
                 <Zap className="h-4 w-4 text-accent" /> Regla de Cobro
@@ -374,7 +415,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         </div>
       </div>
 
-      {/* MODAL: QR Check-in */}
       <Dialog open={showQr} onOpenChange={setShowQr}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 text-center border-none">
           <DialogHeader><DialogTitle className="text-2xl font-headline">Check-in QR en Vivo</DialogTitle></DialogHeader>
