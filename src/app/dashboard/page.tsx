@@ -25,7 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
 
 export default function Dashboard() {
-  const { user, isUserLoading } = useUser();
+  const { user, isUserLoading } = user;
   const firestore = useFirestore();
   const { toast } = useToast();
 
@@ -50,10 +50,10 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
 
-  // 3. Deudas que ME deben (Incoming - Solo en revisión)
+  // 3. Deudas que ME deben (Incoming - Todas las no pagadas)
   const incomingDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
-    return query(collectionGroup(firestore, 'debts'), where('creditorId', '==', user.uid), where('status', '==', 'under_review'), orderBy('createdAt', 'desc'));
+    return query(collectionGroup(firestore, 'debts'), where('creditorId', '==', user.uid), orderBy('createdAt', 'desc'));
   }, [firestore, user?.uid]);
   const { data: myIncomingDebts, isLoading: myIncomingLoading } = useCollection<Debt>(incomingDebtsQuery);
 
@@ -61,7 +61,10 @@ export default function Dashboard() {
   useEffect(() => {
     const uids = new Set<string>();
     myDebts?.forEach(d => uids.add(d.creditorId));
-    myIncomingDebts?.forEach(d => uids.add(d.debtorId));
+    myIncomingDebts?.forEach(d => {
+      uids.add(d.debtorId);
+      uids.add(d.creditorId);
+    });
     
     if (uids.size > 0) {
       getGroupMembersDetails(Array.from(uids)).then(profiles => {
@@ -88,22 +91,39 @@ export default function Dashboard() {
     return Object.values(groups).sort((a, b) => b.total - a.total);
   }, [myDebts, user?.uid]);
 
-  // Agrupar deudas entrantes por solicitud de pago (Payment Request ID)
-  const incomingGroups = useMemo(() => {
-    if (!myIncomingDebts) return [];
-    const groups: Record<string, { id: string; debtorId: string; total: number; debts: Debt[]; updatedAt: number }> = {};
+  // Agrupar deudas entrantes (Te deben)
+  const incomingResult = useMemo(() => {
+    if (!myIncomingDebts || !user?.uid) return { pending: [], review: [], total: 0 };
     
-    myIncomingDebts.forEach(debt => {
-      const rid = debt.paymentRequestId || `legacy_${debt.debtorId}_${debt.createdAt}`;
-      if (!groups[rid]) {
-        groups[rid] = { id: rid, debtorId: debt.debtorId, total: 0, debts: [], updatedAt: debt.updatedAt || debt.createdAt };
+    const pendingGroups: Record<string, { debtorId: string; total: number; debts: Debt[] }> = {};
+    const reviewGroups: Record<string, { id: string; debtorId: string; total: number; debts: Debt[]; updatedAt: number }> = {};
+    let totalIncoming = 0;
+
+    myIncomingDebts.filter(d => d.status !== 'paid' && d.debtorId !== d.creditorId).forEach(debt => {
+      totalIncoming += debt.amount;
+
+      if (debt.status === 'under_review') {
+        const rid = debt.paymentRequestId || `legacy_${debt.debtorId}_${debt.createdAt}`;
+        if (!reviewGroups[rid]) {
+          reviewGroups[rid] = { id: rid, debtorId: debt.debtorId, total: 0, debts: [], updatedAt: debt.updatedAt || debt.createdAt };
+        }
+        reviewGroups[rid].total += debt.amount;
+        reviewGroups[rid].debts.push(debt);
+      } else {
+        if (!pendingGroups[debt.debtorId]) {
+          pendingGroups[debt.debtorId] = { debtorId: debt.debtorId, total: 0, debts: [] };
+        }
+        pendingGroups[debt.debtorId].total += debt.amount;
+        pendingGroups[debt.debtorId].debts.push(debt);
       }
-      groups[rid].total += debt.amount;
-      groups[rid].debts.push(debt);
     });
 
-    return Object.values(groups).sort((a, b) => b.updatedAt - a.updatedAt);
-  }, [myIncomingDebts]);
+    return {
+      pending: Object.values(pendingGroups).sort((a, b) => b.total - a.total),
+      review: Object.values(reviewGroups).sort((a, b) => b.updatedAt - a.updatedAt),
+      total: totalIncoming
+    };
+  }, [myIncomingDebts, user?.uid]);
 
   const handleCreateGroup = async () => {
     if (!newGroupName || !user) return;
@@ -262,51 +282,93 @@ export default function Dashboard() {
             </Card>
           </section>
 
-          {/* Tarjeta 2: Te Deben (Validación) */}
+          {/* Tarjeta 2: Te Deben */}
           <section className="space-y-6">
             <h2 className="text-xl font-headline font-bold flex items-center gap-2 text-emerald-600"><ArrowDownLeft className="h-5 w-5" /> Billetera: Te Deben</h2>
             <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
               <div className="bg-secondary p-8 text-white text-center">
-                 <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-2">Total por Validar</p>
-                 <p className="text-5xl font-headline font-bold">${incomingGroups.reduce((sum, g) => sum + g.total, 0).toFixed(2)}</p>
+                 <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-2">Total que Te Deben</p>
+                 <p className="text-5xl font-headline font-bold">${incomingResult.total.toFixed(2)}</p>
               </div>
               <CardContent className="p-6 space-y-8">
-                {myIncomingLoading ? <Loader2 className="animate-spin mx-auto" /> : incomingGroups.length === 0 ? (
+                {myIncomingLoading ? <Loader2 className="animate-spin mx-auto" /> : incomingResult.total === 0 ? (
                   <div className="py-6 text-center opacity-30 font-bold uppercase text-[10px]">No tienes cobros pendientes</div>
-                ) : incomingGroups.map(group => {
-                  const debtor = profilesMap[group.debtorId];
-                  return (
-                    <div key={group.id} className="space-y-3">
-                      <div className="flex items-center justify-between px-1">
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary"><User className="h-4 w-4" /></div>
-                          <div className="min-w-0">
-                            <span className="text-[11px] font-black uppercase text-primary block">{debtor?.displayName || '...'} reportó pago</span>
-                            <span className="text-[8px] text-muted-foreground uppercase">{new Date(group.updatedAt).toLocaleDateString()} {new Date(group.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                          </div>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          className="h-8 rounded-xl text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => setSelectedValidationGroup({ ...group, name: debtor?.displayName || 'Usuario' })}
-                        >
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> Validar ${group.total.toFixed(2)}
-                        </Button>
+                ) : (
+                  <>
+                    {/* Sección 1: En Revisión */}
+                    {incomingResult.review.length > 0 && (
+                      <div className="space-y-6">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded">Pendientes de Validación</h3>
+                        {incomingResult.review.map(group => {
+                          const debtor = profilesMap[group.debtorId];
+                          return (
+                            <div key={group.id} className="space-y-3">
+                              <div className="flex items-center justify-between px-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 rounded-full bg-secondary/10 flex items-center justify-center text-secondary"><User className="h-4 w-4" /></div>
+                                  <div className="min-w-0">
+                                    <span className="text-[11px] font-black uppercase text-primary block">{debtor?.displayName || '...'} reportó pago</span>
+                                    <span className="text-[8px] text-muted-foreground uppercase">{new Date(group.updatedAt).toLocaleDateString()}</span>
+                                  </div>
+                                </div>
+                                <Button 
+                                  size="sm" 
+                                  className="h-8 rounded-xl text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  onClick={() => setSelectedValidationGroup({ ...group, name: debtor?.displayName || 'Usuario' })}
+                                >
+                                  <CheckCircle2 className="h-3 w-3 mr-1" /> Validar ${group.total.toFixed(2)}
+                                </Button>
+                              </div>
+                              <div className="space-y-2 pl-2 border-l-2 border-secondary/20">
+                                {group.debts.map(debt => (
+                                  <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
+                                     <div className="min-w-0 pr-2">
+                                       <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
+                                       <p className="font-bold truncate">{debt.description}</p>
+                                     </div>
+                                     <span className="font-bold text-secondary shrink-0">${debt.amount.toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="space-y-2 pl-2 border-l-2 border-secondary/20">
-                        {group.debts.map(debt => (
-                          <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
-                             <div className="min-w-0 pr-2">
-                               <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
-                               <p className="font-bold truncate">{debt.description}</p>
-                             </div>
-                             <span className="font-bold text-secondary shrink-0">${debt.amount.toFixed(2)}</span>
-                          </div>
-                        ))}
+                    )}
+
+                    {/* Sección 2: Pendientes */}
+                    {incomingResult.pending.length > 0 && (
+                      <div className="space-y-6">
+                        <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded">Deudas Pendientes</h3>
+                        {incomingResult.pending.map(group => {
+                          const debtor = profilesMap[group.debtorId];
+                          return (
+                            <div key={group.debtorId} className="space-y-3">
+                              <div className="flex items-center justify-between px-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-muted-foreground"><User className="h-4 w-4" /></div>
+                                  <span className="text-[11px] font-black uppercase text-primary">{debtor?.displayName || '...'} te debe</span>
+                                </div>
+                                <span className="text-sm font-black text-primary font-headline">${group.total.toFixed(2)}</span>
+                              </div>
+                              <div className="space-y-2 pl-2 border-l-2 border-muted">
+                                {group.debts.map(debt => (
+                                  <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
+                                     <div className="min-w-0 pr-2">
+                                       <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
+                                       <p className="font-bold truncate">{debt.description}</p>
+                                     </div>
+                                     <span className="font-bold text-muted-foreground shrink-0">${debt.amount.toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </div>
-                  );
-                })}
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
           </section>
