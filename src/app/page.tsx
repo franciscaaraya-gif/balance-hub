@@ -12,11 +12,8 @@ export default function Home() {
           <span className="text-2xl font-headline tracking-tight text-primary font-bold">Zygos</span>
         </Link>
         <nav className="ml-auto flex gap-4 sm:gap-6 items-center">
-          <Link href="/login" className="text-sm font-medium hover:text-accent transition-colors text-primary font-semibold">
-            Ingresar
-          </Link>
-          <Button asChild size="lg" variant="default" className="bg-accent hover:bg-accent/90 text-white font-bold rounded-xl h-11">
-            <Link href="/register">Comenzar</Link>
+          <Button asChild size="lg" variant="default" className="bg-primary text-white font-bold rounded-xl h-11 px-6">
+            <Link href="/login">Ingresar</Link>
           </Button>
         </nav>
       </header>
@@ -34,10 +31,7 @@ export default function Home() {
               </div>
               <div className="flex flex-col sm:flex-row gap-4 mt-8">
                 <Button size="lg" asChild className="px-8 py-6 text-lg bg-primary hover:bg-primary/90 text-white rounded-2xl font-bold shadow-lg">
-                  <Link href="/register">Crear un Grupo</Link>
-                </Button>
-                <Button size="lg" variant="outline" className="px-8 py-6 text-lg border-primary text-primary hover:bg-primary/5 rounded-2xl font-bold">
-                  <Link href="/login">Explorar Funciones</Link>
+                  <Link href="/login">Acceder a mi Cuenta</Link>
                 </Button>
               </div>
             </div>
