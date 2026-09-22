@@ -15,12 +15,14 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { 
   Users, ChevronRight, Loader2, 
-  ReceiptText, AlertCircle, Clock, CheckCircle2, 
-  CreditCard, User, Send, ArrowUpRight, ArrowDownLeft, Calendar
+  AlertCircle, Clock, CheckCircle2, 
+  CreditCard, User, Send, ArrowUpRight, ArrowDownLeft, Calendar,
+  ChevronDown, ChevronUp
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
+import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -165,29 +167,13 @@ export default function Dashboard() {
     <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto pb-10 px-2 sm:px-4">
       {/* Header General */}
       <div>
-        <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName}!</h1>
-        <p className="text-sm text-muted-foreground">Bienvenido a tu panel de control financiero en Zygos.</p>
+        <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName?.split(' ')[0]}!</h1>
+        <p className="text-sm text-muted-foreground">Bienvenido a Zygos — cuentas claras con tu grupo.</p>
       </div>
 
       {/* DISPOSITIVOS MÓVILES (Layout Enfocado) */}
       <div className="block md:hidden space-y-6">
-        {/* Accesos Rápidos Superiores */}
-        <div className="grid grid-cols-2 gap-3">
-          <Button asChild variant="outline" className="h-20 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm">
-            <Link href="/dashboard/groups">
-              <Users className="h-5 w-5 text-primary" />
-              <span className="text-xs font-bold text-primary">Ver mis grupos</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-20 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm">
-            <Link href="/dashboard/attendance">
-              <Calendar className="h-5 w-5 text-accent" />
-              <span className="text-xs font-bold text-primary">Ver mis eventos</span>
-            </Link>
-          </Button>
-        </div>
-
-        {/* Billetera Principal */}
+        {/* Billetera Principal Compacta */}
         <div className="space-y-6">
           <WalletSection 
             outgoingGroups={outgoingGroups} 
@@ -200,11 +186,26 @@ export default function Dashboard() {
             setSelectedValidationGroup={setSelectedValidationGroup} 
           />
         </div>
+
+        {/* Accesos Rápidos Inferiores (para que queden tras un scroll corto) */}
+        <div className="grid grid-cols-2 gap-3">
+          <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
+            <Link href="/dashboard/groups">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-[10px] font-black uppercase tracking-tight text-primary">Mis grupos</span>
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
+            <Link href="/dashboard/attendance">
+              <Calendar className="h-4 w-4 text-accent" />
+              <span className="text-[10px] font-black uppercase tracking-tight text-primary">Eventos</span>
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* COMPUTADORES DE ESCRITORIO (Layout Todo-Junto) */}
       <div className="hidden md:grid md:grid-cols-3 gap-8">
-        {/* Columna Izquierda y Central: Billetera Completa */}
         <div className="md:col-span-2 space-y-6">
           <WalletSection 
             outgoingGroups={outgoingGroups} 
@@ -215,12 +216,11 @@ export default function Dashboard() {
             getStatusBadge={getStatusBadge} 
             setSelectedDebtGroup={setSelectedDebtGroup} 
             setSelectedValidationGroup={setSelectedValidationGroup} 
+            defaultExpanded={true}
           />
         </div>
 
-        {/* Columna Derecha: Paneles de Resumen */}
         <div className="space-y-6">
-          {/* Panel Resumen: Mis Grupos */}
           <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
             <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
@@ -243,7 +243,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Panel Resumen: Mis Eventos Activos */}
           <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
             <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
@@ -331,6 +330,7 @@ interface WalletSectionProps {
   getStatusBadge: (status: string) => React.ReactNode;
   setSelectedDebtGroup: (val: any) => void;
   setSelectedValidationGroup: (val: any) => void;
+  defaultExpanded?: boolean;
 }
 
 function WalletSection({
@@ -341,140 +341,207 @@ function WalletSection({
   profilesMap,
   getStatusBadge,
   setSelectedDebtGroup,
-  setSelectedValidationGroup
+  setSelectedValidationGroup,
+  defaultExpanded = false
 }: WalletSectionProps) {
+  const [isDebesExpanded, setIsDebesExpanded] = useState(defaultExpanded);
+  const [isTeDebenExpanded, setIsTeDebenExpanded] = useState(defaultExpanded);
+
   const pendingReviewTotal = incomingResult.review.reduce((sum: number, r: any) => sum + r.total, 0);
   const pendingNormalTotal = incomingResult.pending.reduce((sum: number, p: any) => sum + p.total, 0);
   const totalTeDebenConsolidado = pendingReviewTotal + pendingNormalTotal;
 
+  const totalOutgoingAmount = outgoingGroups.reduce((sum, g) => sum + g.total, 0);
+  const totalOutgoingCount = outgoingGroups.reduce((sum, g) => sum + g.debts.length, 0);
+
+  const totalIncomingCount = incomingResult.review.reduce((sum: number, g: any) => sum + g.debts.length, 0) +
+                             incomingResult.pending.reduce((sum: number, g: any) => sum + g.debts.length, 0);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Tarjeta: Debes Pagar */}
-      <section className="space-y-4">
-        <h2 className="text-xl font-headline font-bold flex items-center gap-2 text-orange-600"><ArrowUpRight className="h-5 w-5" /> Billetera: Pagos Pendientes</h2>
-        <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
-          <div className="bg-primary p-6 sm:p-8 text-primary-foreground text-center">
-             <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-2">Total que Debes</p>
-             <p className="text-4xl sm:text-5xl font-headline font-bold">${outgoingGroups.reduce((sum, g) => sum + g.total, 0).toFixed(2)}</p>
+      <section className="space-y-2">
+        <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-orange-600 ml-2">
+          <ArrowUpRight className="h-4 w-4" /> Billetera: Pagos
+        </h2>
+        <Card className={cn(
+          "border-none shadow-md bg-white rounded-[2rem] overflow-hidden transition-all duration-300",
+          !isDebesExpanded && "cursor-pointer hover:shadow-lg active:scale-[0.99]"
+        )} onClick={() => !isDebesExpanded && setIsDebesExpanded(true)}>
+          <div className={cn(
+            "bg-primary p-5 sm:p-8 text-primary-foreground text-center relative transition-all",
+            !isDebesExpanded ? "py-4" : "py-6 sm:py-8"
+          )}>
+             <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-1">Debes</p>
+             <div className="flex flex-col items-center">
+               <p className={cn("font-headline font-bold transition-all", !isDebesExpanded ? "text-2xl" : "text-4xl sm:text-5xl")}>
+                 ${totalOutgoingAmount.toFixed(2)}
+               </p>
+               {!isDebesExpanded && (
+                 <p className="text-[9px] font-bold opacity-70 mt-0.5">
+                   {totalOutgoingCount} {totalOutgoingCount === 1 ? 'deuda pendiente' : 'deudas pendientes'}
+                 </p>
+               )}
+             </div>
+             {isDebesExpanded && (
+               <Button 
+                 variant="ghost" 
+                 size="icon" 
+                 className="absolute top-4 right-4 text-white/50 hover:text-white hover:bg-white/10"
+                 onClick={(e) => { e.stopPropagation(); setIsDebesExpanded(false); }}
+               >
+                 <ChevronUp className="h-5 w-5" />
+               </Button>
+             )}
           </div>
-          <CardContent className="p-4 sm:p-6 space-y-6">
-            {myDebtsLoading ? <div className="flex justify-center"><Loader2 className="animate-spin text-primary" /></div> : outgoingGroups.length === 0 ? (
-              <div className="py-6 text-center opacity-30"><CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" /><p className="text-[10px] font-bold uppercase">Al día</p></div>
-            ) : outgoingGroups.map(group => {
-              const creditor = profilesMap[group.creditorId];
-              return (
-                <div key={group.creditorId} className="space-y-3">
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2">
-                      <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center text-accent"><User className="h-3.5 w-3.5" /></div>
-                      <span className="text-[10px] font-black uppercase text-primary">A {creditor?.displayName || '...'}</span>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      className="h-8 rounded-xl text-[9px] font-black uppercase bg-accent text-white"
-                      onClick={() => setSelectedDebtGroup({ ...group, name: creditor?.displayName || 'Acreedor' })}
-                    >
-                      <CreditCard className="h-3 w-3 mr-1" /> Pagar ${group.total.toFixed(2)}
-                    </Button>
-                  </div>
-                  <div className="space-y-2 pl-2 border-l-2 border-accent/20">
-                    {group.debts.map((debt: any) => (
-                      <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
-                         <div className="min-w-0 pr-2">
-                           <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
-                           <p className="font-bold truncate">{debt.description}</p>
-                         </div>
-                         <div className="text-right shrink-0">
-                           <p className="font-bold text-accent">${debt.amount.toFixed(2)}</p>
-                           {getStatusBadge(debt.status)}
-                         </div>
+          {isDebesExpanded && (
+            <CardContent className="p-4 sm:p-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
+              {myDebtsLoading ? <div className="flex justify-center"><Loader2 className="animate-spin text-primary" /></div> : outgoingGroups.length === 0 ? (
+                <div className="py-6 text-center opacity-30"><CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" /><p className="text-[10px] font-bold uppercase">Al día</p></div>
+              ) : outgoingGroups.map(group => {
+                const creditor = profilesMap[group.creditorId];
+                return (
+                  <div key={group.creditorId} className="space-y-3">
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center text-accent"><User className="h-3.5 w-3.5" /></div>
+                        <span className="text-[10px] font-black uppercase text-primary">A {creditor?.displayName || '...'}</span>
                       </div>
-                    ))}
+                      <Button 
+                        size="sm" 
+                        className="h-8 rounded-xl text-[9px] font-black uppercase bg-accent text-white"
+                        onClick={() => setSelectedDebtGroup({ ...group, name: creditor?.displayName || 'Acreedor' })}
+                      >
+                        <CreditCard className="h-3 w-3 mr-1" /> Pagar ${group.total.toFixed(2)}
+                      </Button>
+                    </div>
+                    <div className="space-y-2 pl-2 border-l-2 border-accent/20">
+                      {group.debts.map((debt: any) => (
+                        <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
+                           <div className="min-w-0 pr-2">
+                             <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
+                             <p className="font-bold truncate">{debt.description}</p>
+                           </div>
+                           <div className="text-right shrink-0">
+                             <p className="font-bold text-accent">${debt.amount.toFixed(2)}</p>
+                             {getStatusBadge(debt.status)}
+                           </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </CardContent>
+                );
+              })}
+            </CardContent>
+          )}
         </Card>
       </section>
 
       {/* Tarjeta: Te Deben */}
-      <section className="space-y-4">
-        <h2 className="text-xl font-headline font-bold flex items-center gap-2 text-emerald-600"><ArrowDownLeft className="h-5 w-5" /> Billetera: Te Deben</h2>
-        <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
-          <div className="bg-secondary p-6 sm:p-8 text-white text-center">
-             <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-2">Total que Te Deben</p>
-             <p className="text-4xl sm:text-5xl font-headline font-bold">${totalTeDebenConsolidado.toFixed(2)}</p>
+      <section className="space-y-2">
+        <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-emerald-600 ml-2">
+          <ArrowDownLeft className="h-4 w-4" /> Billetera: Cobros
+        </h2>
+        <Card className={cn(
+          "border-none shadow-md bg-white rounded-[2rem] overflow-hidden transition-all duration-300",
+          !isTeDebenExpanded && "cursor-pointer hover:shadow-lg active:scale-[0.99]"
+        )} onClick={() => !isTeDebenExpanded && setIsTeDebenExpanded(true)}>
+          <div className={cn(
+            "bg-secondary p-5 sm:p-8 text-white text-center relative transition-all",
+            !isTeDebenExpanded ? "py-4" : "py-6 sm:py-8"
+          )}>
+             <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-1">Te Deben</p>
+             <div className="flex flex-col items-center">
+               <p className={cn("font-headline font-bold transition-all", !isTeDebenExpanded ? "text-2xl" : "text-4xl sm:text-5xl")}>
+                 ${totalTeDebenConsolidado.toFixed(2)}
+               </p>
+               {!isTeDebenExpanded && (
+                 <p className="text-[9px] font-bold opacity-70 mt-0.5">
+                   {totalIncomingCount} {totalIncomingCount === 1 ? 'cobro pendiente' : 'cobros pendientes'}
+                 </p>
+               )}
+             </div>
+             {isTeDebenExpanded && (
+               <Button 
+                 variant="ghost" 
+                 size="icon" 
+                 className="absolute top-4 right-4 text-white/50 hover:text-white hover:bg-white/10"
+                 onClick={(e) => { e.stopPropagation(); setIsTeDebenExpanded(false); }}
+               >
+                 <ChevronUp className="h-5 w-5" />
+               </Button>
+             )}
           </div>
-          <CardContent className="p-4 sm:p-6 space-y-6">
-            {myIncomingLoading ? <div className="flex justify-center"><Loader2 className="animate-spin text-primary" /></div> : totalTeDebenConsolidado === 0 ? (
-              <div className="py-6 text-center opacity-30 font-bold uppercase text-[10px]">No tienes cobros pendientes</div>
-            ) : (
-              <>
-                {/* 1. SECCIÓN: Pendientes de validación */}
-                {incomingResult.review.length > 0 && (
-                  <div className="space-y-4">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded">Pendientes de Validación</h3>
-                    {incomingResult.review.map((group: any) => {
-                      const debtor = profilesMap[group.debtorId];
-                      return (
-                        <div key={group.id} className="space-y-3 p-3 border rounded-2xl bg-blue-50/10 border-blue-100">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="h-7 w-7 rounded-full bg-secondary/10 flex items-center justify-center text-secondary"><User className="h-3.5 w-3.5" /></div>
-                              <div className="min-w-0">
-                                <span className="text-[11px] font-black uppercase text-primary block">{debtor?.displayName || '...'} reportó pago</span>
-                                <span className="text-[7px] text-muted-foreground uppercase">{new Date(group.updatedAt).toLocaleDateString()}</span>
+          {isTeDebenExpanded && (
+            <CardContent className="p-4 sm:p-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
+              {myIncomingLoading ? <div className="flex justify-center"><Loader2 className="animate-spin text-primary" /></div> : totalTeDebenConsolidado === 0 ? (
+                <div className="py-6 text-center opacity-30 font-bold uppercase text-[10px]">No tienes cobros pendientes</div>
+              ) : (
+                <>
+                  {/* 1. SECCIÓN: Pendientes de validación */}
+                  {incomingResult.review.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded">Pendientes de Validación</h3>
+                      {incomingResult.review.map((group: any) => {
+                        const debtor = profilesMap[group.debtorId];
+                        return (
+                          <div key={group.id} className="space-y-3 p-3 border rounded-2xl bg-blue-50/10 border-blue-100">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="h-7 w-7 rounded-full bg-secondary/10 flex items-center justify-center text-secondary"><User className="h-3.5 w-3.5" /></div>
+                                <div className="min-w-0">
+                                  <span className="text-[11px] font-black uppercase text-primary block">{debtor?.displayName || '...'} reportó pago</span>
+                                  <span className="text-[7px] text-muted-foreground uppercase">{new Date(group.updatedAt).toLocaleDateString()}</span>
+                                </div>
                               </div>
+                              <Button 
+                                size="sm" 
+                                className="h-8 rounded-xl text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                                onClick={() => setSelectedValidationGroup({ ...group, name: debtor?.displayName || 'Usuario' })}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> Validar ${group.total.toFixed(2)}
+                              </Button>
                             </div>
-                            <Button 
-                              size="sm" 
-                              className="h-8 rounded-xl text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                              onClick={() => setSelectedValidationGroup({ ...group, name: debtor?.displayName || 'Usuario' })}
-                            >
-                              <CheckCircle2 className="h-3 w-3 mr-1" /> Validar ${group.total.toFixed(2)}
-                            </Button>
+                            <div className="space-y-2 pl-2 border-l-2 border-secondary/20">
+                              {group.debts.map((debt: any) => (
+                                <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl text-xs shadow-inner">
+                                   <div className="min-w-0 pr-2">
+                                     <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
+                                     <p className="font-bold truncate">{debt.description}</p>
+                                   </div>
+                                   <span className="font-bold text-secondary shrink-0">${debt.amount.toFixed(2)}</span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div className="space-y-2 pl-2 border-l-2 border-secondary/20">
-                            {group.debts.map((debt: any) => (
-                              <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl text-xs shadow-inner">
-                                 <div className="min-w-0 pr-2">
-                                   <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
-                                   <p className="font-bold truncate">{debt.description}</p>
-                                 </div>
-                                 <span className="font-bold text-secondary shrink-0">${debt.amount.toFixed(2)}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  )}
 
-                {/* 2. SECCIÓN: Deudas pendientes normales */}
-                {incomingResult.pending.length > 0 && (
-                  <div className="space-y-4 pt-2 border-t border-dashed">
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded">Deudas Pendientes</h3>
-                    {incomingResult.pending.map((group: any) => {
-                      const debtor = profilesMap[group.debtorId];
-                      return (
-                        <div key={group.debtorId} className="space-y-3">
-                          <div className="flex items-center justify-between px-1">
-                            <div className="flex items-center gap-2">
-                              <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground"><User className="h-3.5 w-3.5" /></div>
-                              <span className="text-[11px] font-black uppercase text-primary">{debtor?.displayName || '...'} te debe</span>
+                  {/* 2. SECCIÓN: Deudas pendientes normales */}
+                  {incomingResult.pending.length > 0 && (
+                    <div className="space-y-4 pt-2 border-t border-dashed">
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded">Deudas Pendientes</h3>
+                      {incomingResult.pending.map((group: any) => {
+                        const debtor = profilesMap[group.debtorId];
+                        return (
+                          <div key={group.debtorId} className="space-y-3">
+                            <div className="flex items-center justify-between px-1">
+                              <div className="flex items-center gap-2">
+                                <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground"><User className="h-3.5 w-3.5" /></div>
+                                <span className="text-[11px] font-black uppercase text-primary">{debtor?.displayName || '...'} te debe</span>
+                              </div>
+                              <span className="text-sm font-black text-primary font-headline">${group.total.toFixed(2)}</span>
                             </div>
-                            <span className="text-sm font-black text-primary font-headline">${group.total.toFixed(2)}</span>
-                          </div>
-                          <div className="space-y-2 pl-2 border-l-2 border-muted">
-                            {group.debts.map((debt: any) => (
-                              <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
-                                 <div className="min-w-0 pr-2">
-                                   <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
-                                   <p className="font-bold truncate">{debt.description}</p>
-                                 </div>
-                                 <span className="font-bold text-muted-foreground shrink-0">${debt.amount.toFixed(2)}</span>
+                            <div className="space-y-2 pl-2 border-l-2 border-muted">
+                              {group.debts.map((debt: any) => (
+                                <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
+                                   <div className="min-w-0 pr-2">
+                                     <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
+                                     <p className="font-bold truncate">{debt.description}</p>
+                                   </div>
+                                   <span className="font-bold text-muted-foreground shrink-0">${debt.amount.toFixed(2)}</span>
                               </div>
                             ))}
                           </div>
@@ -486,8 +553,9 @@ function WalletSection({
               </>
             )}
           </CardContent>
-        </Card>
-      </section>
-    </div>
-  );
+        )}
+      </Card>
+    </section>
+  </div>
+);
 }
