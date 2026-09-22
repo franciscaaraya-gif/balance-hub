@@ -195,6 +195,34 @@ export const addFixedDebtToAll = async (groupId: string, amount: number, descrip
   return batch.commit();
 };
 
+export const reportPayment = async (debts: Debt[]) => {
+  const batch = writeBatch(db);
+  const paymentRequestId = `pay_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;
+  
+  debts.forEach(debt => {
+    const ref = doc(db, "groups", debt.groupId, "debts", debt.id);
+    batch.update(ref, { 
+      status: 'under_review', 
+      paymentRequestId,
+      updatedAt: Date.now() 
+    });
+  });
+  
+  return batch.commit();
+};
+
+export const validatePayment = async (debts: Debt[]) => {
+  const batch = writeBatch(db);
+  debts.forEach(debt => {
+    const ref = doc(db, "groups", debt.groupId, "debts", debt.id);
+    batch.update(ref, { 
+      status: 'paid', 
+      updatedAt: Date.now() 
+    });
+  });
+  return batch.commit();
+};
+
 export const updateDebtStatusInGroup = (groupId: string, debtId: string, status: DebtStatus) => {
   const docRef = doc(db, "groups", groupId, "debts", debtId);
   updateDoc(docRef, {
@@ -269,7 +297,6 @@ export const finalizeReceipt = async (
         const userId = key.substring(item.id.length + 1);
         
         let targetUserId = userId;
-        // Si el userId es un invitado (guest_X), asignamos el cargo a su responsable
         if (userId.startsWith('guest_')) {
           const guestIdx = parseInt(userId.split('_')[1]);
           const guest = externalGuests[guestIdx];

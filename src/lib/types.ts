@@ -35,6 +35,7 @@ export interface Debt {
   debtorId: string;
   creditorId: string;
   chargeGroupId: string;
+  paymentRequestId?: string;
   amount: number;
   description: string;
   status: DebtStatus;
