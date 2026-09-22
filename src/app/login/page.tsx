@@ -102,10 +102,12 @@ function LoginContent() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <Card className="w-full max-w-md shadow-xl border-none rounded-[2rem] overflow-hidden bg-white">
-        <CardHeader className="space-y-2 text-center pt-8">
+      <Card className="w-full max-w-md shadow-2xl border-none rounded-[2.5rem] overflow-hidden bg-white">
+        <CardHeader className="space-y-3 text-center pt-10">
           <div className="flex justify-center mb-2">
-            <Logo className="h-12 w-12" />
+            <div className="p-3 bg-primary/5 rounded-3xl border border-primary/10 shadow-sm">
+              <Logo className="h-16 w-16 filter drop-shadow-sm" />
+            </div>
           </div>
           <CardTitle className="text-3xl font-headline tracking-tight text-primary font-bold">Iniciar Sesión</CardTitle>
           <CardDescription className="text-muted-foreground font-body">Accede a tu panel en Zygos</CardDescription>

@@ -6,16 +6,16 @@ import { Logo } from "@/components/logo";
 export default function Home() {
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="px-4 lg:px-6 h-16 flex items-center border-b bg-white/50 backdrop-blur-md sticky top-0 z-50">
-        <Link className="flex items-center justify-center space-x-3" href="/">
-          <Logo className="h-9 w-9" />
-          <span className="text-xl font-headline tracking-tight text-primary font-bold">Zygos</span>
+      <header className="px-4 lg:px-6 h-20 flex items-center border-b bg-white/50 backdrop-blur-md sticky top-0 z-50">
+        <Link className="flex items-center justify-center space-x-3 group" href="/">
+          <Logo className="h-12 w-12 transition-transform group-hover:scale-105 filter drop-shadow-sm" />
+          <span className="text-2xl font-headline tracking-tight text-primary font-bold">Zygos</span>
         </Link>
         <nav className="ml-auto flex gap-4 sm:gap-6 items-center">
           <Link href="/login" className="text-sm font-medium hover:text-accent transition-colors text-primary font-semibold">
             Ingresar
           </Link>
-          <Button asChild size="sm" variant="default" className="bg-accent hover:bg-accent/90 text-white font-bold rounded-xl">
+          <Button asChild size="lg" variant="default" className="bg-accent hover:bg-accent/90 text-white font-bold rounded-xl h-11">
             <Link href="/register">Comenzar</Link>
           </Button>
         </nav>
@@ -82,7 +82,7 @@ export default function Home() {
                 <div className="space-y-4">
                   <h2 className="text-2xl font-headline font-bold text-primary">¿Es gratis usar Zygos?</h2>
                   <p className="text-muted-foreground font-body">
-                    Zygos offers un **nivel gratuito generoso** perfecto para amigos, familias y pequeños grupos deportivos o de salidas. Gestiona cientos de deudas de forma transparente sin pagar ni un centavo.
+                    Zygos ofrece un **nivel gratuito generoso** perfecto para amigos, familias y pequeños grupos deportivos o de salidas. Gestiona cientos de deudas de forma transparente sin pagar ni un centavo.
                   </p>
                 </div>
               </div>

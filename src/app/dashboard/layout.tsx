@@ -46,9 +46,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const NavContent = () => (
     <div className="flex flex-col h-full">
       <div className="p-6">
-        <Link href="/dashboard" className="flex items-center gap-3 mb-8" onClick={() => setIsSheetOpen(false)}>
-          <Logo className="h-10 w-10 shrink-0" variant="dark" />
-          <span className="text-2xl font-headline font-bold text-white tracking-tight">Zygos</span>
+        <Link href="/dashboard" className="flex items-center gap-4 mb-10 group" onClick={() => setIsSheetOpen(false)}>
+          <Logo className="h-14 w-14 shrink-0 transition-transform group-hover:scale-105 filter drop-shadow-[0_4px_6px_rgba(255,255,255,0.15)]" variant="dark" />
+          <span className="text-3xl font-headline font-bold text-white tracking-tight">Zygos</span>
         </Link>
         <nav className="space-y-1">
           {navItems.map((item) => (
@@ -109,8 +109,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </SheetContent>
             </Sheet>
             <Link href="/dashboard" className="flex items-center gap-2">
-              <Logo className="h-8 w-8" variant="dark" />
-              <span className="text-lg font-headline font-bold tracking-tight text-white">Zygos</span>
+              <Logo className="h-10 w-10 filter drop-shadow-[0_2px_4px_rgba(255,255,255,0.1)]" variant="dark" />
+              <span className="text-xl font-headline font-bold tracking-tight text-white">Zygos</span>
             </Link>
           </div>
           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white/70 hover:text-white rounded-xl">
