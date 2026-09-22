@@ -16,16 +16,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { 
-  PlusCircle, Users, Wallet, ChevronRight, Loader2, 
+  PlusCircle, Users, ChevronRight, Loader2, 
   ReceiptText, AlertCircle, Clock, CheckCircle2, 
-  CreditCard, User, Send, Info, ArrowUpRight, ArrowDownLeft
+  CreditCard, User, Send, ArrowUpRight, ArrowDownLeft
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 
 export default function Dashboard() {
-  // CORRECCIÓN: Llamar al hook useUser() correctamente
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -37,28 +37,24 @@ export default function Dashboard() {
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // 1. Grupos del usuario
   const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
   const { data: myGroups, isLoading: myGroupsLoading } = useCollection<Group>(myGroupsQuery);
 
-  // 2. Deudas que YO debo (Outgoing)
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(collectionGroup(firestore, 'debts'), where('debtorId', '==', user.uid), orderBy('createdAt', 'desc'));
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
 
-  // 3. Deudas que ME deben (Incoming - Todas las no pagadas)
   const incomingDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(collectionGroup(firestore, 'debts'), where('creditorId', '==', user.uid), orderBy('createdAt', 'desc'));
   }, [firestore, user?.uid]);
   const { data: myIncomingDebts, isLoading: myIncomingLoading } = useCollection<Debt>(incomingDebtsQuery);
 
-  // Cargar perfiles necesarios
   useEffect(() => {
     const uids = new Set<string>();
     myDebts?.forEach(d => uids.add(d.creditorId));
@@ -76,7 +72,6 @@ export default function Dashboard() {
     }
   }, [myDebts, myIncomingDebts]);
 
-  // Agrupar deudas salientes por acreedor
   const outgoingGroups = useMemo(() => {
     if (!myDebts || !user?.uid) return [];
     const groups: Record<string, { creditorId: string; total: number; debts: Debt[] }> = {};
@@ -92,7 +87,6 @@ export default function Dashboard() {
     return Object.values(groups).sort((a, b) => b.total - a.total);
   }, [myDebts, user?.uid]);
 
-  // Agrupar deudas entrantes (Te deben)
   const incomingResult = useMemo(() => {
     if (!myIncomingDebts || !user?.uid) return { pending: [], review: [], total: 0 };
     
@@ -178,7 +172,7 @@ export default function Dashboard() {
   if (isUserLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    <div className="space-y-6 sm:space-y-10 max-w-6xl mx-auto pb-10">
+    <div className="space-y-6 sm:space-y-10 max-w-6xl mx-auto pb-10 px-2 sm:px-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName}!</h1>
@@ -209,32 +203,37 @@ export default function Dashboard() {
         <div className="space-y-8">
           <section className="space-y-6">
             <h2 className="text-xl font-headline font-bold flex items-center gap-2"><ReceiptText className="h-5 w-5 text-primary" /> Mis Grupos</h2>
-            <div className="grid gap-6 sm:grid-cols-2">
-              {myGroupsLoading ? [1,2].map(i => <div key={i} className="h-40 rounded-[2rem] bg-muted animate-pulse" />) : myGroups?.map(g => (
-                <Link key={g.id} href={`/dashboard/groups/${g.id}`}>
-                  <Card className="hover:shadow-lg transition-all border-none bg-white rounded-[2rem] overflow-hidden group shadow-sm border border-primary/5">
-                    <div className="h-1.5 bg-primary w-full" />
-                    <CardHeader className="pb-4">
-                      <CardTitle className="mt-2 text-lg font-headline group-hover:text-primary transition-colors truncate">{g.name}</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-4 border-t font-bold uppercase">
-                        <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {g.memberIds.length} MIEMBROS</span>
-                        <span className="text-primary flex items-center">VER <ChevronRight className="h-3 w-3" /></span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-              {myGroups?.length === 0 && (
-                <div className="col-span-full py-10 text-center border-2 border-dashed rounded-[2rem] opacity-30 font-bold uppercase text-[10px]">Sin grupos activos</div>
+            <div className="relative px-1">
+              {myGroupsLoading ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {[1, 2].map(i => <div key={i} className="h-40 rounded-[2rem] bg-muted animate-pulse" />)}
+                </div>
+              ) : myGroups?.length === 0 ? (
+                <div className="py-10 text-center border-2 border-dashed rounded-[2rem] opacity-30 font-bold uppercase text-[10px]">Sin grupos activos</div>
+              ) : myGroups && myGroups.length <= 4 ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {myGroups.map(g => <GroupCard key={g.id} g={g} />)}
+                </div>
+              ) : (
+                <Carousel opts={{ align: "start" }} className="w-full">
+                  <CarouselContent className="-ml-4">
+                    {myGroups?.map((g) => (
+                      <CarouselItem key={g.id} className="pl-4 sm:basis-1/2">
+                        <GroupCard g={g} />
+                      </CarouselItem>
+                    ))}
+                  </CarouselContent>
+                  <div className="hidden sm:block">
+                    <CarouselPrevious className="-left-6 rounded-xl h-10 w-10 border-2" />
+                    <CarouselNext className="-right-6 rounded-xl h-10 w-10 border-2" />
+                  </div>
+                </Carousel>
               )}
             </div>
           </section>
         </div>
 
         <div className="space-y-8">
-          {/* Tarjeta 1: Debes Pagar */}
           <section className="space-y-6">
             <h2 className="text-xl font-headline font-bold flex items-center gap-2 text-orange-600"><ArrowUpRight className="h-5 w-5" /> Billetera: Pagos Pendientes</h2>
             <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
@@ -283,7 +282,6 @@ export default function Dashboard() {
             </Card>
           </section>
 
-          {/* Tarjeta 2: Te Deben */}
           <section className="space-y-6">
             <h2 className="text-xl font-headline font-bold flex items-center gap-2 text-emerald-600"><ArrowDownLeft className="h-5 w-5" /> Billetera: Te Deben</h2>
             <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
@@ -296,7 +294,6 @@ export default function Dashboard() {
                   <div className="py-6 text-center opacity-30 font-bold uppercase text-[10px]">No tienes cobros pendientes</div>
                 ) : (
                   <>
-                    {/* Sección 1: En Revisión */}
                     {incomingResult.review.length > 0 && (
                       <div className="space-y-6">
                         <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded">Pendientes de Validación</h3>
@@ -337,7 +334,6 @@ export default function Dashboard() {
                       </div>
                     )}
 
-                    {/* Sección 2: Pendientes */}
                     {incomingResult.pending.length > 0 && (
                       <div className="space-y-6">
                         <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded">Deudas Pendientes</h3>
@@ -376,7 +372,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Diálogo Reportar Pago (Debtor) */}
       <Dialog open={!!selectedDebtGroup} onOpenChange={val => !val && setSelectedDebtGroup(null)}>
         <DialogContent className="rounded-[2.5rem] border-none p-8 max-w-sm text-center">
           <DialogHeader>
@@ -403,7 +398,6 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo Validar Pago (Creditor) */}
       <Dialog open={!!selectedValidationGroup} onOpenChange={val => !val && setSelectedValidationGroup(null)}>
         <DialogContent className="rounded-[2.5rem] border-none p-8 max-w-sm text-center">
           <DialogHeader>
@@ -425,5 +419,24 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function GroupCard({ g }: { g: Group }) {
+  return (
+    <Link href={`/dashboard/groups/${g.id}`}>
+      <Card className="hover:shadow-lg transition-all border-none bg-white rounded-[2rem] overflow-hidden group shadow-sm border border-primary/5 h-full">
+        <div className="h-1.5 bg-primary w-full" />
+        <CardHeader className="pb-4">
+          <CardTitle className="mt-2 text-lg font-headline group-hover:text-primary transition-colors truncate">{g.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-4 border-t font-bold uppercase">
+            <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {g.memberIds.length} MIEMBROS</span>
+            <span className="text-primary flex items-center">VER <ChevronRight className="h-3 w-3" /></span>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

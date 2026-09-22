@@ -417,15 +417,11 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   if (event.isCharged) throw new Error("Este evento ya fue cobrado.");
 
-  const totalPresentParticipants = event.presentIds?.length || 0;
-  const totalPresentGuests = event.externalGuests?.filter(g => g.present).length || 0;
-  
-  const absentIds = event.participantIds.filter(id => !event.presentIds.includes(id));
-  const totalAbsents = absentIds.length;
+  const totalParticipants = event.participantIds?.length || 0;
+  const totalGuests = event.externalGuests?.length || 0;
+  const totalHeads = totalParticipants + totalGuests;
 
-  const totalHeads = totalPresentParticipants + totalPresentGuests + (event.chargeAbsentees ? totalAbsents : 0);
-
-  if (totalHeads === 0) throw new Error("No hay asistentes ni ausentes configurados para cobrar.");
+  if (totalHeads === 0) throw new Error("No hay cabezas para cobrar.");
 
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
@@ -434,23 +430,16 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   for (const uid of event.participantIds) {
     const isPresent = event.presentIds.includes(uid);
-    const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
-    const isAbsentAndCharged = !isPresent && event.chargeAbsentees;
+    const myGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
 
-    if (!isPresent && !event.chargeAbsentees) continue;
-
-    let multiplier = 0;
-    if (isPresent) multiplier += 1;
+    let multiplier = 1; // El participante siempre paga
     multiplier += myGuests.length;
-    if (isAbsentAndCharged) multiplier += 1;
 
     const finalAmount = costPerHead * multiplier;
 
     if (finalAmount > 0) {
       let descriptionText = `${event.title}: ${conceptText}`;
-      if (isPresent) descriptionText += " (Presente)";
       if (myGuests.length > 0) descriptionText += ` (+${myGuests.length} invitados)`;
-      if (isAbsentAndCharged) descriptionText += " (Ausente con cargo)";
 
       await addDebt(
         event.groupId, 
