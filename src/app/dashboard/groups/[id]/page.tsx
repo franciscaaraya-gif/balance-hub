@@ -25,12 +25,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
   UserPlus, ScanLine, Loader2, DollarSign, Users, 
-  CreditCard, Copy, ReceiptText, ChevronRight, User, Info, Settings2
+  CreditCard, Copy, ReceiptText, ChevronRight, User, Info, Settings2, Download
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
+import * as XLSX from "xlsx";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -103,7 +104,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     const event = events?.find(e => e.id === eventId);
     if (event) {
       setSelectedEventId(eventId);
-      // REQUISITO: No precargar concepto ni monto para evitar desajustes si se editan
       setExpenseTitle("");
       setExpenseAmount("");
       setCreditorId(event.creatorId);
@@ -116,7 +116,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         });
       }
       setSelectedMembers(candidates);
-      setManualAmounts({}); // Limpiar montos manuales al cambiar evento
+      setManualAmounts({});
     }
   };
 
@@ -305,6 +305,41 @@ nombre_item;cantidad;precio_unitario;precio_total`;
     }
   };
 
+  const handleExportExcel = () => {
+    if (!debts || !group) return;
+
+    const sortedDebts = [...debts].sort((a, b) => a.createdAt - b.createdAt);
+
+    const data = sortedDebts.map(debt => {
+      const debtorName = members.find(m => m.uid === debt.debtorId)?.displayName || debt.debtorId;
+      const creditorName = members.find(m => m.uid === debt.creditorId)?.displayName || debt.creditorId;
+      
+      let statusText = "Pendiente";
+      if (debt.status === "under_review") statusText = "En Revisión";
+      if (debt.status === "paid") statusText = "Pagado";
+
+      return {
+        "Deudor": debtorName,
+        "Acreedor": creditorName,
+        "Concepto/Gasto": debt.description,
+        "Monto": debt.amount,
+        "Estado": statusText,
+        "Fecha de creación": new Date(debt.createdAt).toLocaleDateString("es-ES"),
+        "Fecha de pago": debt.status === "paid" ? new Date(debt.updatedAt || debt.createdAt).toLocaleDateString("es-ES") : ""
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cobros");
+    
+    const sanitizedName = group.name.replace(/[^a-zA-Z0-9]/g, "_");
+    const today = new Date().toISOString().split("T")[0];
+    
+    XLSX.writeFile(wb, `cobros-${sanitizedName}-${today}.xlsx`);
+    toast({ title: "Excel Descargado", description: "El historial de deudas se ha exportado correctamente." });
+  };
+
   if (groupLoading) return <div className="h-full flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!group) return <div className="p-8 text-center"><AlertCircle className="mx-auto h-12 w-12 opacity-50 mb-4" /><p>Grupo no encontrado.</p></div>;
 
@@ -331,9 +366,21 @@ nombre_item;cantidad;precio_unitario;precio_total`;
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4 sm:space-y-6">
           <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
-            <CardHeader className="border-b pb-6 px-4 sm:px-6">
-              <CardTitle className="text-lg font-headline">Historial de Cobros</CardTitle>
-              <CardDescription className="text-xs">Cobros agrupados por gasto o evento.</CardDescription>
+            <CardHeader className="border-b pb-6 px-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-lg font-headline">Historial de Cobros</CardTitle>
+                <CardDescription className="text-xs">Cobros agrupados por gasto o evento.</CardDescription>
+              </div>
+              {debts && debts.length > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleExportExcel} 
+                  className="rounded-xl h-10 border-2 font-bold text-xs gap-2 w-full sm:w-auto"
+                >
+                  <Download className="h-4 w-4" /> Descargar Excel
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               <div className="divide-y">
