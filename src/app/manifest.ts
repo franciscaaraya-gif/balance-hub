@@ -1,6 +1,11 @@
+
 import { MetadataRoute } from 'next';
+import { PlaceHolderImages } from './lib/placeholder-images';
 
 export default function manifest(): MetadataRoute.Manifest {
+  const icon192 = PlaceHolderImages.find(img => img.id === 'pwa-icon-192')?.imageUrl || 'https://picsum.photos/seed/zygos-v1/192/192';
+  const icon512 = PlaceHolderImages.find(img => img.id === 'pwa-icon-512')?.imageUrl || 'https://picsum.photos/seed/zygos-v1/512/512';
+
   return {
     name: 'Zygos - Gestión de Deudas',
     short_name: 'Zygos',
@@ -11,12 +16,12 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#1d2a5a',
     icons: [
       {
-        src: 'https://picsum.photos/seed/zygos-icon/192/192',
+        src: icon192,
         sizes: '192x192',
         type: 'image/png',
       },
       {
-        src: 'https://picsum.photos/seed/zygos-icon/512/512',
+        src: icon512,
         sizes: '512x512',
         type: 'image/png',
       },

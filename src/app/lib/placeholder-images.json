@@ -1,16 +1,17 @@
+
 {
   "placeholderImages": [
     {
       "id": "pwa-icon-192",
       "description": "Icono de App Zygos 192x192",
-      "imageUrl": "https://picsum.photos/seed/zygos-icon/192/192",
-      "imageHint": "icono app"
+      "imageUrl": "https://picsum.photos/seed/zygos-v1/192/192",
+      "imageHint": "financial icon"
     },
     {
       "id": "pwa-icon-512",
       "description": "Icono de App Zygos 512x512",
-      "imageUrl": "https://picsum.photos/seed/zygos-icon/512/512",
-      "imageHint": "icono app"
+      "imageUrl": "https://picsum.photos/seed/zygos-v1/512/512",
+      "imageHint": "financial icon"
     }
   ]
 }
