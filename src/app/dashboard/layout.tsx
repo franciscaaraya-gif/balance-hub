@@ -46,9 +46,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const NavContent = () => (
     <div className="flex flex-col h-full">
       <div className="p-6">
-        <Link href="/dashboard" className="flex items-center gap-2 mb-8" onClick={() => setIsSheetOpen(false)}>
-          <Logo className="h-7 w-7" variant="dark" />
-          <span className="text-xl font-headline font-bold text-white tracking-tight">Zygos</span>
+        <Link href="/dashboard" className="flex items-center gap-3 mb-8" onClick={() => setIsSheetOpen(false)}>
+          <Logo className="h-10 w-10 shrink-0" variant="dark" />
+          <span className="text-2xl font-headline font-bold text-white tracking-tight">Zygos</span>
         </Link>
         <nav className="space-y-1">
           {navItems.map((item) => (
@@ -109,6 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </SheetContent>
             </Sheet>
             <Link href="/dashboard" className="flex items-center gap-2">
+              <Logo className="h-8 w-8" variant="dark" />
               <span className="text-lg font-headline font-bold tracking-tight text-white">Zygos</span>
             </Link>
           </div>
