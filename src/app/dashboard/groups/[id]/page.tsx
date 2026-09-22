@@ -103,8 +103,9 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     const event = events?.find(e => e.id === eventId);
     if (event) {
       setSelectedEventId(eventId);
-      setExpenseTitle(event.costConcept || event.title);
-      setExpenseAmount(event.totalCost.toString());
+      // REQUISITO: No precargar concepto ni monto para evitar desajustes si se editan
+      setExpenseTitle("");
+      setExpenseAmount("");
       setCreditorId(event.creatorId);
 
       const absentIds = event.participantIds.filter(id => !event.presentIds.includes(id));
@@ -115,26 +116,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         });
       }
       setSelectedMembers(candidates);
-
-      const totalPresentParticipants = event.presentIds?.length || 0;
-      const totalPresentGuests = event.externalGuests?.filter(g => g.present).length || 0;
-      const totalAbsents = absentIds.length;
-      const totalHeads = totalPresentParticipants + totalPresentGuests + (event.chargeAbsentees ? totalAbsents : 0);
-      const costPerPerson = totalHeads > 0 ? event.totalCost / totalHeads : 0;
-
-      const initialManuals: Record<string, string> = {};
-      candidates.forEach(uid => {
-        const isPresent = event.presentIds.includes(uid);
-        const myGuestsCount = event.externalGuests?.filter(g => g.addedBy === uid && g.present).length || 0;
-        
-        let multiplier = 0;
-        if (isPresent) multiplier += 1;
-        multiplier += myGuestsCount;
-        if (!isPresent && event.chargeAbsentees) multiplier += 1;
-
-        initialManuals[uid] = (costPerPerson * multiplier).toFixed(2);
-      });
-      setManualAmounts(initialManuals);
+      setManualAmounts({}); // Limpiar montos manuales al cambiar evento
     }
   };
 
