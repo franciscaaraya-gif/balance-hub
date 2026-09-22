@@ -61,21 +61,23 @@ export interface ReceiptItem {
   claims: ReceiptItemClaim[];
 }
 
-export interface Receipt {
-  id: string;
-  groupId: string;
-  imageUrl?: string;
-  status: 'open' | 'processing' | 'completed';
-  items: ReceiptItem[];
-  claims?: Record<string, number>;
-  creditorId: string;
-  createdAt: number;
-}
-
 export interface ExternalGuest {
   name: string;
   addedBy: string;
   present: boolean;
+}
+
+export interface Receipt {
+  id: string;
+  groupId: string;
+  imageUrl?: string;
+  status: 'active' | 'completed';
+  items: ReceiptItem[];
+  claims?: Record<string, number>;
+  creditorId: string;
+  externalGuests?: ExternalGuest[];
+  includeTip?: boolean;
+  createdAt: number;
 }
 
 export interface Event {

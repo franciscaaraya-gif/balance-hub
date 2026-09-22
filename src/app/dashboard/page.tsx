@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -37,7 +36,11 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
 
-  const pendingDebts = useMemo(() => myDebts?.filter(d => d.status !== 'paid') || [], [myDebts]);
+  // Filtrar deudas pendientes y evitar deudas hacia uno mismo
+  const pendingDebts = useMemo(() => {
+    if (!myDebts || !user?.uid) return [];
+    return myDebts.filter(d => d.status !== 'paid' && d.creditorId !== user.uid);
+  }, [myDebts, user?.uid]);
 
   // Resolver nombres de acreedores
   useEffect(() => {

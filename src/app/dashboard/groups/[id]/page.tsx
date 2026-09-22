@@ -246,7 +246,14 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       }
       setIsActionLoading(true);
       try {
-        await createReceipt(params.id, parsedItems.map(it => ({ name: it.name, price: it.totalPrice })), creditorId || user!.uid, includeTip);
+        const event = selectedEventId ? events?.find(e => e.id === selectedEventId) : null;
+        await createReceipt(
+          params.id, 
+          parsedItems.map(it => ({ name: it.name, price: it.totalPrice })), 
+          creditorId || user!.uid, 
+          includeTip,
+          event?.externalGuests || []
+        );
         toast({ title: "Boleta Activa Creada" });
         setAddingExpense(false);
         resetExpenseForm();
@@ -483,6 +490,7 @@ Papas fritas;2;3500;7000`;
                       </div>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {/* Checkboxes para miembros */}
                         {members.map(m => {
                           const claimKey = `${item.id}_${m.uid}`;
                           const currentPercentage = receipt.claims?.[claimKey] || 0;
@@ -506,6 +514,36 @@ Papas fritas;2;3500;7000`;
                             </div>
                           );
                         })}
+
+                        {/* Checkboxes para invitados */}
+                        {receipt.externalGuests?.map((guest, gIdx) => {
+                          const guestId = `guest_${gIdx}`;
+                          const claimKey = `${item.id}_${guestId}`;
+                          const currentPercentage = receipt.claims?.[claimKey] || 0;
+                          const isClaimed = currentPercentage > 0;
+                          const responsibleName = members.find(m => m.uid === guest.addedBy)?.displayName?.split(' ')[0] || '...';
+
+                          return (
+                            <div 
+                              key={guestId} 
+                              className={cn(
+                                "flex items-center gap-2 p-2 rounded-xl border transition-all active:scale-[0.98] border-dashed",
+                                isClaimed ? "bg-accent/5 border-accent/40" : "bg-muted/10 border-transparent"
+                              )}
+                              onClick={() => claimReceiptItem(params.id, receipt.id, item.id, guestId, isClaimed ? 0 : 100)}
+                            >
+                              <Checkbox 
+                                checked={isClaimed} 
+                                onCheckedChange={() => {}} 
+                                className="h-4 w-4 rounded pointer-events-none" 
+                              />
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-bold text-[10px] truncate">{guest.name}</span>
+                                <span className="text-[7px] text-muted-foreground font-medium truncate italic">De {responsibleName}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -513,7 +551,21 @@ Papas fritas;2;3500;7000`;
               </CardContent>
               <CardFooter className="p-4 bg-accent/5 border-t">
                 {user?.uid === receipt.creditorId ? (
-                  <Button className="w-full bg-accent text-[10px] font-black uppercase tracking-widest h-11 rounded-xl shadow-lg" onClick={() => finalizeReceipt(params.id, receipt.id, receipt.items, receipt.claims, receipt.creditorId, undefined, receipt.includeTip)}>Finalizar y Cobrar</Button>
+                  <Button 
+                    className="w-full bg-accent text-[10px] font-black uppercase tracking-widest h-11 rounded-xl shadow-lg" 
+                    onClick={() => finalizeReceipt(
+                      params.id, 
+                      receipt.id, 
+                      receipt.items, 
+                      receipt.claims, 
+                      receipt.creditorId, 
+                      undefined, 
+                      receipt.includeTip,
+                      receipt.externalGuests
+                    )}
+                  >
+                    Finalizar y Cobrar
+                  </Button>
                 ) : (
                   <div className="w-full text-center py-2 px-4 rounded-xl bg-muted/50 border border-dashed text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
                     Esperando que el acreedor finalice

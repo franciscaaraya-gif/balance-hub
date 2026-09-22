@@ -135,11 +135,18 @@ export const addDebt = async (
   if (!groupSnap.exists()) throw new Error("Grupo no encontrado");
   const group = groupSnap.data() as Group;
 
+  const actualCreditorId = creditorId || group.adminId;
+
+  // EVITAR DEUDA HACIA UNO MISMO
+  if (debtorId === actualCreditorId) {
+    return null;
+  }
+
   const debtCollection = collection(db, "groups", groupId, "debts");
   const data = {
     groupId,
     debtorId,
-    creditorId: creditorId || group.adminId,
+    creditorId: actualCreditorId,
     chargeGroupId: chargeGroupId || Math.random().toString(36).substring(7),
     amount,
     description,
@@ -173,6 +180,9 @@ export const addFixedDebtToAll = async (groupId: string, amount: number, descrip
   const chargeGroupId = Math.random().toString(36).substring(7);
 
   memberIds.forEach(uid => {
+    // EVITAR DEUDA HACIA UNO MISMO
+    if (uid === creditorId) return;
+
     const debtRef = doc(collection(db, "groups", groupId, "debts"));
     batch.set(debtRef, {
       groupId,
@@ -207,7 +217,7 @@ export const updateDebtStatusInGroup = (groupId: string, debtId: string, status:
   });
 };
 
-export const createReceipt = (groupId: string, items: any[], creditorId: string, includeTip: boolean = false) => {
+export const createReceipt = (groupId: string, items: any[], creditorId: string, includeTip: boolean = false, externalGuests?: ExternalGuest[]) => {
   const receiptCollection = collection(db, "groups", groupId, "receipts");
   const data = {
     groupId,
@@ -221,6 +231,7 @@ export const createReceipt = (groupId: string, items: any[], creditorId: string,
     })),
     claims: {},
     includeTip,
+    externalGuests: externalGuests || [],
     createdAt: Date.now()
   };
   return addDoc(receiptCollection, data);
@@ -240,7 +251,8 @@ export const finalizeReceipt = async (
   claims: Record<string, number> = {}, 
   creditorId: string, 
   description?: string,
-  includeTip: boolean = false
+  includeTip: boolean = false,
+  externalGuests: ExternalGuest[] = []
 ) => {
   const receiptRef = doc(db, "groups", groupId, "receipts", receiptId);
   const chargeGroupId = Math.random().toString(36).substring(7);
@@ -254,7 +266,18 @@ export const finalizeReceipt = async (
       const splitPrice = item.price / itemClaimants.length;
       for (const key of itemClaimants) {
         const userId = key.substring(item.id.length + 1);
-        userBaseAmounts[userId] = (userBaseAmounts[userId] || 0) + splitPrice;
+        
+        // Atribuir costo de invitado a su responsable
+        let targetUserId = userId;
+        if (userId.startsWith('guest_')) {
+          const guestIdx = parseInt(userId.split('_')[1]);
+          const guest = externalGuests[guestIdx];
+          if (guest) {
+            targetUserId = guest.addedBy;
+          }
+        }
+
+        userBaseAmounts[targetUserId] = (userBaseAmounts[targetUserId] || 0) + splitPrice;
       }
     }
   }
@@ -379,8 +402,12 @@ export const chargeEventToGroup = async (eventId: string) => {
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
   const chargeGroupId = event.id;
+  const creditorId = event.creatorId;
 
   for (const uid of event.presentIds) {
+    // EVITAR DEUDA HACIA UNO MISMO
+    if (uid === creditorId) continue;
+
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid && g.present) || [];
     
     let descriptionText = `${event.title}: ${conceptText} (Presente)`;
@@ -397,7 +424,7 @@ export const chargeEventToGroup = async (eventId: string) => {
         uid, 
         finalAmount, 
         descriptionText, 
-        event.creatorId,
+        creditorId,
         chargeGroupId,
         undefined,
         { eventId: event.id, eventName: event.title }
@@ -407,13 +434,16 @@ export const chargeEventToGroup = async (eventId: string) => {
 
   if (event.chargeAbsentees) {
     for (const uid of absentIds) {
+      // EVITAR DEUDA HACIA UNO MISMO
+      if (uid === creditorId) continue;
+
       if (costPerHead > 0) {
         await addDebt(
           event.groupId, 
           uid, 
           costPerHead, 
           `${event.title}: ${conceptText} (Ausencia autorizada con cargo)`, 
-          event.creatorId,
+          creditorId,
           chargeGroupId,
           undefined,
           { eventId: event.id, eventName: event.title }
