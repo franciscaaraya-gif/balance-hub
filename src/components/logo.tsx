@@ -9,22 +9,26 @@ export function Logo({ className, variant = "light" }: { className?: string; var
         <line x1="40" y1="88" x2="160" y2="88" stroke="#ffffff" strokeWidth="5"/>
         <line x1="40" y1="121" x2="160" y2="121" stroke="#ffffff" strokeWidth="5"/>
         <line x1="40" y1="154" x2="160" y2="154" stroke="#ffffff" strokeWidth="5"/>
-        <circle cx="50" cy="55" r="8" fill="#f56a56"/>
-        <circle cx="83" cy="55" r="8" fill="#f56a56"/>
-        <circle cx="117" cy="55" r="8" fill="#f56a56"/>
-        <circle cx="150" cy="55" r="8" fill="#f56a56"/>
-        <circle cx="50" cy="88" r="8" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
-        <circle cx="83" cy="88" r="8" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
-        <circle cx="117" cy="88" r="8" fill="#f56a56"/>
-        <circle cx="150" cy="88" r="8" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
-        <circle cx="50" cy="121" r="8" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
-        <circle cx="83" cy="121" r="8" fill="#f56a56"/>
-        <circle cx="117" cy="121" r="8" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
-        <circle cx="150" cy="121" r="8" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
-        <circle cx="50" cy="154" r="8" fill="#f56a56"/>
-        <circle cx="83" cy="154" r="8" fill="#f56a56"/>
-        <circle cx="117" cy="154" r="8" fill="#f56a56"/>
-        <circle cx="150" cy="154" r="8" fill="#f56a56"/>
+        {/* Beads forming Z pattern */}
+        <circle cx="50" cy="55" r="10" fill="#f56a56"/>
+        <circle cx="83" cy="55" r="10" fill="#f56a56"/>
+        <circle cx="117" cy="55" r="10" fill="#f56a56"/>
+        <circle cx="150" cy="55" r="10" fill="#f56a56"/>
+        
+        <circle cx="50" cy="88" r="10" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
+        <circle cx="83" cy="88" r="10" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
+        <circle cx="117" cy="88" r="10" fill="#f56a56"/>
+        <circle cx="150" cy="88" r="10" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
+        
+        <circle cx="50" cy="121" r="10" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
+        <circle cx="83" cy="121" r="10" fill="#f56a56"/>
+        <circle cx="117" cy="121" r="10" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
+        <circle cx="150" cy="121" r="10" fill="#ffffff" stroke="#1c2450" strokeWidth="2.5"/>
+        
+        <circle cx="50" cy="154" r="10" fill="#f56a56"/>
+        <circle cx="83" cy="154" r="10" fill="#f56a56"/>
+        <circle cx="117" cy="154" r="10" fill="#f56a56"/>
+        <circle cx="150" cy="154" r="10" fill="#f56a56"/>
       </svg>
     );
   }
@@ -36,22 +40,26 @@ export function Logo({ className, variant = "light" }: { className?: string; var
       <line x1="40" y1="88" x2="160" y2="88" stroke="#1c2450" strokeWidth="5"/>
       <line x1="40" y1="121" x2="160" y2="121" stroke="#1c2450" strokeWidth="5"/>
       <line x1="40" y1="154" x2="160" y2="154" stroke="#1c2450" strokeWidth="5"/>
-      <circle cx="50" cy="55" r="8" fill="#f56a56"/>
-      <circle cx="83" cy="55" r="8" fill="#f56a56"/>
-      <circle cx="117" cy="55" r="8" fill="#f56a56"/>
-      <circle cx="150" cy="55" r="8" fill="#f56a56"/>
-      <circle cx="50" cy="88" r="8" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
-      <circle cx="83" cy="88" r="8" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
-      <circle cx="117" cy="88" r="8" fill="#f56a56"/>
-      <circle cx="150" cy="88" r="8" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
-      <circle cx="50" cy="121" r="8" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
-      <circle cx="83" cy="121" r="8" fill="#f56a56"/>
-      <circle cx="117" cy="121" r="8" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
-      <circle cx="150" cy="121" r="8" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
-      <circle cx="50" cy="154" r="8" fill="#f56a56"/>
-      <circle cx="83" cy="154" r="8" fill="#f56a56"/>
-      <circle cx="117" cy="154" r="8" fill="#f56a56"/>
-      <circle cx="150" cy="154" r="8" fill="#f56a56"/>
+      {/* Beads forming Z pattern */}
+      <circle cx="50" cy="55" r="10" fill="#f56a56"/>
+      <circle cx="83" cy="55" r="10" fill="#f56a56"/>
+      <circle cx="117" cy="55" r="10" fill="#f56a56"/>
+      <circle cx="150" cy="55" r="10" fill="#f56a56"/>
+      
+      <circle cx="50" cy="88" r="10" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
+      <circle cx="83" cy="88" r="10" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
+      <circle cx="117" cy="88" r="10" fill="#f56a56"/>
+      <circle cx="150" cy="88" r="10" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
+      
+      <circle cx="50" cy="121" r="10" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
+      <circle cx="83" cy="121" r="10" fill="#f56a56"/>
+      <circle cx="117" cy="121" r="10" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
+      <circle cx="150" cy="121" r="10" fill="#1c2450" stroke="#ffffff" strokeWidth="2.5"/>
+      
+      <circle cx="50" cy="154" r="10" fill="#f56a56"/>
+      <circle cx="83" cy="154" r="10" fill="#f56a56"/>
+      <circle cx="117" cy="154" r="10" fill="#f56a56"/>
+      <circle cx="150" cy="154" r="10" fill="#f56a56"/>
     </svg>
   );
 }
