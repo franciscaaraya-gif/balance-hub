@@ -47,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex flex-col h-full">
       <div className="p-6">
         <Link href="/dashboard" className="flex items-center gap-2 mb-8" onClick={() => setIsSheetOpen(false)}>
-          <Logo className="h-7 w-7" />
+          <Logo className="h-7 w-7" variant="dark" />
           <span className="text-xl font-headline font-bold text-white tracking-tight">Zygos</span>
         </Link>
         <nav className="space-y-1">
