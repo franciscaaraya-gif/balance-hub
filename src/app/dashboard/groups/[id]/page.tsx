@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
   UserPlus, ScanLine, Loader2, DollarSign, Users, 
-  CreditCard, Copy, ReceiptText, ChevronRight, User, Info
+  CreditCard, Copy, ReceiptText, ChevronRight, User, Info, Settings2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
@@ -272,7 +272,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
       if (expenseMode === 'event' && selectedEventId) {
         await updateDoc(doc(firestore, 'events', selectedEventId), { isCharged: true });
-        toast({ title: "¡Evento Liquidado con Éxito!", description: "El evento quedó cerrado y las deudas asignadas." });
+        toast({ title: "¡Evento Liquidado!", description: "El evento quedó cerrado y las deudas asignadas." });
       } else {
         toast({ title: "Gasto Registrado Correctamente" });
       }
@@ -300,12 +300,8 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   };
 
   const copyAiPrompt = () => {
-    const promptText = `Analiza la imagen de esta boleta/factura y devuélveme SOLO una lista, un ítem por línea, en este formato exacto sin encabezados ni texto adicional:
-nombre_item;cantidad;precio_unitario;precio_total
-
-Ejemplo:
-Cerveza;4;2500;10000
-Papas fritas;2;3500;7000`;
+    const promptText = `Analiza la imagen de esta boleta/factura y devuélveme SOLO una lista, un ítem por línea, en este formato exacto:
+nombre_item;cantidad;precio_unitario;precio_total`;
     navigator.clipboard.writeText(promptText);
     toast({ title: "Prompt Copiado" });
   };
@@ -319,9 +315,9 @@ Papas fritas;2;3500;7000`;
     if (!confirmingDebt) return;
     try {
       await updateDebtStatusInGroup(params.id, confirmingDebt.id, 'paid');
-      toast({ title: "Pago Validado", description: "La deuda ha sido marcada como pagada." });
+      toast({ title: "Pago Validado" });
     } catch (e) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el estado." });
+      toast({ variant: "destructive", title: "Error" });
     } finally {
       setConfirmingDebt(null);
     }
@@ -468,7 +464,7 @@ Papas fritas;2;3500;7000`;
                 <CardTitle className="text-[10px] font-black uppercase tracking-widest text-accent flex items-center gap-2">
                   <ScanLine className="h-4 w-4" /> Boleta Colaborativa {receipt.includeTip && " + 10% Propina"}
                 </CardTitle>
-                <p className="text-[9px] text-muted-foreground font-medium">Marca lo que consumiste, los cambios se ven al instante.</p>
+                <p className="text-[9px] text-muted-foreground font-medium">Marca lo que consumiste.</p>
               </CardHeader>
               <CardContent className="p-0 max-h-[350px] sm:max-h-[450px] overflow-y-auto">
                 <div className="divide-y">
@@ -558,7 +554,7 @@ Papas fritas;2;3500;7000`;
                   </Button>
                 ) : (
                   <div className="w-full text-center py-2 px-4 rounded-xl bg-muted/50 border border-dashed text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                    Esperando que el acreedor finalice
+                    Esperando al acreedor
                   </div>
                 )}
               </CardFooter>
@@ -568,7 +564,7 @@ Papas fritas;2;3500;7000`;
           <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
             <CardHeader className="pb-3 border-b px-4">
               <CardTitle className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2 text-primary">
-                <Users className="h-4 w-4" /> Miembros del Grupo ({members.length})
+                <Users className="h-4 w-4" /> Miembros ({members.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-4 space-y-2 px-4">
@@ -601,7 +597,7 @@ Papas fritas;2;3500;7000`;
                 <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Vincular a Evento</Label>
                 <Select onValueChange={handleEventSelect} value={selectedEventId || ""}>
                   <SelectTrigger className="h-12 rounded-xl text-xs">
-                    <SelectValue placeholder="Elegir un evento reciente..." />
+                    <SelectValue placeholder="Elegir evento..." />
                   </SelectTrigger>
                   <SelectContent>
                     {events?.map(ev => (
@@ -615,7 +611,7 @@ Papas fritas;2;3500;7000`;
             )}
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">¿Quién pagó el gasto?</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">¿Quién pagó?</Label>
               <Select value={creditorId} onValueChange={setCreditorId}>
                 <SelectTrigger className="h-12 rounded-xl text-xs">
                   <SelectValue placeholder="Seleccionar acreedor" />
@@ -633,7 +629,7 @@ Papas fritas;2;3500;7000`;
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Concepto</Label>
-                    <Input placeholder="Ej: Pizza / Cancha / Luces" value={expenseTitle} onChange={e => setExpenseTitle(e.target.value)} className="h-12 rounded-xl text-sm" />
+                    <Input placeholder="Ej: Pizza" value={expenseTitle} onChange={e => setExpenseTitle(e.target.value)} className="h-12 rounded-xl text-sm" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Monto Total</Label>
@@ -656,7 +652,7 @@ Papas fritas;2;3500;7000`;
                       {members.map(m => (
                         <div key={m.uid} className={cn("flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98]", selectedMembers.includes(m.uid) ? "bg-white border-primary/20 shadow-sm" : "bg-transparent border-transparent")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
                           <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md pointer-events-none" />
-                          <span className="text-[11px] font-bold truncate">{m.displayName</span>
+                          <span className="text-[11px] font-bold truncate">{m.displayName}</span>
                         </div>
                       ))}
                     </div>
@@ -682,17 +678,17 @@ Papas fritas;2;3500;7000`;
             ) : (
               <div className="space-y-4">
                 <div className="bg-primary/5 p-5 rounded-2xl border border-primary/10 space-y-3 text-center">
-                  <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">Usa una IA para escanear tu boleta y pega aquí el resultado estructurado para que cada miembro pueda marcar sus ítems.</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Copia el prompt, procésalo en una IA externa y pega aquí el resultado.</p>
                   <Button type="button" onClick={copyAiPrompt} variant="outline" className="w-full h-11 text-[10px] font-black uppercase rounded-xl gap-2">
-                    <Copy className="h-4 w-4" /> Copiar Prompt para IA
+                    <Copy className="h-4 w-4" /> Copiar Prompt
                   </Button>
                 </div>
-                <Textarea placeholder="Pega aquí el resultado (ítem;cantidad;precio;total)" className="min-h-[150px] rounded-xl text-[11px] font-mono p-4" value={pastedText} onChange={(e) => setPastedText(e.target.value)} />
-                <Button type="button" className="w-full h-12 rounded-xl text-[11px] font-black uppercase" onClick={handleParseItems}>Procesar Texto de Boleta</Button>
+                <Textarea placeholder="nombre;cantidad;precio_unitario;precio_total" className="min-h-[150px] rounded-xl text-[11px] font-mono p-4" value={pastedText} onChange={(e) => setPastedText(e.target.value)} />
+                <Button type="button" className="w-full h-12 rounded-xl text-[11px] font-black uppercase" onClick={handleParseItems}>Procesar Texto</Button>
                 
                 {parsedItems.length > 0 && (
                   <div className="space-y-4 mt-4 border-t pt-4">
-                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Revisar ítems extraídos</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Revisar ítems</Label>
                     <div className="space-y-2 max-h-48 overflow-y-auto bg-muted/10 p-2 rounded-xl border">
                       {parsedItems.map((item, idx) => (
                         <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border shadow-sm">
@@ -739,20 +735,18 @@ Papas fritas;2;3500;7000`;
                     </div>
 
                     <div className="flex justify-between items-center bg-muted/30 p-3 rounded-xl font-bold text-sm">
-                      <span className="text-muted-foreground text-xs uppercase tracking-wider">Suma Total Boleta:</span>
+                      <span className="text-muted-foreground text-xs uppercase tracking-wider">Total:</span>
                       <span className="text-primary">${aggregatedItemsTotal.toFixed(2)}</span>
                     </div>
 
                     <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl border">
-                      <div className="space-y-0.5">
-                        <Label className="text-xs font-bold">¿Incluir propina?</Label>
-                      </div>
+                      <div className="space-y-0.5"><Label className="text-xs font-bold">¿Propina 10%?</Label></div>
                       <Switch checked={includeTip} onCheckedChange={setIncludeTip} />
                     </div>
 
                     {includeTip && (
-                      <p className="text-[11px] text-accent font-medium leading-relaxed bg-accent/5 p-3 rounded-xl border border-accent/20 animate-in fade-in duration-200">
-                        Total boleta + propina: ${(aggregatedItemsTotal * 1.10).toFixed(2)}. La propina se dividirá en proporción a lo que consuma cada participante.
+                      <p className="text-[11px] text-accent font-medium leading-relaxed bg-accent/5 p-3 rounded-xl border border-accent/20">
+                        Total + Propina: ${(aggregatedItemsTotal * 1.10).toFixed(2)} (Proporcional).
                       </p>
                     )}
                   </div>
@@ -764,7 +758,7 @@ Papas fritas;2;3500;7000`;
           <DialogFooter className="flex-col sm:flex-row gap-3">
             <Button variant="ghost" className="rounded-xl h-12 w-full sm:w-auto" onClick={() => setAddingExpense(false)}>Cancelar</Button>
             <Button className="rounded-xl px-10 h-12 w-full sm:w-auto font-bold shadow-lg" onClick={handleRegisterExpense} disabled={isActionLoading || (!divideEqually && expenseMode !== 'item' && Math.abs(difference) > 0.01)}>
-              {isActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar Gasto"}
+              {isActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -777,7 +771,7 @@ Papas fritas;2;3500;7000`;
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{creditorProfile?.displayName}</p>
           </DialogHeader>
           <div className="bg-muted/30 p-6 rounded-[1.5rem] font-mono text-xs sm:text-sm text-left whitespace-pre-wrap border border-dashed mt-4 leading-relaxed">
-            {creditorProfile?.transferDetails || "El acreedor no ha configurado sus instrucciones bancarias."}
+            {creditorProfile?.transferDetails || "Sin datos configurados."}
           </div>
           <Button className="w-full h-12 rounded-xl mt-6 font-bold" onClick={() => setCreditorProfile(null)}>Entendido</Button>
         </DialogContent>
@@ -785,14 +779,14 @@ Papas fritas;2;3500;7000`;
 
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
         <DialogContent className="w-[90vw] max-w-sm rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
-          <DialogHeader className="pb-4"><DialogTitle className="text-xl font-headline">Compartir Invitación</DialogTitle></DialogHeader>
+          <DialogHeader className="pb-4"><DialogTitle className="text-xl font-headline">Invitación</DialogTitle></DialogHeader>
           <div className="space-y-6">
             <div className="p-4 bg-muted/30 rounded-2xl border-2 border-dashed text-xs font-mono break-all leading-relaxed">
               {group.inviteLink}
             </div>
             <Button 
               className="w-full h-12 rounded-xl font-bold gap-2" 
-              onClick={() => { navigator.clipboard.writeText(group.inviteLink); toast({ title: "Enlace Copiado", description: "Envíalo por WhatsApp a tus amigos." }); }}
+              onClick={() => { navigator.clipboard.writeText(group.inviteLink); toast({ title: "Copiado" }); }}
             >
               <Copy className="h-4 w-4" /> Copiar Enlace
             </Button>
@@ -813,7 +807,7 @@ Papas fritas;2;3500;7000`;
           </DialogHeader>
           <DialogFooter className="flex gap-2">
             <Button variant="ghost" className="flex-1 rounded-xl" onClick={() => setConfirmingDebt(null)}>Cancelar</Button>
-            <Button className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700" onClick={confirmPaid}>Confirmar Pago</Button>
+            <Button className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700" onClick={confirmPaid}>Confirmar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
