@@ -4,7 +4,7 @@ import { useUser } from "@/firebase";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, LogOut, Loader2, CalendarCheck, UserCircle, Menu } from "lucide-react";
+import { LayoutDashboard, LogOut, Loader2, CalendarCheck, UserCircle, Menu, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase/config";
 import { signOut } from "firebase/auth";
@@ -38,7 +38,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const navItems = [
-    { name: 'Mis Grupos', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Inicio', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'Mis Grupos', href: '/dashboard/groups', icon: Users },
     { name: 'Asistencia', href: '/dashboard/attendance', icon: CalendarCheck },
     { name: 'Mi Perfil', href: '/dashboard/settings', icon: UserCircle },
   ];
