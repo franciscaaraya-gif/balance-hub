@@ -1,0 +1,25 @@
+import { MetadataRoute } from 'next';
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: 'BalanceHub - Gestión de Deudas',
+    short_name: 'BalanceHub',
+    description: 'Gestión inteligente de deudas grupales y división de gastos.',
+    start_url: '/dashboard',
+    display: 'standalone',
+    background_color: '#f1f3f7',
+    theme_color: '#1d2a5a',
+    icons: [
+      {
+        src: 'https://picsum.photos/seed/balancehub-icon/192/192',
+        sizes: '192x192',
+        type: 'image/png',
+      },
+      {
+        src: 'https://picsum.photos/seed/balancehub-icon/512/512',
+        sizes: '512x512',
+        type: 'image/png',
+      },
+    ],
+  };
+}

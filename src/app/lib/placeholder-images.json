@@ -1,0 +1,16 @@
+{
+  "placeholderImages": [
+    {
+      "id": "pwa-icon-192",
+      "description": "App Icon 192x192",
+      "imageUrl": "https://picsum.photos/seed/balancehub-icon/192/192",
+      "imageHint": "app icon"
+    },
+    {
+      "id": "pwa-icon-512",
+      "description": "App Icon 512x512",
+      "imageUrl": "https://picsum.photos/seed/balancehub-icon/512/512",
+      "imageHint": "app icon"
+    }
+  ]
+}
