@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { createEvent } from "@/lib/firebase/store";
 import { Event, Group } from "@/lib/types";
@@ -13,18 +13,19 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   PlusCircle, Calendar, Users, ChevronRight, 
-  Loader2, User, Clock, MapPin, Archive, 
-  ChevronLeft
+  Loader2, User, Clock, MapPin, Archive
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, orderBy } from "firebase/firestore";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
+import { useSearchParams } from "next/navigation";
 
-export default function AttendanceDashboard() {
+function AttendanceContent() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -32,12 +33,40 @@ export default function AttendanceDashboard() {
   const [formData, setFormData] = useState({ 
     title: "", 
     date: "", 
-    time: "", 
+    time: "12:00", 
     location: "", 
     totalCost: "", 
     costConcept: "", 
     groupId: ""
   });
+
+  const [selectedHour, setSelectedHour] = useState("12");
+  const [selectedMinute, setSelectedMinute] = useState("00");
+
+  useEffect(() => {
+    const isDup = searchParams.get('dup') === 'true';
+    if (isDup) {
+      const time = searchParams.get('time') || "12:00";
+      const [h, m] = time.split(':');
+      
+      setFormData({
+        title: searchParams.get('title') || "",
+        date: "",
+        time: time,
+        location: searchParams.get('location') || "",
+        totalCost: searchParams.get('cost') || "",
+        costConcept: searchParams.get('concept') || "",
+        groupId: searchParams.get('groupId') || ""
+      });
+      setSelectedHour(h || "12");
+      setSelectedMinute(m || "00");
+      setOpen(true);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, time: `${selectedHour}:${selectedMinute}` }));
+  }, [selectedHour, selectedMinute]);
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -71,7 +100,7 @@ export default function AttendanceDashboard() {
         location: formData.location,
         totalCost: parseFloat(formData.totalCost),
         costConcept: formData.costConcept,
-        chargeAbsentees: true, // Por defecto, todos los confirmados pagan ahora
+        chargeAbsentees: true,
         groupId: formData.groupId,
         creatorId: user.uid,
         creatorName: user.displayName || 'Organizador'
@@ -82,7 +111,7 @@ export default function AttendanceDashboard() {
       setFormData({ 
         title: "", 
         date: "", 
-        time: "", 
+        time: "12:00", 
         location: "", 
         totalCost: "", 
         costConcept: "", 
@@ -101,6 +130,9 @@ export default function AttendanceDashboard() {
 
   if (isUserLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
+  const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+  const minutes = ["00", "15", "30", "45"];
+
   return (
     <div className="space-y-6 sm:space-y-10 max-w-6xl mx-auto pb-10 px-2 sm:px-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -116,7 +148,7 @@ export default function AttendanceDashboard() {
           </Button>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-accent h-12 flex-1 md:flex-none px-6 rounded-2xl shadow-lg shadow-accent/20 font-bold">
+              <Button className="bg-accent h-12 flex-1 md:flex-none px-6 rounded-2xl shadow-lg shadow-accent/20 font-bold text-white">
                 <PlusCircle className="h-5 w-5 mr-2" /> Nueva Fecha
               </Button>
             </DialogTrigger>
@@ -145,7 +177,24 @@ export default function AttendanceDashboard() {
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground px-1">Hora</Label>
-                    <Input type="time" value={formData.time} onChange={e => setFormData({...formData, time: e.target.value})} className="rounded-xl h-11 text-xs" />
+                    <div className="flex gap-2">
+                      <Select value={selectedHour} onValueChange={setSelectedHour}>
+                        <SelectTrigger className="rounded-xl h-11 text-xs flex-1">
+                          <SelectValue placeholder="HH" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {hours.map(h => <SelectItem key={h} value={h} className="text-xs">{h}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Select value={selectedMinute} onValueChange={setSelectedMinute}>
+                        <SelectTrigger className="rounded-xl h-11 text-xs flex-1">
+                          <SelectValue placeholder="MM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {minutes.map(m => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -155,7 +204,7 @@ export default function AttendanceDashboard() {
                 
                 <div className="bg-primary/5 p-4 rounded-xl mt-2 border border-primary/10">
                   <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">
-                    Info: En Zygos, todos los participantes que no sean eliminados de la lista antes del cobro pagarán su parte por igual, asistan o no.
+                    Info: En Zygos, todos los participantes que no sean eliminados de la lista antes del cobro pagarán su parte por igual.
                   </p>
                 </div>
               </div>
@@ -240,5 +289,13 @@ function EventCard({ event }: { event: Event }) {
         </CardContent>
       </Card>
     </Link>
+  );
+}
+
+export default function AttendanceDashboard() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>}>
+      <AttendanceContent />
+    </Suspense>
   );
 }

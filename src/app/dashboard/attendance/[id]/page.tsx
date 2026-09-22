@@ -20,7 +20,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, MapPin, Clock, QrCode, CheckCircle2, Loader2, Zap, AlertCircle, Share2, Coins, ArrowLeft, Trash2, Plus, Settings2, Info } from "lucide-react";
+import { 
+  Calendar, MapPin, Clock, QrCode, CheckCircle2, 
+  Loader2, Zap, AlertCircle, Share2, Coins, 
+  ArrowLeft, Trash2, Plus, Settings2, Info, Copy
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
@@ -72,6 +76,20 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       });
     }
   }, [event?.participantIds, event?.externalGuests]);
+
+  const handleDuplicate = () => {
+    if (!event) return;
+    const params = new URLSearchParams({
+      dup: 'true',
+      title: event.title,
+      concept: event.costConcept,
+      time: event.time,
+      cost: event.totalCost.toString(),
+      groupId: event.groupId,
+      location: event.location
+    });
+    router.push(`/dashboard/attendance?${params.toString()}`);
+  };
 
   if (eventLoading) {
     return (
@@ -150,7 +168,17 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       <div className="bg-primary p-6 sm:p-8 rounded-[2rem] text-primary-foreground shadow-xl">
         <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center">
           <div className="space-y-2">
-            <Badge className="bg-accent text-white px-3 font-bold">{event.date}</Badge>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-accent text-white px-3 font-bold">{event.date}</Badge>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 rounded-lg bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white uppercase tracking-tighter"
+                onClick={handleDuplicate}
+              >
+                <Copy className="h-3 w-3 mr-1" /> Duplicar Evento
+              </Button>
+            </div>
             <h1 className="text-3xl font-headline font-bold">{event.title}</h1>
             <p className="text-sm opacity-80 font-medium">Concepto del Costo: <span className="underline font-bold">{event.costConcept || "No especificado"}</span></p>
             <div className="flex gap-4 text-xs opacity-60 pt-2">
@@ -225,7 +253,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                             size="sm"
                             className={cn(
                               "rounded-xl text-[10px] font-black h-9 px-3", 
-                              isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none" : "border-primary/20 text-primary"
+                              isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none text-white" : "border-primary/20 text-primary"
                             )}
                             onClick={() => toggleAttendance(event.id, uid, !isPresent)}
                           >
@@ -338,7 +366,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             <CardContent className="pt-4 space-y-4">
               <div className="bg-primary/5 p-4 rounded-2xl flex items-start gap-3">
                 <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">
                   En Zygos el costo se divide entre todos los anotados. La única forma de no pagar es ser eliminado de la lista por el administrador.
                 </p>
               </div>
@@ -386,7 +414,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                <Share2 className="h-4 w-4 text-accent" />
                <span className="text-xs font-black uppercase tracking-widest">Enlace Invitación</span>
              </div>
-             <p className="text-[10px] text-muted-foreground leading-relaxed">Comparte este link. Los que se anoten pagarán su parte por igual al liquidar.</p>
+             <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">Comparte este link. Los que se anoten pagarán su parte por igual al liquidar.</p>
              <Button 
                variant="outline" 
                className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
@@ -405,7 +433,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             <div className="bg-white p-4 rounded-3xl border-2 border-primary/10 shadow-xl">
               <img src={qrCodeUrl} alt="QR de asistencia" className="w-60 h-60" />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground max-w-xs leading-relaxed">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground max-w-xs leading-relaxed font-medium">
               Escaneando este código se registra la llegada del participante.
             </p>
           </div>
