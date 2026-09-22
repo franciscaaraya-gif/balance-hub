@@ -10,11 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Users, Wallet, ChevronRight, Loader2, ReceiptText, AlertCircle, Clock, CheckCircle2, CreditCard, User, Send } from "lucide-react";
+import { PlusCircle, Users, Wallet, ChevronRight, Loader2, ReceiptText, AlertCircle, Clock, CheckCircle2, CreditCard, User, Send, Info } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
-import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -38,13 +37,11 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
 
-  // Filtrar deudas pendientes o en revisión (excluyendo auto-deudas pagadas)
   const pendingDebts = useMemo(() => {
     if (!myDebts || !user?.uid) return [];
-    return myDebts.filter(d => d.status !== 'paid');
+    return myDebts.filter(d => d.status !== 'paid' && d.debtorId !== d.creditorId);
   }, [myDebts, user?.uid]);
 
-  // Resolver nombres de acreedores
   useEffect(() => {
     if (pendingDebts.length > 0) {
       const uids = Array.from(new Set(pendingDebts.map(d => d.creditorId)));
@@ -58,7 +55,6 @@ export default function Dashboard() {
     }
   }, [pendingDebts]);
 
-  // Agrupar deudas por acreedor
   const groupedDebts = useMemo(() => {
     const groups: Record<string, { creditorId: string; total: number; debts: Debt[] }> = {};
     
@@ -93,20 +89,9 @@ export default function Dashboard() {
     if (!selectedDebtGroup || !user) return;
     setIsReporting(true);
     try {
-      const pendingIds = selectedDebtGroup.debts
-        .filter(d => d.status === 'pending')
-        .map(d => d.id);
-      
-      if (pendingIds.length > 0) {
-        // Asumiendo que las deudas están en diferentes grupos, necesitamos actualizarlas individualmente o por lote si conocemos sus groupId
-        // Por simplicidad en esta iteración, el bulkUpdateDebtStatus en store.ts se ajustará para ser genérico o usaremos bucle.
-        // Aquí usaremos el bulkUpdateDebtStatus ya mejorado en store.ts.
-        // Nota: En Firestore real, las subcolecciones requieren el path completo. 
-        // Ajustamos la lógica para iterar sobre los debtIds si pertenecen a distintos grupos.
-        for (const debt of selectedDebtGroup.debts) {
-          if (debt.status === 'pending') {
-            await bulkUpdateDebtStatus(debt.groupId, [debt.id], 'under_review');
-          }
+      for (const debt of selectedDebtGroup.debts) {
+        if (debt.status === 'pending') {
+          await bulkUpdateDebtStatus(debt.groupId, [debt.id], 'under_review');
         }
       }
       
@@ -199,7 +184,6 @@ export default function Dashboard() {
                 <div className="py-6 text-center opacity-30"><CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" /><p className="text-[10px] font-bold uppercase tracking-widest">Al día con todos tus grupos</p></div>
               ) : groupedDebts.map(group => {
                 const creditor = creditorProfiles[group.creditorId];
-                const hasPending = group.debts.some(d => d.status === 'pending');
                 
                 return (
                   <div key={group.creditorId} className="space-y-3">
