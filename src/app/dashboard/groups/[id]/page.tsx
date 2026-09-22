@@ -12,7 +12,6 @@ import {
   updateDebtStatusInGroup, 
   getUserProfile
 } from "@/lib/firebase/store";
-import { generateDebtSummary } from "@/ai/flows/ai-debt-summary-generation";
 import { Group, Debt, UserProfile, Receipt, ReceiptItem, Event } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -26,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
   UserPlus, ScanLine, Loader2, DollarSign, Users, 
-  CreditCard, Copy, BrainCircuit, ReceiptText, ChevronRight, User, Info
+  CreditCard, Copy, ReceiptText, ChevronRight, User, Info
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
@@ -56,15 +55,11 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
-  
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [expandedGastoId, setExpandedGastoId] = useState<string | null>(null);
 
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [creditorProfile, setCreditorProfile] = useState<UserProfile | null>(null);
 
-  // Estados para diálogos de confirmación
   const [confirmingDebt, setConfirmingDebt] = useState<{ id: string; amount: number; name: string } | null>(null);
 
   const groupRef = useMemoFirebase(() => {
@@ -194,29 +189,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const difference = useMemo(() => {
     return totalTarget - manualSum;
   }, [totalTarget, manualSum]);
-
-  const handleGenerateAiSummary = async () => {
-    if (!group || !debts || !members) return;
-    setIsGeneratingSummary(true);
-    try {
-      const result = await generateDebtSummary({
-        groupName: group.name,
-        members: members.map(m => ({ id: m.uid, name: m.displayName || 'Usuario' })),
-        debts: debts.map(d => ({
-          id: d.id,
-          debtorId: d.debtorId,
-          amount: d.amount,
-          description: d.description,
-          status: d.status
-        }))
-      });
-      setAiSummary(result.summary);
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo generar el resumen con IA." });
-    } finally {
-      setIsGeneratingSummary(false);
-    }
-  };
 
   const handleParseItems = () => {
     const lines = pastedText.split('\n').map(l => l.trim()).filter(Boolean);
@@ -369,10 +341,6 @@ Papas fritas;2;3500;7000`;
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" className="flex-1 md:flex-none gap-2 rounded-xl h-10 text-[10px] font-black uppercase" onClick={handleGenerateAiSummary} disabled={isGeneratingSummary}>
-            {isGeneratingSummary ? <Loader2 className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4 text-accent" />}
-            Resumen IA
-          </Button>
           <Button variant="outline" size="sm" className="flex-1 md:flex-none gap-2 rounded-xl h-10 text-[10px] font-black uppercase" onClick={() => setShowInviteModal(true)}>
             <UserPlus className="h-4 w-4" /> Invitar
           </Button>
@@ -514,7 +482,6 @@ Papas fritas;2;3500;7000`;
                       </div>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {/* Checkboxes para miembros */}
                         {members.map(m => {
                           const claimKey = `${item.id}_${m.uid}`;
                           const currentPercentage = receipt.claims?.[claimKey] || 0;
@@ -539,7 +506,6 @@ Papas fritas;2;3500;7000`;
                           );
                         })}
 
-                        {/* Checkboxes para invitados */}
                         {receipt.externalGuests?.map((guest, gIdx) => {
                           const guestId = `guest_${gIdx}`;
                           const claimKey = `${item.id}_${guestId}`;
@@ -690,7 +656,7 @@ Papas fritas;2;3500;7000`;
                       {members.map(m => (
                         <div key={m.uid} className={cn("flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98]", selectedMembers.includes(m.uid) ? "bg-white border-primary/20 shadow-sm" : "bg-transparent border-transparent")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
                           <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md pointer-events-none" />
-                          <span className="text-[11px] font-bold truncate">{m.displayName}</span>
+                          <span className="text-[11px] font-bold truncate">{m.displayName</span>
                         </div>
                       ))}
                     </div>
