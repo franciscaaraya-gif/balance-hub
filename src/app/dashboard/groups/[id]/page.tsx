@@ -10,9 +10,9 @@ import {
   claimReceiptItem, 
   finalizeReceipt, 
   updateDebtStatusInGroup, 
-  getUserProfile,
-  generateDebtSummary
+  getUserProfile
 } from "@/lib/firebase/store";
+import { generateDebtSummary } from "@/ai/flows/ai-debt-summary-generation";
 import { Group, Debt, UserProfile, Receipt, ReceiptItem, Event } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
   UserPlus, ScanLine, Loader2, DollarSign, Users, 
-  CreditCard, Copy, BrainCircuit, ReceiptText, ChevronRight, User
+  CreditCard, Copy, BrainCircuit, ReceiptText, ChevronRight, User, Info
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
@@ -63,6 +63,9 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const [members, setMembers] = useState<UserProfile[]>([]);
   const [creditorProfile, setCreditorProfile] = useState<UserProfile | null>(null);
+
+  // Estados para diálogos de confirmación
+  const [confirmingDebt, setConfirmingDebt] = useState<{ id: string; amount: number; name: string } | null>(null);
 
   const groupRef = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
@@ -340,6 +343,18 @@ Papas fritas;2;3500;7000`;
     setCreditorProfile(profile);
   };
 
+  const confirmPaid = async () => {
+    if (!confirmingDebt) return;
+    try {
+      await updateDebtStatusInGroup(params.id, confirmingDebt.id, 'paid');
+      toast({ title: "Pago Validado", description: "La deuda ha sido marcada como pagada." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el estado." });
+    } finally {
+      setConfirmingDebt(null);
+    }
+  };
+
   if (groupLoading) return <div className="h-full flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!group) return <div className="p-8 text-center"><AlertCircle className="mx-auto h-12 w-12 opacity-50 mb-4" /><p>Grupo no encontrado.</p></div>;
 
@@ -437,13 +452,22 @@ Papas fritas;2;3500;7000`;
                                   <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                                 ) : (
                                   <div className="flex items-center gap-1.5">
-                                    <Badge variant="outline" className="text-[8px] border-orange-200 text-orange-600 bg-orange-50 font-bold px-1.5 py-0.5">Pendiente</Badge>
+                                    <Badge variant="outline" className={cn(
+                                      "text-[8px] font-bold px-1.5 py-0.5",
+                                      debt.status === 'under_review' ? "border-blue-200 text-blue-600 bg-blue-50 animate-pulse" : "border-orange-200 text-orange-600 bg-orange-50"
+                                    )}>
+                                      {debt.status === 'under_review' ? 'En Revisión' : 'Pendiente'}
+                                    </Badge>
                                     {(isAdmin || expense.creditorId === user?.uid) && (
                                       <Button 
                                         size="icon" 
                                         variant="ghost" 
                                         className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 rounded-lg shrink-0 border border-emerald-100"
-                                        onClick={() => updateDebtStatusInGroup(params.id, debt.id, 'paid')}
+                                        onClick={() => setConfirmingDebt({ 
+                                          id: debt.id, 
+                                          amount: debt.amount, 
+                                          name: members.find(m => m.uid === debt.debtorId)?.displayName || 'Usuario' 
+                                        })}
                                       >
                                         <CheckCircle2 className="h-4 w-4" />
                                       </Button>
@@ -807,6 +831,24 @@ Papas fritas;2;3500;7000`;
               <Copy className="h-4 w-4" /> Copiar Enlace
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!confirmingDebt} onOpenChange={() => setConfirmingDebt(null)}>
+        <DialogContent className="w-[90vw] max-w-sm rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
+          <DialogHeader className="pb-4">
+            <div className="mx-auto bg-emerald-100 p-4 rounded-full w-fit mb-4">
+              <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+            </div>
+            <DialogTitle className="text-xl font-headline">Validar Pago</DialogTitle>
+            <DialogDescription className="text-xs pt-2">
+              ¿Confirmas que recibiste <strong>${confirmingDebt?.amount.toFixed(2)}</strong> de <strong>{confirmingDebt?.name}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="ghost" className="flex-1 rounded-xl" onClick={() => setConfirmingDebt(null)}>Cancelar</Button>
+            <Button className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700" onClick={confirmPaid}>Confirmar Pago</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

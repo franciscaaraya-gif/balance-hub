@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { createGroup, getGroupMembersDetails } from "@/lib/firebase/store";
+import { createGroup, getGroupMembersDetails, bulkUpdateDebtStatus } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,18 +10,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Users, Wallet, ChevronRight, Loader2, ReceiptText, AlertCircle, Clock, CheckCircle2, CreditCard, User } from "lucide-react";
+import { PlusCircle, Users, Wallet, ChevronRight, Loader2, ReceiptText, AlertCircle, Clock, CheckCircle2, CreditCard, User, Send } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
+import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const [newGroupName, setNewGroupName] = useState("");
   const [open, setOpen] = useState(false);
-  const [selectedDebt, setSelectedDebt] = useState<Debt | null>(null);
+  const [selectedDebtGroup, setSelectedDebtGroup] = useState<{ creditorId: string; total: number; debts: Debt[]; name: string } | null>(null);
   const [creditorProfiles, setCreditorProfiles] = useState<Record<string, UserProfile>>({});
+  const [isReporting, setIsReporting] = useState(false);
   const { toast } = useToast();
 
   const myGroupsQuery = useMemoFirebase(() => {
@@ -36,10 +38,10 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: myDebts, isLoading: myDebtsLoading } = useCollection<Debt>(myDebtsQuery);
 
-  // Filtrar deudas pendientes y evitar deudas hacia uno mismo
+  // Filtrar deudas pendientes o en revisión (excluyendo auto-deudas pagadas)
   const pendingDebts = useMemo(() => {
     if (!myDebts || !user?.uid) return [];
-    return myDebts.filter(d => d.status !== 'paid' && d.creditorId !== user.uid && d.debtorId !== d.creditorId);
+    return myDebts.filter(d => d.status !== 'paid');
   }, [myDebts, user?.uid]);
 
   // Resolver nombres de acreedores
@@ -56,7 +58,7 @@ export default function Dashboard() {
     }
   }, [pendingDebts]);
 
-  // Agrupar deudas por acreedor y ordenar por monto total descendente
+  // Agrupar deudas por acreedor
   const groupedDebts = useMemo(() => {
     const groups: Record<string, { creditorId: string; total: number; debts: Debt[] }> = {};
     
@@ -84,6 +86,36 @@ export default function Dashboard() {
         title: "Error al crear grupo", 
         description: e.message || "Asegúrate de tener permisos." 
       });
+    }
+  };
+
+  const handleReportTransfer = async () => {
+    if (!selectedDebtGroup || !user) return;
+    setIsReporting(true);
+    try {
+      const pendingIds = selectedDebtGroup.debts
+        .filter(d => d.status === 'pending')
+        .map(d => d.id);
+      
+      if (pendingIds.length > 0) {
+        // Asumiendo que las deudas están en diferentes grupos, necesitamos actualizarlas individualmente o por lote si conocemos sus groupId
+        // Por simplicidad en esta iteración, el bulkUpdateDebtStatus en store.ts se ajustará para ser genérico o usaremos bucle.
+        // Aquí usaremos el bulkUpdateDebtStatus ya mejorado en store.ts.
+        // Nota: En Firestore real, las subcolecciones requieren el path completo. 
+        // Ajustamos la lógica para iterar sobre los debtIds si pertenecen a distintos grupos.
+        for (const debt of selectedDebtGroup.debts) {
+          if (debt.status === 'pending') {
+            await bulkUpdateDebtStatus(debt.groupId, [debt.id], 'under_review');
+          }
+        }
+      }
+      
+      toast({ title: "Transferencia Reportada", description: "El acreedor ha sido notificado para validar el pago." });
+      setSelectedDebtGroup(null);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo reportar el pago." });
+    } finally {
+      setIsReporting(false);
     }
   };
 
@@ -167,6 +199,8 @@ export default function Dashboard() {
                 <div className="py-6 text-center opacity-30"><CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" /><p className="text-[10px] font-bold uppercase tracking-widest">Al día con todos tus grupos</p></div>
               ) : groupedDebts.map(group => {
                 const creditor = creditorProfiles[group.creditorId];
+                const hasPending = group.debts.some(d => d.status === 'pending');
+                
                 return (
                   <div key={group.creditorId} className="space-y-3">
                     <div className="flex items-center justify-between px-1">
@@ -178,18 +212,19 @@ export default function Dashboard() {
                           Debes <span className="text-accent">${group.total.toFixed(2)}</span> a {creditor?.displayName || 'Cargando...'}
                         </span>
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 px-2 text-[8px] font-black uppercase tracking-widest rounded-lg text-accent hover:bg-accent/5"
-                        onClick={() => setSelectedDebt({ 
-                          ...group.debts[0], 
-                          amount: group.total, 
-                          description: `Total adeudado a ${creditor?.displayName || 'Acreedor'}` 
-                        } as Debt)}
-                      >
-                        <CreditCard className="h-3 w-3 mr-1.5" /> Pagar
-                      </Button>
+                      <div className="flex gap-1 shrink-0">
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 px-2 text-[8px] font-black uppercase tracking-widest rounded-lg text-accent hover:bg-accent/5"
+                          onClick={() => setSelectedDebtGroup({ 
+                            ...group, 
+                            name: creditor?.displayName || 'Acreedor' 
+                          })}
+                        >
+                          <CreditCard className="h-3 w-3 mr-1" /> Pagar
+                        </Button>
+                      </div>
                     </div>
                     
                     <div className="space-y-3 pl-2 border-l-2 border-accent/20">
@@ -216,28 +251,46 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <Dialog open={!!selectedDebt} onOpenChange={val => !val && setSelectedDebt(null)}>
+      <Dialog open={!!selectedDebtGroup} onOpenChange={val => !val && setSelectedDebtGroup(null)}>
         <DialogContent className="rounded-[2rem] border-none p-6 sm:p-8 mx-4 max-w-sm sm:max-w-md shadow-2xl">
           <DialogHeader className="text-center pb-4">
             <div className="bg-accent/10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-accent">
               <CreditCard className="h-7 w-7 sm:h-8" />
             </div>
-            <DialogTitle className="text-xl sm:text-2xl font-headline font-bold text-primary">Detalle de Depósito</DialogTitle>
-            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mt-1">{selectedDebt?.description}</p>
+            <DialogTitle className="text-xl sm:text-2xl font-headline font-bold text-primary">Detalle de Pago</DialogTitle>
+            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mt-1">Pago total a {selectedDebtGroup?.name}</p>
           </DialogHeader>
-          {selectedDebt && (
+          
+          {selectedDebtGroup && (
             <div className="space-y-6 text-center">
               <div className="bg-muted/30 p-6 sm:p-8 rounded-[1.5rem] sm:rounded-[2rem] space-y-1 border border-primary/5">
                 <p className="text-[9px] font-black text-muted-foreground uppercase tracking-widest">Monto a Transferir</p>
-                <p className="text-3xl sm:text-5xl font-headline font-bold text-primary">${selectedDebt.amount.toFixed(2)}</p>
+                <p className="text-3xl sm:text-5xl font-headline font-bold text-primary">${selectedDebtGroup.total.toFixed(2)}</p>
               </div>
               <div className="space-y-2 text-left bg-primary/5 p-4 rounded-xl border border-primary/10">
                 <Label className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-2 block">Datos de Transferencia</Label>
                 <div className="font-mono text-[11px] text-primary whitespace-pre-wrap leading-relaxed">
-                  {selectedDebt.transferDetails || creditorProfiles[selectedDebt.creditorId]?.transferDetails || "El acreedor no ha cargado sus datos de pago."}
+                  {creditorProfiles[selectedDebtGroup.creditorId]?.transferDetails || "El acreedor no ha cargado sus datos de pago."}
                 </div>
               </div>
-              <Button className="w-full h-12 sm:h-14 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg shadow-xl shadow-primary/20 text-white" onClick={() => setSelectedDebt(null)}>Entendido</Button>
+              
+              <div className="flex flex-col gap-3">
+                <Button 
+                  disabled={isReporting || !selectedDebtGroup.debts.some(d => d.status === 'pending')}
+                  className="w-full h-12 sm:h-14 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg shadow-xl shadow-primary/20 text-white gap-2" 
+                  onClick={handleReportTransfer}
+                >
+                  {isReporting ? <Loader2 className="animate-spin" /> : <><Send className="h-5 w-5" /> Reportar Transferencia</>}
+                </Button>
+                <Button variant="ghost" className="w-full h-10 rounded-xl" onClick={() => setSelectedDebtGroup(null)}>Cerrar</Button>
+              </div>
+              
+              <div className="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-xl border border-blue-100">
+                <Info className="h-4 w-4 shrink-0" />
+                <p className="text-[10px] text-left leading-relaxed font-medium">
+                  Al reportar, tus deudas pasarán a <strong>"En Revisión"</strong> hasta que el acreedor confirme la recepción del dinero.
+                </p>
+              </div>
             </div>
           )}
         </DialogContent>
