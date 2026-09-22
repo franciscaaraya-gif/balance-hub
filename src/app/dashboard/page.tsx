@@ -25,7 +25,8 @@ import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
 
 export default function Dashboard() {
-  const { user, isUserLoading } = user;
+  // CORRECCIÓN: Llamar al hook useUser() correctamente
+  const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
 
