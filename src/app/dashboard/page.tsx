@@ -39,7 +39,7 @@ export default function Dashboard() {
   // Filtrar deudas pendientes y evitar deudas hacia uno mismo
   const pendingDebts = useMemo(() => {
     if (!myDebts || !user?.uid) return [];
-    return myDebts.filter(d => d.status !== 'paid' && d.creditorId !== user.uid);
+    return myDebts.filter(d => d.status !== 'paid' && d.creditorId !== user.uid && d.debtorId !== d.creditorId);
   }, [myDebts, user?.uid]);
 
   // Resolver nombres de acreedores
@@ -170,14 +170,26 @@ export default function Dashboard() {
                 return (
                   <div key={group.creditorId} className="space-y-3">
                     <div className="flex items-center justify-between px-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center text-accent">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center text-accent shrink-0">
                           <User className="h-4 w-4" />
                         </div>
-                        <span className="text-[11px] font-black uppercase tracking-widest text-primary">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-primary truncate">
                           Debes <span className="text-accent">${group.total.toFixed(2)}</span> a {creditor?.displayName || 'Cargando...'}
                         </span>
                       </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 px-2 text-[8px] font-black uppercase tracking-widest rounded-lg text-accent hover:bg-accent/5"
+                        onClick={() => setSelectedDebt({ 
+                          ...group.debts[0], 
+                          amount: group.total, 
+                          description: `Total adeudado a ${creditor?.displayName || 'Acreedor'}` 
+                        } as Debt)}
+                      >
+                        <CreditCard className="h-3 w-3 mr-1.5" /> Pagar
+                      </Button>
                     </div>
                     
                     <div className="space-y-3 pl-2 border-l-2 border-accent/20">
@@ -192,7 +204,6 @@ export default function Dashboard() {
                           </div>
                           <div className="flex justify-between items-center mt-1">
                             {getStatusBadge(debt.status)}
-                            <Button variant="ghost" size="sm" className="h-7 text-[8px] font-black uppercase tracking-tighter sm:tracking-widest rounded-lg hover:bg-white" onClick={() => setSelectedDebt(debt)}>Ver Pago</Button>
                           </div>
                         </div>
                       ))}
@@ -212,7 +223,7 @@ export default function Dashboard() {
               <CreditCard className="h-7 w-7 sm:h-8" />
             </div>
             <DialogTitle className="text-xl sm:text-2xl font-headline font-bold text-primary">Detalle de Depósito</DialogTitle>
-            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mt-1">{selectedDebt?.groupName}</p>
+            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground mt-1">{selectedDebt?.description}</p>
           </DialogHeader>
           {selectedDebt && (
             <div className="space-y-6 text-center">
