@@ -4,12 +4,13 @@ import { useUser } from "@/firebase";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Wallet, LayoutDashboard, LogOut, Settings, Loader2, CalendarCheck, UserCircle, Menu, X } from "lucide-react";
+import { LayoutDashboard, LogOut, Loader2, CalendarCheck, UserCircle, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { auth } from "@/lib/firebase/config";
 import { signOut } from "firebase/auth";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/logo";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
@@ -46,10 +47,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex flex-col h-full">
       <div className="p-6">
         <Link href="/dashboard" className="flex items-center gap-2 mb-8" onClick={() => setIsSheetOpen(false)}>
-          <div className="bg-accent p-1.5 rounded-lg">
-            <Wallet className="h-6 w-6 text-white" />
-          </div>
-          <span className="text-xl font-headline font-bold">BalanceHub</span>
+          <Logo className="h-7 w-7" />
+          <span className="text-xl font-headline font-bold text-white tracking-tight">Zygos</span>
         </Link>
         <nav className="space-y-1">
           {navItems.map((item) => (
@@ -70,11 +69,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
       <div className="mt-auto p-6 border-t border-white/10">
         <div className="flex items-center gap-3 mb-6 px-4">
-          <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center text-lg font-bold shrink-0">
+          <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center text-lg font-bold shrink-0 text-white">
             {user.displayName?.[0] || 'U'}
           </div>
           <div className="overflow-hidden">
-            <p className="text-sm font-medium truncate">{user.displayName}</p>
+            <p className="text-sm font-medium truncate text-white">{user.displayName}</p>
             <p className="text-xs text-primary-foreground/50 truncate">{user.email}</p>
           </div>
         </div>
@@ -92,12 +91,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-72 bg-primary text-primary-foreground border-r shrink-0">
         <NavContent />
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0">
         <header className="md:hidden flex items-center justify-between p-4 bg-primary text-primary-foreground sticky top-0 z-40 shadow-md">
           <div className="flex items-center gap-3">
@@ -112,7 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </SheetContent>
             </Sheet>
             <Link href="/dashboard" className="flex items-center gap-2">
-              <span className="text-lg font-headline font-bold tracking-tight">BalanceHub</span>
+              <span className="text-lg font-headline font-bold tracking-tight text-white">Zygos</span>
             </Link>
           </div>
           <Button variant="ghost" size="icon" onClick={handleLogout} className="text-white/70 hover:text-white rounded-xl">

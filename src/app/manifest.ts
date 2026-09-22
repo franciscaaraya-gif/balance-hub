@@ -2,8 +2,8 @@ import { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'BalanceHub - Gestión de Deudas',
-    short_name: 'BalanceHub',
+    name: 'Zygos - Gestión de Deudas',
+    short_name: 'Zygos',
     description: 'Gestión inteligente de deudas grupales y división de gastos.',
     start_url: '/dashboard',
     display: 'standalone',
@@ -11,12 +11,12 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#1d2a5a',
     icons: [
       {
-        src: 'https://picsum.photos/seed/balancehub-icon/192/192',
+        src: 'https://picsum.photos/seed/zygos-icon/192/192',
         sizes: '192x192',
         type: 'image/png',
       },
       {
-        src: 'https://picsum.photos/seed/balancehub-icon/512/512',
+        src: 'https://picsum.photos/seed/zygos-icon/512/512',
         sizes: '512x512',
         type: 'image/png',
       },

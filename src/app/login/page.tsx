@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
@@ -15,9 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet, Loader2, RefreshCcw } from "lucide-react";
+import { Loader2, RefreshCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { createUserProfile } from "@/lib/firebase/store";
+import { Logo } from "@/components/logo";
 
 function LoginContent() {
   const { user, isUserLoading } = useUser();
@@ -39,7 +39,6 @@ function LoginContent() {
   }, [isUserLoading]);
 
   useEffect(() => {
-    // Redirección automática si ya hay un usuario logueado
     if (user && !isUserLoading && !isSubmitting) {
       router.push(redirectTo);
     }
@@ -90,7 +89,7 @@ function LoginContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-muted-foreground animate-pulse">Cargando BalanceHub...</p>
+        <p className="text-muted-foreground animate-pulse">Cargando Zygos...</p>
         {showReset && (
           <Button variant="outline" onClick={forceReset} className="gap-2 mt-4">
             <RefreshCcw className="h-4 w-4" />
@@ -103,21 +102,19 @@ function LoginContent() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <Card className="w-full max-w-md shadow-xl border-none">
-        <CardHeader className="space-y-2 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="bg-primary p-3 rounded-2xl text-primary-foreground">
-              <Wallet className="h-8 w-8" />
-            </div>
+      <Card className="w-full max-w-md shadow-xl border-none rounded-[2rem] overflow-hidden bg-white">
+        <CardHeader className="space-y-2 text-center pt-8">
+          <div className="flex justify-center mb-2">
+            <Logo className="h-12 w-12" />
           </div>
-          <CardTitle className="text-3xl font-headline tracking-tight text-primary">Iniciar Sesión</CardTitle>
-          <CardDescription className="text-muted-foreground font-body">Accede a tu cuenta de BalanceHub</CardDescription>
+          <CardTitle className="text-3xl font-headline tracking-tight text-primary font-bold">Iniciar Sesión</CardTitle>
+          <CardDescription className="text-muted-foreground font-body">Accede a tu panel en Zygos</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Button
             variant="outline"
             type="button"
-            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium"
+            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium rounded-xl"
             onClick={handleGoogleLogin}
             disabled={isSubmitting}
           >
@@ -134,29 +131,29 @@ function LoginContent() {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">O con tu correo</span>
+              <span className="bg-background px-2 text-muted-foreground font-bold">O con tu correo</span>
             </div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Correo Electrónico</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Label htmlFor="email" className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Correo Electrónico</Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11 rounded-xl" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Label htmlFor="password" className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Contraseña</Label>
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="h-11 rounded-xl" />
             </div>
-            <Button type="submit" className="w-full bg-primary py-6 text-lg" disabled={isSubmitting}>
+            <Button type="submit" className="w-full bg-primary text-white py-6 text-lg rounded-xl font-bold shadow-md" disabled={isSubmitting}>
               {isSubmitting ? "Entrando..." : "Entrar"}
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col gap-2 text-center">
-          <p className="text-sm text-muted-foreground">
-            ¿No tienes cuenta? <Link href={`/register${redirectTo !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-accent font-semibold hover:underline">Regístrate</Link>
+        <CardFooter className="flex flex-col gap-2 text-center pb-8">
+          <p className="text-sm text-muted-foreground font-medium">
+            ¿No tienes cuenta? <Link href={`/register${redirectTo !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-accent font-bold hover:underline">Regístrate</Link>
           </p>
-          <Link href="/" className="text-xs text-muted-foreground hover:underline">Volver al inicio</Link>
+          <Link href="/" className="text-xs text-muted-foreground hover:underline font-medium">Volver al inicio</Link>
         </CardFooter>
       </Card>
     </div>

@@ -7,7 +7,7 @@ import { joinGroupByInvite, getGroupByToken } from "@/lib/firebase/store";
 import { Group } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet, Loader2, Users, AlertTriangle } from "lucide-react";
+import { Loader2, Users, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -77,18 +77,18 @@ export default function JoinGroup({ params: paramsPromise }: { params: Promise<{
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background p-4">
-        <Card className="w-full max-w-md shadow-xl border-none text-center">
+        <Card className="w-full max-w-md shadow-xl border-none text-center rounded-[2rem] bg-white">
           <CardHeader>
             <div className="flex justify-center mb-4">
               <div className="bg-destructive/10 p-3 rounded-full text-destructive">
                 <AlertTriangle className="h-8 w-8" />
               </div>
             </div>
-            <CardTitle className="text-2xl font-headline">Invitación no válida</CardTitle>
+            <CardTitle className="text-2xl font-headline font-bold text-primary">Invitación no válida</CardTitle>
             <CardDescription>{error}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full" onClick={() => router.push("/dashboard")}>
+            <Button variant="outline" className="w-full rounded-xl" onClick={() => router.push("/dashboard")}>
               Ir al Panel Principal
             </Button>
           </CardContent>
@@ -99,16 +99,16 @@ export default function JoinGroup({ params: paramsPromise }: { params: Promise<{
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden">
+      <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden rounded-[2rem] bg-white">
         <div className="h-2 bg-accent" />
-        <CardHeader className="space-y-4 text-center pb-8">
+        <CardHeader className="space-y-4 text-center pb-8 pt-8">
           <div className="flex justify-center">
             <div className="bg-primary/10 p-4 rounded-2xl text-primary">
               <Users className="h-10 w-10" />
             </div>
           </div>
           <div className="space-y-1">
-            <CardTitle className="text-3xl font-headline tracking-tight">¡Invitación Recibida!</CardTitle>
+            <CardTitle className="text-3xl font-headline tracking-tight text-primary font-bold">¡Invitación Recibida!</CardTitle>
             <CardDescription className="text-base">Has sido invitado a participar en un grupo de cobro.</CardDescription>
           </div>
         </CardHeader>
@@ -136,7 +136,7 @@ export default function JoinGroup({ params: paramsPromise }: { params: Promise<{
 
           <div className="flex flex-col gap-3">
             <Button 
-              className="w-full bg-accent hover:bg-accent/90 py-7 text-lg font-bold shadow-lg shadow-accent/20" 
+              className="w-full bg-accent hover:bg-accent/90 py-7 text-lg font-bold shadow-lg text-white rounded-2xl shadow-accent/10" 
               onClick={handleJoin}
               disabled={joining || !user}
             >
@@ -146,14 +146,14 @@ export default function JoinGroup({ params: paramsPromise }: { params: Promise<{
                 "Aceptar Invitación y Unirme"
               )}
             </Button>
-            <Button variant="ghost" className="text-muted-foreground" onClick={() => router.push("/dashboard")}>
+            <Button variant="ghost" className="text-muted-foreground rounded-xl" onClick={() => router.push("/dashboard")}>
               Tal vez más tarde
             </Button>
           </div>
         </CardContent>
         <div className="bg-muted/20 p-4 text-center">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium">
-            BalanceHub • Gestión Transparente de Deudas
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+            Zygos • Gestión Transparente de Deudas
           </p>
         </div>
       </Card>

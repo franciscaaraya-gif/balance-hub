@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
@@ -17,8 +16,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Wallet, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Logo } from "@/components/logo";
 
 function RegisterContent() {
   const { user, isUserLoading } = useUser();
@@ -43,9 +43,7 @@ function RegisterContent() {
     setIsSubmitting(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      // Actualizamos perfil en Auth
       await updateProfile(userCredential.user, { displayName: name });
-      // Y lo creamos en Firestore esperando a que termine
       await createUserProfile(userCredential.user.uid, email, name);
       
       toast({ title: "¡Bienvenido!", description: "Cuenta creada con éxito." });
@@ -90,21 +88,19 @@ function RegisterContent() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-background p-4">
-      <Card className="w-full max-w-md shadow-xl border-none">
-        <CardHeader className="space-y-2 text-center">
-          <div className="flex justify-center mb-4">
-            <div className="bg-primary p-3 rounded-2xl text-primary-foreground">
-              <Wallet className="h-8 w-8" />
-            </div>
+      <Card className="w-full max-w-md shadow-xl border-none rounded-[2rem] overflow-hidden bg-white">
+        <CardHeader className="space-y-2 text-center pt-8">
+          <div className="flex justify-center mb-2">
+            <Logo className="h-12 w-12" />
           </div>
-          <CardTitle className="text-3xl font-headline tracking-tight text-primary">Crear Cuenta</CardTitle>
-          <CardDescription className="text-muted-foreground font-body">Únete a BalanceHub hoy mismo</CardDescription>
+          <CardTitle className="text-3xl font-headline tracking-tight text-primary font-bold">Crear Cuenta</CardTitle>
+          <CardDescription className="text-muted-foreground font-body">Únete a Zygos hoy mismo</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Button
             variant="outline"
             type="button"
-            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium"
+            className="w-full py-6 flex gap-3 border-primary/20 hover:bg-primary/5 text-base font-medium rounded-xl"
             onClick={handleGoogleLogin}
             disabled={isSubmitting}
           >
@@ -121,31 +117,31 @@ function RegisterContent() {
               <span className="w-full border-t" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">O usa tu correo</span>
+              <span className="bg-background px-2 text-muted-foreground font-bold">O usa tu correo</span>
             </div>
           </div>
 
           <form onSubmit={handleRegister} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Nombre Completo</Label>
-              <Input id="name" placeholder="Juan Pérez" value={name} onChange={(e) => setName(e.target.value)} required />
+              <Label htmlFor="name" className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Nombre Completo</Label>
+              <Input id="name" placeholder="Juan Pérez" value={name} onChange={(e) => setName(e.target.value)} required className="h-11 rounded-xl" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Correo Electrónico</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Label htmlFor="email" className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Correo Electrónico</Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11 rounded-xl" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Contraseña</Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <Label htmlFor="password" className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Contraseña</Label>
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="h-11 rounded-xl" />
             </div>
-            <Button type="submit" className="w-full bg-accent py-6 text-lg" disabled={isSubmitting}>
+            <Button type="submit" className="w-full bg-accent text-white py-6 text-lg rounded-xl font-bold shadow-md" disabled={isSubmitting}>
               {isSubmitting ? "Creando..." : "Registrarse"}
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex justify-center">
-          <p className="text-sm text-muted-foreground">
-            ¿Ya tienes cuenta? <Link href={`/login${redirectTo !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-primary font-semibold hover:underline">Inicia sesión</Link>
+        <CardFooter className="flex justify-center pb-8">
+          <p className="text-sm text-muted-foreground font-medium">
+            ¿Ya tienes cuenta? <Link href={`/login${redirectTo !== '/dashboard' ? `?redirect=${encodeURIComponent(redirectTo)}` : ''}`} className="text-primary font-bold hover:underline">Inicia sesión</Link>
           </p>
         </CardFooter>
       </Card>
