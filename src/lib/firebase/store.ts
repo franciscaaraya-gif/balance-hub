@@ -426,7 +426,7 @@ export const chargeEventToGroup = async (eventId: string) => {
   const costPerHead = event.totalCost / totalHeads;
   const conceptText = event.costConcept || "Gasto de Evento";
   const chargeGroupId = event.id;
-  const creditorId = event.creatorId;
+  const creditorId = event.creditorId || event.creatorId;
 
   for (const uid of event.participantIds) {
     const isPresent = event.presentIds.includes(uid);

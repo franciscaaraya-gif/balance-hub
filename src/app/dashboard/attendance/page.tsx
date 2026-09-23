@@ -2,8 +2,8 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { createEvent } from "@/lib/firebase/store";
-import { Event, Group } from "@/lib/types";
+import { createEvent, getGroupMembersDetails } from "@/lib/firebase/store";
+import { Event, Group, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ function AttendanceContent() {
   
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
   
   const [formData, setFormData] = useState({ 
     title: "", 
@@ -37,11 +38,18 @@ function AttendanceContent() {
     location: "", 
     totalCost: "", 
     costConcept: "", 
-    groupId: ""
+    groupId: "",
+    creditorId: ""
   });
 
   const [selectedHour, setSelectedHour] = useState("12");
   const [selectedMinute, setSelectedMinute] = useState("00");
+
+  useEffect(() => {
+    if (user?.uid && !formData.creditorId) {
+      setFormData(prev => ({ ...prev, creditorId: user.uid }));
+    }
+  }, [user, formData.creditorId]);
 
   useEffect(() => {
     const isDup = searchParams.get('dup') === 'true';
@@ -56,13 +64,14 @@ function AttendanceContent() {
         location: searchParams.get('location') || "",
         totalCost: searchParams.get('cost') || "",
         costConcept: searchParams.get('concept') || "",
-        groupId: searchParams.get('groupId') || ""
+        groupId: searchParams.get('groupId') || "",
+        creditorId: user?.uid || ""
       });
       setSelectedHour(h || "12");
       setSelectedMinute(m || "00");
       setOpen(true);
     }
-  }, [searchParams]);
+  }, [searchParams, user]);
 
   useEffect(() => {
     setFormData(prev => ({ ...prev, time: `${selectedHour}:${selectedMinute}` }));
@@ -73,6 +82,17 @@ function AttendanceContent() {
     return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
   const { data: groups } = useCollection<Group>(groupsQuery);
+
+  useEffect(() => {
+    if (formData.groupId && groups) {
+      const group = groups.find(g => g.id === formData.groupId);
+      if (group?.memberIds) {
+        getGroupMembersDetails(group.memberIds).then(setGroupMembers);
+      }
+    } else {
+      setGroupMembers([]);
+    }
+  }, [formData.groupId, groups]);
 
   const groupIds = groups?.map(g => g.id) || [];
   const groupIdsKey = groupIds.join(',');
@@ -85,12 +105,12 @@ function AttendanceContent() {
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user?.uid, groupIdsKey]);
-  const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
+  const { data: events } = useCollection<Event>(eventsQuery);
 
   const activeEvents = events?.filter(e => !e.isCharged) || [];
 
   const handleCreate = async () => {
-    if (!formData.title || !formData.date || !formData.totalCost || !formData.costConcept || !formData.groupId || !user) {
+    if (!formData.title || !formData.date || !formData.totalCost || !formData.costConcept || !formData.groupId || !formData.creditorId || !user) {
       toast({ variant: "destructive", title: "Faltan datos", description: "Por favor completa todos los campos obligatorios." });
       return;
     }
@@ -105,6 +125,7 @@ function AttendanceContent() {
         costConcept: formData.costConcept,
         chargeAbsentees: true,
         groupId: formData.groupId,
+        creditorId: formData.creditorId,
         creatorId: user.uid,
         creatorName: user.displayName || 'Organizador'
       });
@@ -118,7 +139,8 @@ function AttendanceContent() {
         location: "", 
         totalCost: "", 
         costConcept: "", 
-        groupId: ""
+        groupId: "",
+        creditorId: user.uid
       });
     } catch (e: any) {
       toast({ 
@@ -165,6 +187,29 @@ function AttendanceContent() {
                     <SelectContent>{groups?.map(g => <SelectItem key={g.id} value={g.id} className="text-xs">{g.name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground px-1">¿Quién pagó el evento? (Acreedor)</Label>
+                  <Select onValueChange={(val) => setFormData({...formData, creditorId: val})} value={formData.creditorId}>
+                    <SelectTrigger className="rounded-xl h-11 text-xs">
+                      <SelectValue placeholder="Selecciona el acreedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groupMembers.length > 0 ? (
+                        groupMembers.map(m => (
+                          <SelectItem key={m.uid} value={m.uid} className="text-xs">
+                            {m.displayName} {m.uid === user?.uid ? "(Tú)" : ""}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value={user?.uid || ""} disabled className="text-xs">
+                          {user?.displayName || "Cargando miembros..."} (Tú)
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-1.5">
                   <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground px-1">Título</Label>
                   <Input placeholder="Ej: Padel de los Miércoles" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} className="rounded-xl h-11 text-sm" />

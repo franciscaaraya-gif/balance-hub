@@ -92,6 +92,7 @@ export interface Event {
   chargeAbsentees: boolean;
   creatorId: string;
   creatorName?: string;
+  creditorId: string;
   groupId: string;
   participantIds: string[];
   presentIds: string[];
