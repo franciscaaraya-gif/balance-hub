@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState, use } from "react";
@@ -101,7 +100,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     const [hour, minute] = event.time.split(':');
     const startStr = `${year.replace(/-/g, '')}${month}${day}T${hour}${minute}00`;
     
-    // Asumimos 2 horas de duración por defecto
     const endHour = (parseInt(hour) + 2).toString().padStart(2, '0');
     const endStr = `${year.replace(/-/g, '')}${month}${day}T${endHour}${minute}00`;
 
@@ -168,6 +166,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const isParticipant = event.participantIds?.includes(user?.uid || '');
   const isAdmin = event.creatorId === user?.uid;
+  // Un administrador debe ver las herramientas de gestión incluso si no asiste.
   const showManagement = isParticipant || isAdmin;
 
   const totalParticipants = event.participantIds?.length || 0;
@@ -259,7 +258,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         </div>
       </div>
 
-      {!showManagement ? (
+      {!isParticipant && (
         <Card className="shadow-2xl border-none bg-white rounded-[2rem] overflow-hidden">
           <CardHeader className="text-center py-10 space-y-4">
             <div className="mx-auto bg-primary/10 p-6 rounded-full w-fit">
@@ -268,7 +267,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             <div>
               <CardTitle className="text-2xl font-headline font-bold">¿Te anotas al evento?</CardTitle>
               <CardDescription className="max-w-sm mx-auto pt-2">
-                Como miembro del grupo, puedes unirte a esta fecha. Al hacerlo, entrarás en la división del costo automáticamente.
+                {isAdmin 
+                  ? "Eres el organizador. Si piensas asistir y participar de la división del costo, confírmalo aquí." 
+                  : "Como miembro del grupo, puedes unirte a esta fecha. Al hacerlo, entrarás en la división del costo automáticamente."}
               </CardDescription>
             </div>
           </CardHeader>
@@ -282,7 +283,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             </Button>
           </CardContent>
         </Card>
-      ) : (
+      )}
+
+      {showManagement && (
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[2rem]">
             <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
@@ -300,7 +303,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               <div className="space-y-8">
                 <div className="space-y-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-accent pl-2">Usuarios Registrados</h3>
-                  {event.participantIds.map(uid => {
+                  {event.participantIds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4 text-center">Aún no hay participantes confirmados.</p>
+                  ) : event.participantIds.map(uid => {
                     const profile = profilesMap[uid];
                     const isPresent = event.presentIds?.includes(uid);
                     
@@ -358,7 +363,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 <div className="space-y-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-secondary pl-2">Invitados (+1)</h3>
                   
-                  {isAdmin && !event.isCharged && (
+                  {isAdmin && !event.isCharged && event.participantIds.length > 0 && (
                     <div className="flex flex-col sm:flex-row gap-2 p-3 bg-muted/20 rounded-2xl space-y-2 sm:space-y-0">
                       <div className="flex-1">
                         <Label className="text-[9px] uppercase font-black mb-1 block px-1">Nombre del Invitado</Label>
@@ -395,7 +400,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                     </div>
                   )}
 
-                  {event.externalGuests?.map((guest, idx) => (
+                  {event.externalGuests?.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2 text-center italic">Sin invitados externos.</p>
+                  ) : event.externalGuests?.map((guest, idx) => (
                     <div key={`${guest.name}-${idx}`} className={cn(
                       "flex items-center justify-between p-4 rounded-2xl border transition-all",
                       guest.present ? "bg-secondary/10 border-secondary/20" : "bg-muted/10 border-transparent"
@@ -478,7 +485,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               {isAdmin && (
                 <CardFooter className="bg-muted/5 pt-4 flex flex-col gap-2">
                   <Button 
-                    disabled={event.isCharged || isCharging}
+                    disabled={event.isCharged || isCharging || totalHeads === 0}
                     className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
                     onClick={handleOneClickCharge}
                   >

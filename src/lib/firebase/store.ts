@@ -405,8 +405,8 @@ export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantI
   const eventData = {
     ...data,
     id: eventRef.id,
-    participantIds: [data.creatorId],
-    presentIds: [data.creatorId],
+    participantIds: [],
+    presentIds: [],
     externalGuests: [],
     shareLink: `${window.location.origin}/attendance/join/${eventRef.id}`,
     checkInToken,
