@@ -2,16 +2,19 @@
 
 import { useMemo } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { archiveGroup } from "@/lib/firebase/store";
 import { Group } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Users, ChevronRight, Archive, ArrowLeft } from "lucide-react";
+import { Loader2, Users, ChevronRight, Archive, ArrowLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { collection, query, where } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ArchivedGroupsPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -22,6 +25,17 @@ export default function ArchivedGroupsPage() {
   const archivedGroups = useMemo(() => {
     return rawGroups?.filter(g => g.isArchived) || [];
   }, [rawGroups]);
+
+  const handleUnarchive = async (e: React.MouseEvent, groupId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await archiveGroup(groupId, false);
+      toast({ title: "Grupo Restaurado", description: "El grupo vuelve a estar activo en tu lista principal." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo restaurar el grupo." });
+    }
+  };
 
   if (isUserLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
@@ -48,11 +62,20 @@ export default function ArchivedGroupsPage() {
         ) : (
           archivedGroups.map(group => (
             <Link key={group.id} href={`/dashboard/groups/${group.id}`}>
-              <Card className="hover:shadow-lg transition-all border-none bg-white rounded-[2rem] overflow-hidden group shadow-sm opacity-80 hover:opacity-100 h-full flex flex-col justify-between">
+              <Card className="hover:shadow-lg transition-all border-none bg-white rounded-[2rem] overflow-hidden group shadow-sm opacity-80 hover:opacity-100 h-full flex flex-col justify-between relative">
                 <div>
                   <div className="h-1.5 w-full bg-slate-400" />
-                  <CardHeader className="pb-4">
-                    <CardTitle className="mt-2 text-lg font-headline group-hover:text-primary transition-colors truncate">{group.name}</CardTitle>
+                  <CardHeader className="pb-4 flex justify-between items-start">
+                    <CardTitle className="mt-2 text-lg font-headline group-hover:text-primary transition-colors truncate pr-8">{group.name}</CardTitle>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary text-muted-foreground shrink-0"
+                      onClick={(e) => handleUnarchive(e, group.id)}
+                      title="Desarchivar"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
                   </CardHeader>
                 </div>
                 <CardContent>

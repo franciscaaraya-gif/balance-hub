@@ -2,17 +2,20 @@
 
 import { useMemo } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { archiveEvent } from "@/lib/firebase/store";
 import { Event, Group } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Calendar, Users, ChevronRight, User, Clock, MapPin, ArrowLeft } from "lucide-react";
+import { Loader2, Calendar, Users, ChevronRight, User, Clock, MapPin, ArrowLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { collection, query, where } from "firebase/firestore";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ArchivedEventsPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -40,6 +43,17 @@ export default function ArchivedEventsPage() {
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [rawEvents]);
 
+  const handleUnarchive = async (e: React.MouseEvent, eventId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await archiveEvent(eventId, false);
+      toast({ title: "Evento Restaurado", description: "El evento vuelve a aparecer en tu lista activa." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo restaurar el evento." });
+    }
+  };
+
   if (isUserLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
@@ -65,29 +79,42 @@ export default function ArchivedEventsPage() {
         ) : (
           archivedEvents.map(event => (
             <Link key={event.id} href={`/dashboard/attendance/${event.id}`}>
-              <Card className="hover:shadow-lg transition-all border-l-4 border-l-slate-400 rounded-[2rem] group relative overflow-hidden bg-white shadow-sm opacity-80 hover:opacity-100">
+              <Card className="hover:shadow-lg transition-all border-l-4 border-l-slate-400 rounded-[2rem] group relative overflow-hidden bg-white shadow-sm opacity-80 hover:opacity-100 h-full flex flex-col">
                 <div className="absolute top-0 right-0 p-1 bg-emerald-500 text-white rounded-bl-lg text-[9px] font-bold px-2 uppercase tracking-tighter">
                   {event.isCharged ? "Liquidado" : "Archivado"}
                 </div>
                 <CardHeader className="pb-3 px-5">
                   <div className="flex justify-between items-start gap-2">
-                    <div className="min-w-0">
-                      <CardTitle className="text-base font-headline group-hover:text-primary transition-colors truncate">{event.title}</CardTitle>
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="text-base font-headline group-hover:text-primary transition-colors truncate pr-2">{event.title}</CardTitle>
                       <div className="flex items-center gap-1.5 mt-1">
                         <User className="h-3 w-3 text-muted-foreground shrink-0" />
                         <span className="text-[10px] text-muted-foreground font-bold uppercase truncate">{event.creatorName}</span>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-[9px] font-black shrink-0 px-2 rounded-lg">{event.date.split('-').reverse().slice(0,2).join('/')}</Badge>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <Badge variant="outline" className="text-[9px] font-black px-2 rounded-lg">{event.date.split('-').reverse().slice(0,2).join('/')}</Badge>
+                      {!event.isCharged && (
+                        <Button 
+                          variant="secondary" 
+                          size="icon" 
+                          className="h-7 w-7 rounded-lg hover:bg-primary hover:text-white transition-colors"
+                          onClick={(e) => handleUnarchive(e, event.id)}
+                          title="Desarchivar"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4 px-5 pb-5">
+                <CardContent className="space-y-4 px-5 pb-5 flex-1 flex flex-col justify-between">
                   <div className="flex flex-col gap-2 text-[10px] text-muted-foreground font-medium">
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {event.time}</span>
                     <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location || "Presencial"}</span>
                   </div>
                   
-                  <div className="pt-4 border-t flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                  <div className="pt-4 border-t flex justify-between items-center text-[10px] font-black uppercase tracking-widest mt-auto">
                     <span className="flex items-center gap-1.5 text-muted-foreground"><Users className="h-3.5 w-3.5" /> {event.participantIds?.length || 0} TOTAL</span>
                     <span className="text-primary font-headline text-sm">${event.totalCost.toFixed(0)}</span>
                   </div>
