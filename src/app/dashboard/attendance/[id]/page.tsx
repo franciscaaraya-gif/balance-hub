@@ -48,7 +48,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   
-  // Estado para búsqueda de asistentes
   const [searchTerm, setSearchTerm] = useState("");
 
   const eventRef = useMemoFirebase(() => {
@@ -172,7 +171,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
-  // Filtrado de participantes basado en searchTerm
   const filteredParticipantIds = useMemo(() => {
     if (!event?.participantIds) return [];
     if (!searchTerm) return event.participantIds;
@@ -256,10 +254,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     } finally {
       setIsCharging(false);
     }
-  };
-
-  const handleGoToAdjustments = () => {
-    router.push(`/dashboard/groups/${event.groupId}?openExpense=true&eventId=${event.id}`);
   };
 
   const checkInUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/attendance/check-in/${event.id}?token=${event.checkInToken}`;
@@ -573,16 +567,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   >
                     {isCharging ? <Loader2 className="animate-spin" /> : (event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar</>)}
                   </Button>
-                  
-                  {!event.isCharged && (
-                    <Button 
-                      variant="ghost" 
-                      className="w-full h-9 sm:h-10 text-[8px] sm:text-[9px] font-black uppercase tracking-widest gap-2 text-muted-foreground hover:text-primary" 
-                      onClick={handleGoToAdjustments}
-                    >
-                      <Settings2 className="h-3 w-3" /> Ajustar antes de cobrar
-                    </Button>
-                  )}
                 </CardFooter>
               )}
             </Card>
