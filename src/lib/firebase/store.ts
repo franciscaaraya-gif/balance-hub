@@ -19,6 +19,7 @@ import {
 import { Group, UserProfile, DebtStatus, ReceiptItem, Event, ExternalGuest, Debt } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { formatCurrency } from "@/lib/utils";
 
 export const createUserProfile = async (uid: string, email: string, displayName: string) => {
   const userRef = doc(db, "userProfiles", uid);
@@ -364,7 +365,7 @@ export const finalizeReceipt = async (
         const totalTip = totalBaseCost * 0.10;
         const userTipShare = totalTip * userRatio;
         finalAmount += userTipShare;
-        extraDescription = ` (incluye 10% propina proporcional: $${userTipShare.toFixed(2)})`;
+        extraDescription = ` (incluye 10% propina proporcional: ${formatCurrency(userTipShare)})`;
       }
       
       await addDebt(

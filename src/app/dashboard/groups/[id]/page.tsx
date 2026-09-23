@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Textarea } from "@/components/ui/textarea";
 import * as XLSX from "xlsx";
 
@@ -257,7 +257,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         await addFixedDebtToAll(params.id, amountPerPerson, expenseTitle, selectedMembers, creditorId);
       } else {
         if (Math.abs(difference) > 0.01) {
-          toast({ variant: "destructive", title: "Monto no cuadra", description: `Diferencia: $${difference.toFixed(2)}` });
+          toast({ variant: "destructive", title: "Monto no cuadra", description: `Diferencia: ${formatCurrency(difference)}` });
           setIsActionLoading(false);
           return;
         }
@@ -461,7 +461,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                       </div>
                       <div className="flex items-center gap-3 sm:gap-6 shrink-0 ml-2">
                         <div className="text-right">
-                          <p className="text-sm sm:text-base font-black text-primary font-headline">${expense.totalAmount.toFixed(2)}</p>
+                          <p className="text-sm sm:text-base font-black text-primary font-headline">{formatCurrency(expense.totalAmount)}</p>
                         </div>
                         <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform shrink-0", expandedGastoId === expense.id && "rotate-90")} />
                       </div>
@@ -490,7 +490,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                                 <span className="text-xs font-bold truncate pr-2">{members.find(m => m.uid === debt.debtorId)?.displayName || 'Usuario'}</span>
                               </div>
                               <div className="flex items-center gap-3 shrink-0">
-                                <span className="text-xs font-black text-primary">${debt.amount.toFixed(2)}</span>
+                                <span className="text-xs font-black text-primary">{formatCurrency(debt.amount)}</span>
                                 {debt.status === 'paid' ? (
                                   <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                                 ) : (
@@ -572,7 +572,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                         <div className="flex justify-between items-start">
                           <div className="min-w-0 pr-2">
                             <p className="text-xs font-bold text-primary truncate">{item.name}</p>
-                            <p className="text-[10px] text-muted-foreground font-medium">${item.price.toFixed(2)}</p>
+                            <p className="text-[10px] text-muted-foreground font-medium">{formatCurrency(item.price)}</p>
                           </div>
                         </div>
                         
@@ -790,8 +790,8 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                         {filteredMembers.length === 0 && <p className="text-[10px] text-muted-foreground text-center py-2">Sin coincidencias.</p>}
                       </div>
                       <div className={cn("p-4 rounded-xl text-[10px] font-bold flex justify-between items-center shadow-inner", Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")}>
-                        <span>Asignado: ${manualSum.toFixed(2)}</span>
-                        <span>{Math.abs(difference) < 0.01 ? <CheckCircle2 className="h-4 w-4" /> : `Falta: $${difference.toFixed(2)}`}</span>
+                        <span>Asignado: {formatCurrency(manualSum)}</span>
+                        <span>{Math.abs(difference) < 0.01 ? <CheckCircle2 className="h-4 w-4" /> : `Falta: ${formatCurrency(difference)}`}</span>
                       </div>
                     </div>
                   )}
@@ -858,7 +858,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
 
                     <div className="flex justify-between items-center bg-muted/30 p-3 rounded-xl font-bold text-sm">
                       <span className="text-muted-foreground text-xs uppercase tracking-wider">Total:</span>
-                      <span className="text-primary">${aggregatedItemsTotal.toFixed(2)}</span>
+                      <span className="text-primary">{formatCurrency(aggregatedItemsTotal)}</span>
                     </div>
 
                     <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl border">
@@ -868,7 +868,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
 
                     {includeTip && (
                       <p className="text-[11px] text-accent font-medium leading-relaxed bg-accent/5 p-3 rounded-xl border border-accent/20">
-                        Total + Propina: ${(aggregatedItemsTotal * 1.10).toFixed(2)} (Proporcional).
+                        Total + Propina: {formatCurrency(aggregatedItemsTotal * 1.10)} (Proporcional).
                       </p>
                     )}
                   </div>
@@ -958,7 +958,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
             </div>
             <DialogTitle className="text-xl font-headline">Validar Pago</DialogTitle>
             <DialogDescription className="text-xs pt-2">
-              ¿Confirmas que recibiste <strong>${confirmingDebt?.amount.toFixed(2)}</strong> de <strong>{confirmingDebt?.name}</strong>?
+              ¿Confirmas que recibiste <strong>{formatCurrency(confirmingDebt?.amount || 0)}</strong> de <strong>{confirmingDebt?.name}</strong>?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2">

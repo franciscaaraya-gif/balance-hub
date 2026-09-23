@@ -19,6 +19,7 @@ import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where } from "firebase/firestore";
 import { useSearchParams } from "next/navigation";
+import { formatCurrency } from "@/lib/utils";
 
 const INITIAL_VISIBLE_COUNT = 4;
 
@@ -263,7 +264,7 @@ function AttendanceContent() {
                         <SelectContent>
                           {minutes.map(m => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
                         </SelectContent>
-                      </Select>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -352,7 +353,7 @@ function EventCard({ event }: { event: Event }) {
           <div className="pt-4 border-t space-y-2 mt-auto">
             <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
               <span className="flex items-center gap-1.5 text-muted-foreground"><Users className="h-3.5 w-3.5" /> {event.participantIds?.length || 0} ANOTADOS</span>
-              <span className="text-primary font-headline text-sm">${event.totalCost.toFixed(0)}</span>
+              <span className="text-primary font-headline text-sm">{formatCurrency(event.totalCost)}</span>
             </div>
             
             <div className="flex items-center justify-end text-[10px] font-black text-accent uppercase tracking-widest pt-1 opacity-0 group-hover:opacity-100 transition-opacity">

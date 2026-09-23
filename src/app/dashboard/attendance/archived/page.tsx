@@ -11,6 +11,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { collection, query, where } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 
 export default function ArchivedEventsPage() {
   const { user, isUserLoading } = useUser();
@@ -116,7 +117,7 @@ export default function ArchivedEventsPage() {
                   
                   <div className="pt-4 border-t flex justify-between items-center text-[10px] font-black uppercase tracking-widest mt-auto">
                     <span className="flex items-center gap-1.5 text-muted-foreground"><Users className="h-3.5 w-3.5" /> {event.participantIds?.length || 0} TOTAL</span>
-                    <span className="text-primary font-headline text-sm">${event.totalCost.toFixed(0)}</span>
+                    <span className="text-primary font-headline text-sm">{formatCurrency(event.totalCost)}</span>
                   </div>
                 </CardContent>
               </Card>

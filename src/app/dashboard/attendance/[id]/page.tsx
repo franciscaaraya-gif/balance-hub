@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 export default function EventAttendanceDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
@@ -312,7 +312,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           </div>
           <div className="bg-white/10 p-5 rounded-2xl text-center min-w-[160px] border border-white/5 backdrop-blur-sm">
             <p className="text-[10px] uppercase font-black opacity-70 tracking-widest">Cuota p/p (Fija)</p>
-            <p className="text-4xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
+            <p className="text-4xl font-headline font-bold text-accent">{formatCurrency(costPerPerson)}</p>
             <p className="text-[9px] mt-1 font-bold uppercase tracking-tight text-white/90">Dividido en {totalHeads} Cabezas</p>
           </div>
         </div>
@@ -549,7 +549,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   </div>
                   <div className="flex justify-between border-t pt-2 font-bold">
                     <span>Costo Total:</span>
-                    <span className="text-primary font-headline">${event.totalCost.toFixed(2)}</span>
+                    <span className="text-primary font-headline">{formatCurrency(event.totalCost)}</span>
                   </div>
                 </div>
               </CardContent>

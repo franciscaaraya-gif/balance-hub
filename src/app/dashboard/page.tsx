@@ -22,7 +22,7 @@ import {
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy, doc } from "firebase/firestore";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -327,7 +327,7 @@ export default function Dashboard() {
             <div className="mx-auto bg-accent/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-accent"><Send className="h-8 w-8" /></div>
             <DialogTitle className="text-2xl font-headline font-bold">Reportar Transferencia</DialogTitle>
             <DialogDescription className="text-xs pt-2">
-              ¿Confirmas que transferiste <strong>${selectedDebtGroup?.total.toFixed(2)}</strong> a <strong>{selectedDebtGroup?.name}</strong>?
+              ¿Confirmas que transferiste <strong>{formatCurrency(selectedDebtGroup?.total || 0)}</strong> a <strong>{selectedDebtGroup?.name}</strong>?
             </DialogDescription>
           </DialogHeader>
           <div className="py-6">
@@ -340,7 +340,7 @@ export default function Dashboard() {
           </div>
           <div className="flex flex-col gap-3">
             <Button disabled={isProcessing} className="w-full h-14 rounded-2xl font-bold text-lg shadow-lg" onClick={handleReportPayment}>
-              {isProcessing ? <Loader2 className="animate-spin" /> : "Confirmar Envío"}
+              {isProcessing ? <Loader2 className="animate-spin" /> : `Confirmar Envío`}
             </Button>
             <Button variant="ghost" className="rounded-xl" onClick={() => setSelectedDebtGroup(null)}>Cancelar</Button>
           </div>
@@ -353,7 +353,7 @@ export default function Dashboard() {
             <div className="mx-auto bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-emerald-600"><CheckCircle2 className="h-8 w-8" /></div>
             <DialogTitle className="text-2xl font-headline font-bold">Validar Cobro</DialogTitle>
             <DialogDescription className="text-xs pt-2">
-              ¿Confirmas que recibiste <strong>${selectedValidationGroup?.total.toFixed(2)}</strong> de <strong>{selectedValidationGroup?.name}</strong> en tu cuenta?
+              ¿Confirmas que recibiste <strong>{formatCurrency(selectedValidationGroup?.total || 0)}</strong> de <strong>{selectedValidationGroup?.name}</strong> en tu cuenta?
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 text-[10px] text-muted-foreground bg-emerald-50 p-4 rounded-2xl border border-emerald-100 font-medium">
@@ -478,8 +478,8 @@ function WalletSection({
                         <div className="min-w-0 pr-2">
                           <p className="text-xs font-bold text-primary">
                             {netItem.netValue > 0 
-                              ? `Si le pagas $${netItem.netValue.toFixed(2)} a ${personName}`
-                              : `Si ${personName} te paga $${Math.abs(netItem.netValue).toFixed(2)}`
+                              ? `Si le pagas ${formatCurrency(netItem.netValue)} a ${personName}`
+                              : `Si ${personName} te paga ${formatCurrency(Math.abs(netItem.netValue))}`
                             }
                           </p>
                           <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
@@ -504,7 +504,7 @@ function WalletSection({
                                 <span className="font-medium text-[11px] text-primary truncate">{debt.description}</span>
                                 <span className="block text-[8px] text-muted-foreground uppercase">{debt.groupName}</span>
                               </div>
-                              <span className="font-bold text-red-600 shrink-0">${debt.amount.toFixed(2)}</span>
+                              <span className="font-bold text-red-600 shrink-0">{formatCurrency(debt.amount)}</span>
                             </div>
                           ))}
 
@@ -516,13 +516,13 @@ function WalletSection({
                                 <span className="font-medium text-[11px] text-primary truncate">{debt.description}</span>
                                 <span className="block text-[8px] text-muted-foreground uppercase">{debt.groupName}</span>
                               </div>
-                              <span className="font-bold text-emerald-600 shrink-0">${debt.amount.toFixed(2)}</span>
+                              <span className="font-bold text-emerald-600 shrink-0">{formatCurrency(debt.amount)}</span>
                             </div>
                           ))}
 
                           <div className="pt-2 border-t border-dashed flex justify-between text-[10px] font-bold text-muted-foreground px-1">
-                            <span>Total que le debes: ${netItem.iOweThem.toFixed(2)}</span>
-                            <span>Total que te debe: ${netItem.owesMe.toFixed(2)}</span>
+                            <span>Total que le debes: {formatCurrency(netItem.iOweThem)}</span>
+                            <span>Total que te debe: {formatCurrency(netItem.owesMe)}</span>
                           </div>
                         </div>
                       )}
@@ -551,7 +551,7 @@ function WalletSection({
              <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-1">Debes</p>
              <div className="flex flex-col items-center">
                <p className={cn("font-headline font-bold transition-all", !isDebesExpanded ? "text-2xl" : "text-4xl sm:text-5xl")}>
-                 ${totalOutgoingAmount.toFixed(2)}
+                 {formatCurrency(totalOutgoingAmount)}
                </p>
                {!isDebesExpanded && (
                  <p className="text-[9px] font-bold opacity-70 mt-0.5">
@@ -588,7 +588,7 @@ function WalletSection({
                         className="h-8 rounded-xl text-[9px] font-black uppercase bg-accent text-white"
                         onClick={() => setSelectedDebtGroup({ ...group, name: creditor?.displayName || 'Acreedor' })}
                       >
-                        <CreditCard className="h-3 w-3 mr-1" /> Pagar ${group.total.toFixed(2)}
+                        <CreditCard className="h-3 w-3 mr-1" /> Pagar {formatCurrency(group.total)}
                       </Button>
                     </div>
                     <div className="space-y-2 pl-2 border-l-2 border-accent/20">
@@ -599,7 +599,7 @@ function WalletSection({
                              <p className="font-bold truncate">{debt.description}</p>
                            </div>
                            <div className="text-right shrink-0">
-                             <p className="font-bold text-accent">${debt.amount.toFixed(2)}</p>
+                             <p className="font-bold text-accent">{formatCurrency(debt.amount)}</p>
                              {getStatusBadge(debt.status)}
                            </div>
                         </div>
@@ -628,7 +628,7 @@ function WalletSection({
              <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-1">Te Deben</p>
              <div className="flex flex-col items-center">
                <p className={cn("font-headline font-bold transition-all", !isTeDebenExpanded ? "text-2xl" : "text-4xl sm:text-5xl")}>
-                 ${totalTeDebenConsolidado.toFixed(2)}
+                 {formatCurrency(totalTeDebenConsolidado)}
                </p>
                {!isTeDebenExpanded && (
                  <p className="text-[9px] font-bold opacity-70 mt-0.5">
@@ -673,7 +673,7 @@ function WalletSection({
                                 className="h-8 rounded-xl text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                                 onClick={() => setSelectedValidationGroup({ ...group, name: debtor?.displayName || 'Usuario' })}
                               >
-                                <CheckCircle2 className="h-3 w-3 mr-1" /> Validar ${group.total.toFixed(2)}
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> Validar {formatCurrency(group.total)}
                               </Button>
                             </div>
                             <div className="space-y-2 pl-2 border-l-2 border-secondary/20">
@@ -683,7 +683,7 @@ function WalletSection({
                                      <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
                                      <p className="font-bold truncate">{debt.description}</p>
                                    </div>
-                                   <span className="font-bold text-secondary shrink-0">${debt.amount.toFixed(2)}</span>
+                                   <span className="font-bold text-secondary shrink-0">{formatCurrency(debt.amount)}</span>
                                 </div>
                               ))}
                             </div>
@@ -705,7 +705,7 @@ function WalletSection({
                                 <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground"><User className="h-3.5 w-3.5" /></div>
                                 <span className="text-[11px] font-black uppercase text-primary">{debtor?.displayName || '...'} te debe</span>
                               </div>
-                              <span className="text-sm font-black text-primary font-headline">${group.total.toFixed(2)}</span>
+                              <span className="text-sm font-black text-primary font-headline">{formatCurrency(group.total)}</span>
                             </div>
                             <div className="space-y-2 pl-2 border-l-2 border-muted">
                               {group.debts.map((debt: any) => (
@@ -714,7 +714,7 @@ function WalletSection({
                                      <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
                                      <p className="font-bold truncate">{debt.description}</p>
                                    </div>
-                                   <span className="font-bold text-muted-foreground shrink-0">${debt.amount.toFixed(2)}</span>
+                                   <span className="font-bold text-muted-foreground shrink-0">{formatCurrency(debt.amount)}</span>
                               </div>
                             ))}
                           </div>
