@@ -89,8 +89,8 @@ export default function GroupsPage() {
                 <PlusCircle className="h-5 w-5 mr-2" /> Nuevo Grupo
               </Button>
             </DialogTrigger>
-            <DialogContent className="rounded-[2rem] border-none p-8">
-              <DialogHeader><DialogTitle className="text-2xl font-headline font-bold">Crear Grupo</DialogTitle></DialogHeader>
+            <DialogContent className="w-[90vw] sm:max-w-md rounded-[2rem] border-none p-6 sm:p-8 mx-auto">
+              <DialogHeader><DialogTitle className="text-xl sm:text-2xl font-headline font-bold">Crear Grupo</DialogTitle></DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase font-black px-1">Nombre del Grupo</Label>

@@ -809,7 +809,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                             <Input type="number" value={item.quantity || ""} onChange={(e) => { const updated = [...parsedItems]; updated[idx].quantity = parseInt(e.target.value) || 0; updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice; setParsedItems(updated); setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString()); }} className="h-7 text-[10px] p-1 text-center rounded-md" />
                           </div>
                           <div className="col-span-4">
-                            <Input type="number" value={item.totalPrice || ""} onChange={(e) => { const updated = [...parsedItems]; updated[idx].totalPrice = parseFloat(e.target.value) || 0; setParsedItems(updated); setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString()); }} className="h-7 text-[10px] font-bold text-right rounded-md" />
+                            <Input type="number" value={item.totalPrice || ""} onChange={(e) => { updated = [...parsedItems]; updated[idx].totalPrice = parseFloat(e.target.value) || 0; setParsedItems(updated); setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString()); }} className="h-7 text-[10px] font-bold text-right rounded-md" />
                           </div>
                         </div>
                       ))}
@@ -903,7 +903,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!confirmingDebt} onOpenChange={() => setConfirmingDebt(null)}>
+      <Dialog open={!!confirmingDebt} onOpenChange={setConfirmingDebt}>
         <DialogContent className="w-[90vw] max-w-sm rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
           <DialogHeader className="pb-4">
             <div className="mx-auto bg-emerald-100 p-4 rounded-full w-fit mb-4">

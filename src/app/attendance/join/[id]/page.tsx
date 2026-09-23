@@ -107,9 +107,9 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-muted/30 p-4">
-      <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-white rounded-[2rem]">
+      <Card className="w-full max-w-md shadow-2xl border-none overflow-hidden bg-white rounded-[1.5rem] sm:rounded-[2rem]">
         <div className="h-2 bg-accent" />
-        <CardHeader className="text-center space-y-3 pb-6 pt-8">
+        <CardHeader className="text-center space-y-3 pb-6 pt-8 px-4">
           <div className="mx-auto bg-primary/10 p-4 rounded-full w-fit">
             <Calendar className="h-8 w-8 text-primary" />
           </div>
@@ -125,7 +125,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
           </div>
         </CardHeader>
         
-        <CardContent className="space-y-6 px-6 pb-10">
+        <CardContent className="space-y-6 px-4 sm:px-6 pb-10">
           <div className="bg-muted/40 p-4 rounded-xl text-center text-xs text-muted-foreground">
             Concepto del Costo: <span className="font-bold text-primary">{event.costConcept || "Gasto general"}</span>
           </div>
@@ -174,7 +174,7 @@ export default function JoinEvent({ params: paramsPromise }: { params: Promise<{
                     Al confirmar quedarás agendado en el evento e ingresarás automáticamente como miembro con acceso total al grupo de pagos.
                   </p>
                 </div>
-                <Button className="w-full bg-accent hover:bg-accent/90 h-14 text-lg font-bold rounded-2xl shadow-lg text-white" onClick={handleJoin} disabled={joining}>
+                <Button className="w-full bg-accent hover:bg-accent/90 h-14 text-base sm:text-lg font-bold rounded-2xl shadow-lg text-white" onClick={handleJoin} disabled={joining}>
                   {joining ? <Loader2 className="animate-spin mr-2" /> : <><Send className="mr-2 h-5 w-5" /> Confirmar Asistencia (RSVP)</>}
                 </Button>
               </div>

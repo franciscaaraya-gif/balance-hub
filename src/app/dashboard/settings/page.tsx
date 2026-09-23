@@ -56,19 +56,19 @@ export default function SettingsPage() {
   if (profileLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 pb-20">
+    <div className="max-w-2xl mx-auto space-y-8 pb-20 px-2 sm:px-0">
       <div>
-        <h1 className="text-3xl font-headline font-bold text-primary">Ajustes de Perfil</h1>
-        <p className="text-muted-foreground">Configura tu identidad y datos de cobro personales.</p>
+        <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">Ajustes de Perfil</h1>
+        <p className="text-sm text-muted-foreground">Configura tu identidad y datos de cobro personales.</p>
       </div>
 
-      <Card className="border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
-        <CardHeader className="border-b bg-muted/10">
-          <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+      <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
+        <CardHeader className="border-b bg-muted/10 px-4 sm:px-6">
+          <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-widest flex items-center gap-2">
             <User className="h-4 w-4 text-primary" /> Información Personal
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="pt-6 space-y-4 px-4 sm:px-6">
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-black px-1">Nombre para mostrar</Label>
             <Input 
@@ -89,21 +89,21 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
-        <CardHeader className="border-b bg-secondary/10">
-          <CardTitle className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-secondary">
+      <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
+        <CardHeader className="border-b bg-secondary/10 px-4 sm:px-6">
+          <CardTitle className="text-xs sm:text-sm font-black uppercase tracking-widest flex items-center gap-2 text-secondary">
             <CreditCard className="h-4 w-4" /> Datos de Cobro Personales
           </CardTitle>
-          <CardDescription className="text-xs">Estos datos se mostrarán a otros miembros cuando tú seas el acreedor de un gasto.</CardDescription>
+          <CardDescription className="text-[10px] sm:text-xs">Estos datos se mostrarán a otros miembros cuando tú seas el acreedor de un gasto.</CardDescription>
         </CardHeader>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="pt-6 space-y-4 px-4 sm:px-6">
           <div className="space-y-2">
             <Label className="text-[10px] uppercase font-black px-1">Instrucciones de Transferencia</Label>
             <Textarea 
               placeholder="Ej: CBU 000000000, Alias: mi.alias.personal, Banco: Galicia" 
               value={formData.transferDetails} 
               onChange={e => setFormData({...formData, transferDetails: e.target.value})}
-              className="rounded-xl min-h-[120px] bg-muted/20 border-none font-mono text-xs"
+              className="rounded-xl min-h-[120px] bg-muted/20 border-none font-mono text-xs sm:text-sm"
             />
           </div>
         </CardContent>
@@ -112,7 +112,7 @@ export default function SettingsPage() {
       <Button 
         onClick={handleSave} 
         disabled={isLoading}
-        className="w-full h-14 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20"
+        className="w-full h-14 rounded-2xl text-base sm:text-lg font-bold shadow-lg shadow-primary/20"
       >
         {isLoading ? <Loader2 className="animate-spin" /> : <><Save className="mr-2 h-5 w-5" /> Guardar Cambios</>}
       </Button>

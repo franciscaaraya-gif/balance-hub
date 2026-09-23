@@ -264,7 +264,7 @@ function AttendanceContent() {
                         <SelectContent>
                           {minutes.map(m => <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>)}
                         </SelectContent>
-                      </div>
+                      </Select>
                     </div>
                   </div>
                 </div>

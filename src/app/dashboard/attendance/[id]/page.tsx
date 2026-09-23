@@ -266,76 +266,78 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(checkInUrl)}`;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-20 px-2 sm:px-4">
-      <div className="bg-primary p-6 sm:p-8 rounded-[2rem] text-primary-foreground shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-6 opacity-10">
+    <div className="space-y-6 max-w-5xl mx-auto pb-20 px-1 sm:px-4">
+      <div className="bg-primary p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2rem] text-primary-foreground shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-6 opacity-10 hidden sm:block">
            <Zap className="h-32 w-32" />
         </div>
         <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center relative z-10">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-accent text-white px-3 font-bold">{event.date}</Badge>
-              {event.isArchived && <Badge variant="secondary" className="bg-white/20 text-white border-none uppercase font-black text-[9px]">Archivado</Badge>}
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 rounded-lg bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white uppercase tracking-tighter"
-                onClick={handleDuplicate}
-              >
-                <Copy className="h-3 w-3 mr-1" /> Duplicar
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-7 rounded-lg bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white uppercase tracking-tighter"
-                onClick={handleDownloadIcs}
-              >
-                <CalendarPlus className="h-3 w-3 mr-1" /> Calendario
-              </Button>
+          <div className="space-y-3 w-full md:w-auto">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <Badge className="bg-accent text-white px-2 sm:px-3 py-0.5 font-bold text-[10px] sm:text-xs">{event.date}</Badge>
+              {event.isArchived && <Badge variant="secondary" className="bg-white/20 text-white border-none uppercase font-black text-[8px] sm:text-[9px]">Archivado</Badge>}
+              <div className="flex gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 sm:h-7 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-[8px] sm:text-[9px] font-bold text-white uppercase tracking-tighter"
+                  onClick={handleDuplicate}
+                >
+                  <Copy className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" /> Duplicar
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 sm:h-7 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-[8px] sm:text-[9px] font-bold text-white uppercase tracking-tighter"
+                  onClick={handleDownloadIcs}
+                >
+                  <CalendarPlus className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" /> Calendario
+                </Button>
+              </div>
               {isAdmin && (
                 <Button 
                   variant="ghost" 
                   size="sm" 
-                  className="h-7 rounded-lg bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white uppercase tracking-tighter"
+                  className="h-6 sm:h-7 px-2 rounded-lg bg-white/10 hover:bg-white/20 text-[8px] sm:text-[9px] font-bold text-white uppercase tracking-tighter"
                   onClick={() => setShowSettings(true)}
                 >
-                  <Settings2 className="h-3 w-3 mr-1" /> Gestión
+                  <Settings2 className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-1" /> Gestión
                 </Button>
               )}
             </div>
-            <h1 className="text-3xl font-headline font-bold">{event.title}</h1>
-            <p className="text-sm opacity-80 font-medium">Concepto: <span className="underline font-bold">{event.costConcept || "No especificado"}</span></p>
-            <div className="flex gap-4 text-xs opacity-60 pt-2">
-              <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location || "Presencial"}</span>
-              <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {event.time}</span>
+            <h1 className="text-2xl sm:text-3xl font-headline font-bold leading-tight">{event.title}</h1>
+            <p className="text-xs sm:text-sm opacity-80 font-medium">Concepto: <span className="underline font-bold">{event.costConcept || "No especificado"}</span></p>
+            <div className="flex flex-wrap gap-3 sm:gap-4 text-[10px] sm:text-xs opacity-60 pt-1">
+              <span className="flex items-center gap-1"><MapPin className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> {event.location || "Presencial"}</span>
+              <span className="flex items-center gap-1"><Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> {event.time}</span>
             </div>
           </div>
-          <div className="bg-white/10 p-5 rounded-2xl text-center min-w-[160px] border border-white/5 backdrop-blur-sm">
-            <p className="text-[10px] uppercase font-black opacity-70 tracking-widest">Cuota p/p (Fija)</p>
-            <p className="text-4xl font-headline font-bold text-accent">{formatCurrency(costPerPerson)}</p>
-            <p className="text-[9px] mt-1 font-bold uppercase tracking-tight text-white/90">Dividido en {totalHeads} Cabezas</p>
+          <div className="bg-white/10 p-4 sm:p-5 rounded-xl sm:rounded-2xl text-center w-full md:min-w-[160px] md:w-auto border border-white/5 backdrop-blur-sm">
+            <p className="text-[9px] sm:text-[10px] uppercase font-black opacity-70 tracking-widest">Cuota p/p (Fija)</p>
+            <p className="text-3xl sm:text-4xl font-headline font-bold text-accent">{formatCurrency(costPerPerson)}</p>
+            <p className="text-[8px] sm:text-[9px] mt-1 font-bold uppercase tracking-tight text-white/90">Dividido en {totalHeads} Cabezas</p>
           </div>
         </div>
       </div>
 
       {!isParticipant && (
-        <Card className="shadow-2xl border-none bg-white rounded-[2rem] overflow-hidden">
-          <CardHeader className="text-center py-10 space-y-4">
-            <div className="mx-auto bg-primary/10 p-6 rounded-full w-fit">
-              <Calendar className="h-12 w-12 text-primary" />
+        <Card className="shadow-2xl border-none bg-white rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden">
+          <CardHeader className="text-center py-8 sm:py-10 space-y-4">
+            <div className="mx-auto bg-primary/10 p-5 sm:p-6 rounded-full w-fit">
+              <Calendar className="h-10 w-10 sm:h-12 sm:w-12 text-primary" />
             </div>
-            <div>
-              <CardTitle className="text-2xl font-headline font-bold">¿Te anotas al evento?</CardTitle>
-              <CardDescription className="max-w-sm mx-auto pt-2">
+            <div className="px-4">
+              <CardTitle className="text-xl sm:text-2xl font-headline font-bold">¿Te anotas al evento?</CardTitle>
+              <CardDescription className="max-w-sm mx-auto pt-2 text-xs sm:text-sm">
                 {isAdmin 
                   ? "Eres el organizador. Si piensas asistir y participar de la división del costo, confírmalo aquí." 
                   : "Como miembro del grupo, puedes unirte a esta fecha. Al hacerlo, entrarás en la división del costo automáticamente."}
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent className="pb-12 text-center">
+          <CardContent className="pb-10 sm:pb-12 text-center px-6">
             <Button 
-              className="w-full max-w-sm h-14 rounded-2xl bg-accent hover:bg-accent/90 text-lg font-bold shadow-xl shadow-accent/20"
+              className="w-full max-w-sm h-12 sm:h-14 rounded-2xl bg-accent hover:bg-accent/90 text-base sm:text-lg font-bold shadow-xl shadow-accent/20"
               onClick={handleJoin}
               disabled={isJoining}
             >
@@ -347,7 +349,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
       {showManagement && (
         <div className="grid gap-6 md:grid-cols-3">
-          <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[2rem]">
+          <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[1.5rem] sm:rounded-[2rem]">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-6 gap-4">
               <div>
                 <CardTitle className="text-lg font-headline">Lista de Control</CardTitle>
@@ -370,7 +372,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 )}
               </div>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 px-3 sm:px-6">
               <div className="space-y-8">
                 <div className="space-y-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-accent pl-2">Usuarios Registrados</h3>
@@ -382,17 +384,17 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                     
                     return (
                       <div key={uid} className={cn(
-                        "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                        "flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all",
                         isPresent ? "bg-emerald-50/60 border-emerald-100" : "bg-muted/10 border-transparent"
                       )}>
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+                          <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-xs sm:text-sm shrink-0">
                             {profile?.displayName?.[0] || profile?.email?.[0] || "U"}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-bold truncate pr-2">{profile?.displayName || profile?.email || `Usuario (${uid.substring(0, 5)})`}</p>
+                            <p className="text-xs sm:text-sm font-bold truncate pr-1">{profile?.displayName || profile?.email || `Usuario (${uid.substring(0, 5)})`}</p>
                             <span className={cn(
-                              "text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter inline-block mt-0.5", 
+                              "text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter inline-block mt-0.5", 
                               isPresent ? "bg-emerald-500 text-white" : "bg-muted/60 text-muted-foreground"
                             )}>
                               {isPresent ? "Presente" : "Confirmado"}
@@ -400,7 +402,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                           {isAdmin && !event.isCharged && (
                             <Button 
                               variant="ghost" 
@@ -417,12 +419,21 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                               variant={isPresent ? "default" : "outline"} 
                               size="sm"
                               className={cn(
-                                "rounded-xl text-[10px] font-black h-9 px-3", 
+                                "rounded-xl text-[9px] sm:text-[10px] font-black h-8 sm:h-9 px-2 sm:px-3", 
                                 isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none text-white" : "border-primary/20 text-primary"
                               )}
                               onClick={() => toggleAttendance(event.id, uid, !isPresent)}
                             >
-                              {isPresent ? "Quitar Asistencia" : "Marcar Llegada"}
+                              {isPresent ? (
+                                <span className="hidden sm:inline">Quitar Asistencia</span>
+                              ) : (
+                                <span className="hidden sm:inline">Marcar Llegada</span>
+                              )}
+                              {isPresent ? (
+                                <span className="sm:hidden">Quitar</span>
+                              ) : (
+                                <span className="sm:hidden">Llegó</span>
+                              )}
                             </Button>
                           )}
                         </div>
@@ -435,7 +446,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-secondary pl-2">Invitados (+1)</h3>
                   
                   {isAdmin && !event.isCharged && event.participantIds.length > 0 && (
-                    <div className="flex flex-col sm:flex-row gap-2 p-3 bg-muted/20 rounded-2xl space-y-2 sm:space-y-0">
+                    <div className="flex flex-col sm:flex-row gap-3 p-3 bg-muted/20 rounded-2xl">
                       <div className="flex-1">
                         <Label className="text-[9px] uppercase font-black mb-1 block px-1">Nombre del Invitado</Label>
                         <Input 
@@ -449,7 +460,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                         <Label className="text-[9px] uppercase font-black mb-1 block px-1">Responsable del Pago</Label>
                         <Select value={selectedResponsibleId} onValueChange={setSelectedResponsibleId}>
                           <SelectTrigger className="h-10 rounded-xl bg-white text-xs">
-                            <SelectValue placeholder="Seleccionar responsable" />
+                            <SelectValue placeholder="Responsable" />
                           </SelectTrigger>
                           <SelectContent>
                             {event.participantIds.map(uid => {
@@ -464,8 +475,8 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                         </Select>
                       </div>
                       <div className="flex items-end">
-                        <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 w-full sm:auto px-4">
-                          <Plus className="h-4 w-4 mr-1" /> Agregar
+                        <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 w-full sm:auto px-4 font-bold text-xs">
+                          <Plus className="h-3.5 w-3.5 mr-1" /> Agregar
                         </Button>
                       </div>
                     </div>
@@ -475,22 +486,22 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                     <p className="text-xs text-muted-foreground py-2 text-center italic">Sin invitados encontrados.</p>
                   ) : filteredGuests.map((guest, idx) => (
                     <div key={`${guest.name}-${idx}`} className={cn(
-                      "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                      "flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all",
                       guest.present ? "bg-secondary/10 border-secondary/20" : "bg-muted/10 border-transparent"
                     )}>
-                      <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-secondary/10 flex items-center justify-center font-bold text-secondary text-sm">
+                      <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+                        <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-secondary/10 flex items-center justify-center font-bold text-secondary text-xs sm:text-sm shrink-0">
                           {guest.name[0]}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold truncate pr-2">{guest.name}</p>
-                          <p className="text-[8px] text-muted-foreground uppercase font-black">
-                            Responsable: {profilesMap[guest.addedBy]?.displayName || profilesMap[guest.addedBy]?.email || `Usuario (${guest.addedBy.substring(0, 5)})`}
+                          <p className="text-xs sm:text-sm font-bold truncate pr-1">{guest.name}</p>
+                          <p className="text-[8px] text-muted-foreground uppercase font-black truncate">
+                            De: {profilesMap[guest.addedBy]?.displayName || `U(${guest.addedBy.substring(0, 3)})`}
                           </p>
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                         {isAdmin && !event.isCharged && (
                           <Button 
                             variant="ghost" 
@@ -507,7 +518,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                             variant={guest.present ? "secondary" : "outline"} 
                             size="sm"
                             className={cn(
-                              "rounded-xl text-[10px] font-black h-9 px-3", 
+                              "rounded-xl text-[9px] sm:text-[10px] font-black h-8 sm:h-9 px-2 sm:px-3", 
                               guest.present ? "bg-secondary text-white hover:bg-secondary/90 border-none" : "border-secondary/20 text-secondary"
                             )}
                             onClick={() => toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present)}
@@ -524,14 +535,14 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           </Card>
 
           <div className="space-y-6">
-            <Card className="border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
+            <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
               <CardHeader className="border-b bg-muted/10">
                 <CardTitle className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
                   <Zap className="h-4 w-4 text-accent" /> Resumen de Cobro
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-4 space-y-4">
-                <div className="bg-primary/5 p-4 rounded-2xl flex items-start gap-3">
+              <CardContent className="pt-4 space-y-4 px-4 sm:px-6">
+                <div className="bg-primary/5 p-4 rounded-xl flex items-start gap-3">
                   <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                   <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">
                     En Zygos el costo se divide entre todos los anotados. La única forma de no pagar es ser eliminado de la lista por el administrador.
@@ -554,10 +565,10 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 </div>
               </CardContent>
               {isAdmin && (
-                <CardFooter className="bg-muted/5 pt-4 flex flex-col gap-2">
+                <CardFooter className="bg-muted/5 pt-4 flex flex-col gap-2 px-4 sm:px-6">
                   <Button 
                     disabled={event.isCharged || isCharging || totalHeads === 0}
-                    className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
+                    className="w-full h-11 sm:h-12 rounded-xl sm:rounded-2xl bg-accent hover:bg-accent/90 text-[10px] sm:text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
                     onClick={handleOneClickCharge}
                   >
                     {isCharging ? <Loader2 className="animate-spin" /> : (event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar</>)}
@@ -566,7 +577,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                   {!event.isCharged && (
                     <Button 
                       variant="ghost" 
-                      className="w-full h-10 text-[9px] font-black uppercase tracking-widest gap-2 text-muted-foreground hover:text-primary" 
+                      className="w-full h-9 sm:h-10 text-[8px] sm:text-[9px] font-black uppercase tracking-widest gap-2 text-muted-foreground hover:text-primary" 
                       onClick={handleGoToAdjustments}
                     >
                       <Settings2 className="h-3 w-3" /> Ajustar antes de cobrar
@@ -576,15 +587,15 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               )}
             </Card>
             
-            <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-3 border">
+            <div className="bg-white p-5 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] shadow-sm space-y-3 border">
                <div className="flex items-center gap-2 text-primary font-bold">
                  <Share2 className="h-4 w-4 text-accent" />
-                 <span className="text-xs font-black uppercase tracking-widest">Enlace Invitación</span>
+                 <span className="text-[11px] font-black uppercase tracking-widest">Enlace Invitación</span>
                </div>
                <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">Comparte este link. Los que se anoten pagarán su parte por igual al liquidar.</p>
                <Button 
                  variant="outline" 
-                 className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
+                 className="w-full h-10 sm:h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
                  onClick={() => { 
                    const shareText = `⚽ ¡Partido armado! ${event.title}, el ${event.date} a las ${event.time}. Confirma tu asistencia acá: ${event.shareLink}`;
                    navigator.clipboard.writeText(shareText); 
@@ -599,32 +610,32 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       )}
 
       <Dialog open={showQr} onOpenChange={setShowQr}>
-        <DialogContent className="max-w-md rounded-[2.5rem] p-8 text-center border-none">
-          <DialogHeader><DialogTitle className="text-2xl font-headline">Check-in QR</DialogTitle></DialogHeader>
+        <DialogContent className="w-[90vw] max-w-md rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-8 text-center border-none mx-auto">
+          <DialogHeader><DialogTitle className="text-xl sm:text-2xl font-headline">Check-in QR</DialogTitle></DialogHeader>
           <div className="py-4 flex flex-col items-center gap-4">
-            <div className="bg-white p-4 rounded-3xl border-2 border-primary/10 shadow-xl">
-              <img src={qrCodeUrl} alt="QR de asistencia" className="w-60 h-60" />
+            <div className="bg-white p-3 sm:p-4 rounded-3xl border-2 border-primary/10 shadow-xl">
+              <img src={qrCodeUrl} alt="QR de asistencia" className="w-52 h-52 sm:w-60 sm:h-60" />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground max-w-xs leading-relaxed font-medium">
+            <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground max-w-xs leading-relaxed font-medium">
               Escaneando este código se registra la llegada del participante.
             </p>
           </div>
-          <Button className="w-full h-12 rounded-2xl" onClick={() => setShowQr(false)}>Cerrar</Button>
+          <Button className="w-full h-11 sm:h-12 rounded-xl sm:rounded-2xl font-bold" onClick={() => setShowQr(false)}>Cerrar</Button>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showSettings} onOpenChange={setShowSettings}>
-        <DialogContent className="w-[95vw] sm:max-w-md rounded-[2rem] p-6 sm:p-8 border-none mx-auto">
+        <DialogContent className="w-[95vw] sm:max-w-md rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 border-none mx-auto">
           <DialogHeader>
-            <DialogTitle className="text-xl font-headline font-bold">Gestión del Evento</DialogTitle>
+            <DialogTitle className="text-lg sm:text-xl font-headline font-bold">Gestión del Evento</DialogTitle>
             <DialogDescription className="text-xs">Opciones de administración para esta fecha.</DialogDescription>
           </DialogHeader>
           <div className="space-y-6 py-4">
             <div className="space-y-3">
                <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground px-1">Archivar</Label>
-               <div className="bg-muted/20 p-4 rounded-2xl space-y-3">
+               <div className="bg-muted/20 p-4 rounded-xl sm:rounded-2xl space-y-3">
                  <p className="text-[11px] text-muted-foreground leading-relaxed">El evento dejará de aparecer en tu lista principal, pero no se borrará ningún dato.</p>
-                 <Button variant="outline" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleArchive}>
+                 <Button variant="outline" className="w-full h-10 sm:h-11 rounded-xl gap-2 font-bold text-xs" onClick={handleArchive}>
                     <Archive className="h-4 w-4" /> Archivar Evento
                  </Button>
                </div>
@@ -632,9 +643,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
             <div className="space-y-3">
                <Label className="text-[10px] uppercase font-black tracking-widest text-destructive px-1">Eliminar</Label>
-               <div className="bg-destructive/5 p-4 rounded-2xl space-y-3 border border-destructive/10">
+               <div className="bg-destructive/5 p-4 rounded-xl sm:rounded-2xl space-y-3 border border-destructive/10">
                  <p className="text-[11px] text-muted-foreground leading-relaxed">Esta acción borrará el evento definitivamente. Solo permitido si no hay deudas generadas.</p>
-                 <Button variant="destructive" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleDelete} disabled={isActionLoading}>
+                 <Button variant="destructive" className="w-full h-10 sm:h-11 rounded-xl gap-2 font-bold text-xs" onClick={handleDelete} disabled={isActionLoading}>
                     {isActionLoading ? <Loader2 className="animate-spin" /> : <><Trash2 className="h-4 w-4" /> Eliminar Definitivamente</>}
                  </Button>
                </div>
