@@ -40,10 +40,13 @@ export default function Dashboard() {
   }, [firestore, user?.uid]);
   const { data: myGroups } = useCollection<Group>(myGroupsQuery);
 
+  const groupIds = myGroups?.map(g => g.id) || [];
+  const groupIdsKey = groupIds.join(',');
+
   const eventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
-    return query(collection(firestore, 'events'), where('participantIds', 'array-contains', user.uid), orderBy('createdAt', 'desc'));
-  }, [firestore, user?.uid]);
+    if (!firestore || !user?.uid || groupIds.length === 0) return null;
+    return query(collection(firestore, 'events'), where('groupId', 'in', groupIds), orderBy('createdAt', 'desc'));
+  }, [firestore, user?.uid, groupIdsKey]);
   const { data: allEvents } = useCollection<Event>(eventsQuery);
   const activeEvents = allEvents?.filter(e => !e.isCharged) || [];
 
@@ -165,15 +168,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto pb-10 px-2 sm:px-4">
-      {/* Header General */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName?.split(' ')[0]}!</h1>
         <p className="text-sm text-muted-foreground">Bienvenido a Zygos — cuentas claras con tu grupo.</p>
       </div>
 
-      {/* DISPOSITIVOS MÓVILES (Layout Enfocado) */}
       <div className="block md:hidden space-y-6">
-        {/* Billetera Principal Compacta */}
         <div className="space-y-6">
           <WalletSection 
             outgoingGroups={outgoingGroups} 
@@ -187,7 +187,6 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Accesos Rápidos Inferiores (para que queden tras un scroll corto) */}
         <div className="grid grid-cols-2 gap-3">
           <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
             <Link href="/dashboard/groups">
@@ -204,7 +203,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* COMPUTADORES DE ESCRITORIO (Layout Todo-Junto) */}
       <div className="hidden md:grid md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-6">
           <WalletSection 
@@ -270,7 +268,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Diálogos Comunes de la Billetera */}
       <Dialog open={!!selectedDebtGroup} onOpenChange={val => !val && setSelectedDebtGroup(null)}>
         <DialogContent className="rounded-[2.5rem] border-none p-8 max-w-sm text-center mx-auto">
           <DialogHeader>
@@ -359,7 +356,6 @@ function WalletSection({
 
   return (
     <div className="space-y-4">
-      {/* Tarjeta: Debes Pagar */}
       <section className="space-y-2">
         <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-orange-600 ml-2">
           <ArrowUpRight className="h-4 w-4" /> Billetera: Pagos
@@ -437,7 +433,6 @@ function WalletSection({
         </Card>
       </section>
 
-      {/* Tarjeta: Te Deben */}
       <section className="space-y-2">
         <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-emerald-600 ml-2">
           <ArrowDownLeft className="h-4 w-4" /> Billetera: Cobros
@@ -478,7 +473,6 @@ function WalletSection({
                 <div className="py-6 text-center opacity-30 font-bold uppercase text-[10px]">No tienes cobros pendientes</div>
               ) : (
                 <>
-                  {/* 1. SECCIÓN: Pendientes de validación */}
                   {incomingResult.review.length > 0 && (
                     <div className="space-y-4">
                       <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded">Pendientes de Validación</h3>
@@ -519,7 +513,6 @@ function WalletSection({
                     </div>
                   )}
 
-                  {/* 2. SECCIÓN: Deudas pendientes normales */}
                   {incomingResult.pending.length > 0 && (
                     <div className="space-y-4 pt-2 border-t border-dashed">
                       <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded">Deudas Pendientes</h3>

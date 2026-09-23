@@ -1,7 +1,7 @@
 "use client";
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { Event } from "@/lib/types";
+import { Event, Group } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Calendar, Users, ChevronRight, User, Clock, MapPin, ArrowLeft } from "lucide-react";
@@ -13,14 +13,23 @@ export default function ArchivedEventsPage() {
   const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
 
-  const eventsQuery = useMemoFirebase(() => {
+  const groupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
+    return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
+  }, [firestore, user?.uid]);
+  const { data: groups } = useCollection<Group>(groupsQuery);
+
+  const groupIds = groups?.map(g => g.id) || [];
+  const groupIdsKey = groupIds.join(',');
+
+  const eventsQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid || groupIds.length === 0) return null;
     return query(
       collection(firestore, 'events'), 
-      where('participantIds', 'array-contains', user.uid),
+      where('groupId', 'in', groupIds),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user?.uid]);
+  }, [firestore, user?.uid, groupIdsKey]);
   const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
   const archivedEvents = events?.filter(e => e.isCharged) || [];

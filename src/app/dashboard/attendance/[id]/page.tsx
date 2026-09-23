@@ -418,7 +418,11 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
              <Button 
                variant="outline" 
                className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
-               onClick={() => { navigator.clipboard.writeText(event.shareLink); toast({ title: "Link copiado" }); }}
+               onClick={() => { 
+                 const shareText = `⚽ ¡Partido armado! ${event.title}, el ${event.date} a las ${event.time}. Confirma tu asistencia acá: ${event.shareLink}`;
+                 navigator.clipboard.writeText(shareText); 
+                 toast({ title: "Link copiado" }); 
+               }}
              >
                Copiar Enlace
              </Button>

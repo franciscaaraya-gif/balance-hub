@@ -815,7 +815,11 @@ nombre_item;cantidad;precio_unitario;precio_total`;
             </div>
             <Button 
               className="w-full h-12 rounded-xl font-bold gap-2" 
-              onClick={() => { navigator.clipboard.writeText(group.inviteLink); toast({ title: "Copiado" }); }}
+              onClick={() => { 
+                const shareText = `¡Hola! Te invito a unirte a nuestro grupo '${group.name}' en Zygos, para llevar la cuenta de los gastos compartidos 💰\n\n${group.inviteLink}`;
+                navigator.clipboard.writeText(shareText); 
+                toast({ title: "Copiado" }); 
+              }}
             >
               <Copy className="h-4 w-4" /> Copiar Enlace
             </Button>

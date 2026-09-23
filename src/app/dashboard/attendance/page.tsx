@@ -74,14 +74,17 @@ function AttendanceContent() {
   }, [firestore, user?.uid]);
   const { data: groups } = useCollection<Group>(groupsQuery);
 
+  const groupIds = groups?.map(g => g.id) || [];
+  const groupIdsKey = groupIds.join(',');
+
   const eventsQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
+    if (!firestore || !user?.uid || groupIds.length === 0) return null;
     return query(
       collection(firestore, 'events'), 
-      where('participantIds', 'array-contains', user.uid),
+      where('groupId', 'in', groupIds),
       orderBy('createdAt', 'desc')
     );
-  }, [firestore, user?.uid]);
+  }, [firestore, user?.uid, groupIdsKey]);
   const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
   const activeEvents = events?.filter(e => !e.isCharged) || [];
