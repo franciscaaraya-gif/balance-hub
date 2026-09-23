@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useUser, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { 
@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Calendar, MapPin, Clock, QrCode, CheckCircle2, 
   Loader2, Zap, AlertCircle, Share2, Coins, 
-  ArrowLeft, Trash2, Plus, Settings2, Info, Copy, CalendarPlus, Archive
+  ArrowLeft, Trash2, Plus, Settings2, Info, Copy, CalendarPlus, Archive, Search
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
@@ -47,6 +47,9 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [isCharging, setIsCharging] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  
+  // Estado para búsqueda de asistentes
+  const [searchTerm, setSearchTerm] = useState("");
 
   const eventRef = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
@@ -168,6 +171,25 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       setShowSettings(false);
     }
   };
+
+  // Filtrado de participantes basado en searchTerm
+  const filteredParticipantIds = useMemo(() => {
+    if (!event?.participantIds) return [];
+    if (!searchTerm) return event.participantIds;
+    return event.participantIds.filter(uid => {
+      const p = profilesMap[uid];
+      return p?.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+             p?.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+  }, [event?.participantIds, searchTerm, profilesMap]);
+
+  const filteredGuests = useMemo(() => {
+    if (!event?.externalGuests) return [];
+    if (!searchTerm) return event.externalGuests;
+    return event.externalGuests.filter(g => 
+      g.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [event?.externalGuests, searchTerm]);
 
   if (eventLoading) {
     return (
@@ -326,24 +348,35 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
       {showManagement && (
         <div className="grid gap-6 md:grid-cols-3">
           <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[2rem]">
-            <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
+            <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-6 gap-4">
               <div>
                 <CardTitle className="text-lg font-headline">Lista de Control</CardTitle>
                 <CardDescription className="text-xs">Todos los anotados entran en la división del costo.</CardDescription>
               </div>
-              {isAdmin && !event.isCharged && (
-                <Button variant="outline" size="sm" className="rounded-xl h-10 border-2" onClick={() => setShowQr(true)}>
-                  <QrCode className="h-4 w-4 mr-2" /> Mostrar QR
-                </Button>
-              )}
+              <div className="flex gap-2 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-64">
+                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                   <Input 
+                      placeholder="Buscar por nombre..." 
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      className="pl-9 h-10 rounded-xl bg-muted/20 border-none text-xs"
+                   />
+                </div>
+                {isAdmin && !event.isCharged && (
+                  <Button variant="outline" size="icon" className="rounded-xl h-10 w-10 border-2" onClick={() => setShowQr(true)}>
+                    <QrCode className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-8">
                 <div className="space-y-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-accent pl-2">Usuarios Registrados</h3>
-                  {event.participantIds.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-4 text-center">Aún no hay participantes confirmados.</p>
-                  ) : event.participantIds.map(uid => {
+                  {filteredParticipantIds.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4 text-center">Sin coincidencias.</p>
+                  ) : filteredParticipantIds.map(uid => {
                     const profile = profilesMap[uid];
                     const isPresent = event.presentIds?.includes(uid);
                     
@@ -431,16 +464,16 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                         </Select>
                       </div>
                       <div className="flex items-end">
-                        <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 w-full sm:w-auto px-4">
+                        <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 w-full sm:auto px-4">
                           <Plus className="h-4 w-4 mr-1" /> Agregar
                         </Button>
                       </div>
                     </div>
                   )}
 
-                  {event.externalGuests?.length === 0 ? (
-                    <p className="text-xs text-muted-foreground py-2 text-center italic">Sin invitados externos.</p>
-                  ) : event.externalGuests?.map((guest, idx) => (
+                  {filteredGuests.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-2 text-center italic">Sin invitados encontrados.</p>
+                  ) : filteredGuests.map((guest, idx) => (
                     <div key={`${guest.name}-${idx}`} className={cn(
                       "flex items-center justify-between p-4 rounded-2xl border transition-all",
                       guest.present ? "bg-secondary/10 border-secondary/20" : "bg-muted/10 border-transparent"

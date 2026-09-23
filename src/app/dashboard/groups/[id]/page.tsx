@@ -28,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
   UserPlus, ScanLine, Loader2, DollarSign, Users, 
-  CreditCard, Copy, ReceiptText, ChevronRight, User, Info, Settings2, Download, Archive, Trash2
+  CreditCard, Copy, ReceiptText, ChevronRight, User, Info, Settings2, Download, Archive, Trash2, Search
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
@@ -57,6 +57,10 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [expenseTitle, setExpenseTitle] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+
+  // Estados para búsqueda de miembros
+  const [memberSearchTerm, setMemberSearchTerm] = useState("");
+  const [receiptSearchTerm, setReceiptSearchTerm] = useState("");
 
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -111,7 +115,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       setSelectedEventId(eventId);
       setExpenseTitle("");
       setExpenseAmount("");
-      setCreditorId(event.creatorId);
+      setCreditorId(event.creditorId || event.creatorId);
 
       const absentIds = event.participantIds.filter(id => !event.presentIds.includes(id));
       const candidates = [...(event.presentIds || [])];
@@ -176,6 +180,15 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const difference = useMemo(() => {
     return totalTarget - manualSum;
   }, [totalTarget, manualSum]);
+
+  // Filtrado de miembros en el modal de gasto
+  const filteredMembers = useMemo(() => {
+    if (!memberSearchTerm) return members;
+    return members.filter(m => 
+      m.displayName?.toLowerCase().includes(memberSearchTerm.toLowerCase()) ||
+      m.email?.toLowerCase().includes(memberSearchTerm.toLowerCase())
+    );
+  }, [members, memberSearchTerm]);
 
   const handleParseItems = () => {
     const lines = pastedText.split('\n').map(l => l.trim()).filter(Boolean);
@@ -248,7 +261,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
           setIsActionLoading(false);
           return;
         }
-        const chargeGroupId = Math.random().toString(36).substring(7);
+        const chargeGroupId = Math.random().toString(35).substring(7);
         for (const uid of Object.keys(manualAmounts)) {
           const amt = parseFloat(manualAmounts[uid]) || 0;
           if (amt > 0) {
@@ -257,13 +270,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
         }
       }
 
-      if (expenseMode === 'event' && selectedEventId) {
-        await updateDoc(doc(firestore, 'events', selectedEventId), { isCharged: true });
-        toast({ title: "¡Evento Liquidado!", description: "El evento quedó cerrado y las deudas asignadas." });
-      } else {
-        toast({ title: "Gasto Registrado Correctamente" });
-      }
-
+      toast({ title: "Gasto Registrado Correctamente" });
       setAddingExpense(false);
       resetExpenseForm();
     } catch (error: any) {
@@ -284,6 +291,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     setPastedText("");
     setParsedItems([]);
     setIncludeTip(false);
+    setMemberSearchTerm("");
   };
 
   const copyAiPrompt = () => {
@@ -529,108 +537,129 @@ nombre_item;cantidad;precio_unitario;precio_total`;
         </div>
 
         <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
-           {receipts?.filter(r => r.status === 'active').map(receipt => (
-            <Card key={receipt.id} className="border-accent/30 shadow-lg rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
-              <CardHeader className="bg-accent/5 pb-3 border-b px-4">
-                <CardTitle className="text-[10px] font-black uppercase tracking-widest text-accent flex items-center gap-2">
-                  <ScanLine className="h-4 w-4" /> Boleta Colaborativa {receipt.includeTip && " + 10% Propina"}
-                </CardTitle>
-                <p className="text-[9px] text-muted-foreground font-medium">Marca lo que consumiste.</p>
-              </CardHeader>
-              <CardContent className="p-0 max-h-[350px] sm:max-h-[450px] overflow-y-auto">
-                <div className="divide-y">
-                  {receipt.items.map(item => (
-                    <div key={item.id} className="p-4 space-y-3 hover:bg-muted/5 transition-colors">
-                      <div className="flex justify-between items-start">
-                        <div className="min-w-0 pr-2">
-                          <p className="text-xs font-bold text-primary truncate">{item.name}</p>
-                          <p className="text-[10px] text-muted-foreground font-medium">${item.price.toFixed(2)}</p>
+           {receipts?.filter(r => r.status === 'active').map(receipt => {
+             // Filtrado de miembros en la boleta activa
+             const filteredMembersForReceipt = members.filter(m => 
+               m.displayName?.toLowerCase().includes(receiptSearchTerm.toLowerCase())
+             );
+             const filteredGuestsForReceipt = receipt.externalGuests?.filter(g => 
+               g.name.toLowerCase().includes(receiptSearchTerm.toLowerCase())
+             ) || [];
+
+             return (
+              <Card key={receipt.id} className="border-accent/30 shadow-lg rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
+                <CardHeader className="bg-accent/5 pb-3 border-b px-4">
+                  <CardTitle className="text-[10px] font-black uppercase tracking-widest text-accent flex items-center gap-2">
+                    <ScanLine className="h-4 w-4" /> Boleta Colaborativa {receipt.includeTip && " + 10% Propina"}
+                  </CardTitle>
+                  <p className="text-[9px] text-muted-foreground font-medium">Marca lo que consumiste.</p>
+                  
+                  {/* Buscador en la boleta */}
+                  <div className="relative mt-3">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <Input 
+                      placeholder="Filtrar por nombre..." 
+                      value={receiptSearchTerm}
+                      onChange={e => setReceiptSearchTerm(e.target.value)}
+                      className="h-8 pl-8 rounded-lg text-[10px] bg-white border-accent/20"
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0 max-h-[350px] sm:max-h-[450px] overflow-y-auto">
+                  <div className="divide-y">
+                    {receipt.items.map(item => (
+                      <div key={item.id} className="p-4 space-y-3 hover:bg-muted/5 transition-colors">
+                        <div className="flex justify-between items-start">
+                          <div className="min-w-0 pr-2">
+                            <p className="text-xs font-bold text-primary truncate">{item.name}</p>
+                            <p className="text-[10px] text-muted-foreground font-medium">${item.price.toFixed(2)}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {filteredMembersForReceipt.map(m => {
+                            const claimKey = `${item.id}_${m.uid}`;
+                            const currentPercentage = receipt.claims?.[claimKey] || 0;
+                            const isClaimed = currentPercentage > 0;
+                            
+                            return (
+                              <div 
+                                key={m.uid} 
+                                className={cn(
+                                  "flex items-center gap-2 p-2 rounded-xl border transition-all active:scale-[0.98]",
+                                  isClaimed ? "bg-accent/5 border-accent/20" : "bg-muted/20 border-transparent"
+                                )}
+                                onClick={() => claimReceiptItem(params.id, receipt.id, item.id, m.uid, isClaimed ? 0 : 100)}
+                              >
+                                <Checkbox 
+                                  checked={isClaimed} 
+                                  onCheckedChange={() => {}} 
+                                  className="h-4 w-4 rounded pointer-events-none" 
+                                />
+                                <span className="font-bold text-[10px] truncate flex-1">{m.displayName?.split(' ')[0]}</span>
+                              </div>
+                            );
+                          })}
+
+                          {filteredGuestsForReceipt.map((guest, gIdx) => {
+                            const guestId = `guest_${gIdx}`;
+                            const claimKey = `${item.id}_${guestId}`;
+                            const currentPercentage = receipt.claims?.[claimKey] || 0;
+                            const isClaimed = currentPercentage > 0;
+                            const responsibleName = members.find(m => m.uid === guest.addedBy)?.displayName?.split(' ')[0] || '...';
+
+                            return (
+                              <div 
+                                key={guestId} 
+                                className={cn(
+                                  "flex items-center gap-2 p-2 rounded-xl border transition-all active:scale-[0.98] border-dashed",
+                                  isClaimed ? "bg-accent/5 border-accent/40" : "bg-muted/10 border-transparent"
+                                )}
+                                onClick={() => claimReceiptItem(params.id, receipt.id, item.id, guestId, isClaimed ? 0 : 100)}
+                              >
+                                <Checkbox 
+                                  checked={isClaimed} 
+                                  onCheckedChange={() => {}} 
+                                  className="h-4 w-4 rounded pointer-events-none" 
+                                />
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-bold text-[10px] truncate">{guest.name}</span>
+                                  <span className="text-[7px] text-muted-foreground font-medium truncate italic">De {responsibleName}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {members.map(m => {
-                          const claimKey = `${item.id}_${m.uid}`;
-                          const currentPercentage = receipt.claims?.[claimKey] || 0;
-                          const isClaimed = currentPercentage > 0;
-                          
-                          return (
-                            <div 
-                              key={m.uid} 
-                              className={cn(
-                                "flex items-center gap-2 p-2 rounded-xl border transition-all active:scale-[0.98]",
-                                isClaimed ? "bg-accent/5 border-accent/20" : "bg-muted/20 border-transparent"
-                              )}
-                              onClick={() => claimReceiptItem(params.id, receipt.id, item.id, m.uid, isClaimed ? 0 : 100)}
-                            >
-                              <Checkbox 
-                                checked={isClaimed} 
-                                onCheckedChange={() => {}} 
-                                className="h-4 w-4 rounded pointer-events-none" 
-                              />
-                              <span className="font-bold text-[10px] truncate flex-1">{m.displayName?.split(' ')[0]}</span>
-                            </div>
-                          );
-                        })}
-
-                        {receipt.externalGuests?.map((guest, gIdx) => {
-                          const guestId = `guest_${gIdx}`;
-                          const claimKey = `${item.id}_${guestId}`;
-                          const currentPercentage = receipt.claims?.[claimKey] || 0;
-                          const isClaimed = currentPercentage > 0;
-                          const responsibleName = members.find(m => m.uid === guest.addedBy)?.displayName?.split(' ')[0] || '...';
-
-                          return (
-                            <div 
-                              key={guestId} 
-                              className={cn(
-                                "flex items-center gap-2 p-2 rounded-xl border transition-all active:scale-[0.98] border-dashed",
-                                isClaimed ? "bg-accent/5 border-accent/40" : "bg-muted/10 border-transparent"
-                              )}
-                              onClick={() => claimReceiptItem(params.id, receipt.id, item.id, guestId, isClaimed ? 0 : 100)}
-                            >
-                              <Checkbox 
-                                checked={isClaimed} 
-                                onCheckedChange={() => {}} 
-                                className="h-4 w-4 rounded pointer-events-none" 
-                              />
-                              <div className="flex flex-col min-w-0">
-                                <span className="font-bold text-[10px] truncate">{guest.name}</span>
-                                <span className="text-[7px] text-muted-foreground font-medium truncate italic">De {responsibleName}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-              <CardFooter className="p-4 bg-accent/5 border-t">
-                {user?.uid === receipt.creditorId ? (
-                  <Button 
-                    className="w-full bg-accent text-[10px] font-black uppercase tracking-widest h-11 rounded-xl shadow-lg" 
-                    onClick={() => finalizeReceipt(
-                      params.id, 
-                      receipt.id, 
-                      receipt.items, 
-                      receipt.claims, 
-                      receipt.creditorId, 
-                      undefined, 
-                      receipt.includeTip,
-                      receipt.externalGuests
-                    )}
-                  >
-                    Finalizar y Cobrar
-                  </Button>
-                ) : (
-                  <div className="w-full text-center py-2 px-4 rounded-xl bg-muted/50 border border-dashed text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
-                    Esperando al acreedor
+                    ))}
                   </div>
-                )}
-              </CardFooter>
-            </Card>
-          ))}
+                </CardContent>
+                <CardFooter className="p-4 bg-accent/5 border-t">
+                  {user?.uid === receipt.creditorId ? (
+                    <Button 
+                      className="w-full bg-accent text-[10px] font-black uppercase tracking-widest h-11 rounded-xl shadow-lg" 
+                      onClick={() => finalizeReceipt(
+                        params.id, 
+                        receipt.id, 
+                        receipt.items, 
+                        receipt.claims, 
+                        receipt.creditorId, 
+                        undefined, 
+                        receipt.includeTip,
+                        receipt.externalGuests
+                      )}
+                    >
+                      Finalizar y Cobrar
+                    </Button>
+                  ) : (
+                    <div className="w-full text-center py-2 px-4 rounded-xl bg-muted/50 border border-dashed text-[9px] font-bold text-muted-foreground uppercase tracking-widest">
+                      Esperando al acreedor
+                    </div>
+                  )}
+                </CardFooter>
+              </Card>
+            );
+          })}
 
           <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
             <CardHeader className="pb-3 border-b px-4">
@@ -716,40 +745,57 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                   <Switch checked={divideEqually} onCheckedChange={(val) => { setDivideEqually(val); }} />
                 </div>
 
-                {divideEqually ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between px-1">
-                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">¿Quiénes entran en la división?</Label>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                      {divideEqually ? "¿Quiénes entran en la división?" : "Montos Manuales"}
+                    </Label>
+                    {divideEqually && (
                       <Button variant="ghost" size="sm" className="h-6 text-[9px] font-black uppercase text-accent hover:bg-accent/5" onClick={handleSelectAll}>
                         {selectedMembers.length === members.length ? "Desmarcar todos" : "Marcar todos"}
                       </Button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-muted/20 p-4 rounded-2xl max-h-48 overflow-y-auto">
-                      {members.map(m => (
+                    )}
+                  </div>
+                  
+                  {/* Buscador de miembros en el modal */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input 
+                      placeholder="Buscar por nombre..." 
+                      value={memberSearchTerm}
+                      onChange={e => setMemberSearchTerm(e.target.value)}
+                      className="h-10 pl-10 rounded-xl text-xs bg-muted/20 border-none"
+                    />
+                  </div>
+
+                  {divideEqually ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-muted/10 p-4 rounded-2xl max-h-48 overflow-y-auto border">
+                      {filteredMembers.map(m => (
                         <div key={m.uid} className={cn("flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98]", selectedMembers.includes(m.uid) ? "bg-white border-primary/20 shadow-sm" : "bg-transparent border-transparent")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
                           <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md pointer-events-none" />
                           <span className="text-[11px] font-bold truncate">{m.displayName}</span>
                         </div>
                       ))}
+                      {filteredMembers.length === 0 && <p className="text-[10px] text-muted-foreground text-center py-2 col-span-full">Sin coincidencias.</p>}
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Montos Manuales</Label>
-                    <div className="space-y-2 bg-muted/20 p-3 sm:p-4 rounded-2xl max-h-60 overflow-y-auto border border-dashed">
-                      {members.map(m => (
-                        <div key={m.uid} className="flex items-center justify-between bg-white p-3 rounded-xl border shadow-sm">
-                          <span className="text-[11px] font-bold truncate pr-2">{m.displayName?.split(' ')[0]}</span>
-                          <Input type="number" placeholder="0.00" className="h-9 w-24 sm:w-32 font-bold text-xs" value={manualAmounts[m.uid] || ""} onChange={(e) => setManualAmounts({ ...manualAmounts, [m.uid]: e.target.value })} />
-                        </div>
-                      ))}
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="space-y-2 bg-muted/10 p-3 sm:p-4 rounded-2xl max-h-60 overflow-y-auto border border-dashed">
+                        {filteredMembers.map(m => (
+                          <div key={m.uid} className="flex items-center justify-between bg-white p-3 rounded-xl border shadow-sm">
+                            <span className="text-[11px] font-bold truncate pr-2">{m.displayName?.split(' ')[0]}</span>
+                            <Input type="number" placeholder="0.00" className="h-9 w-24 sm:w-32 font-bold text-xs" value={manualAmounts[m.uid] || ""} onChange={(e) => setManualAmounts({ ...manualAmounts, [m.uid]: e.target.value })} />
+                          </div>
+                        ))}
+                        {filteredMembers.length === 0 && <p className="text-[10px] text-muted-foreground text-center py-2">Sin coincidencias.</p>}
+                      </div>
+                      <div className={cn("p-4 rounded-xl text-[10px] font-bold flex justify-between items-center shadow-inner", Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")}>
+                        <span>Asignado: ${manualSum.toFixed(2)}</span>
+                        <span>{Math.abs(difference) < 0.01 ? <CheckCircle2 className="h-4 w-4" /> : `Falta: $${difference.toFixed(2)}`}</span>
+                      </div>
                     </div>
-                    <div className={cn("p-4 rounded-xl text-[10px] font-bold flex justify-between items-center shadow-inner", Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")}>
-                      <span>Asignado: ${manualSum.toFixed(2)}</span>
-                      <span>{Math.abs(difference) < 0.01 ? <CheckCircle2 className="h-4 w-4" /> : `Falta: $${difference.toFixed(2)}`}</span>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </>
             ) : (
               <div className="space-y-4">
