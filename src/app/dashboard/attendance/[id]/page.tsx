@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, use } from "react";
@@ -10,7 +11,8 @@ import {
   removeExternalGuest, 
   addExternalGuest, 
   removeParticipantFromEvent,
-  chargeEventToGroup
+  chargeEventToGroup,
+  addParticipantToEvent
 } from "@/lib/firebase/store";
 import { Event, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -23,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Calendar, MapPin, Clock, QrCode, CheckCircle2, 
   Loader2, Zap, AlertCircle, Share2, Coins, 
-  ArrowLeft, Trash2, Plus, Settings2, Info, Copy
+  ArrowLeft, Trash2, Plus, Settings2, Info, Copy, CalendarPlus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
@@ -41,6 +43,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const [selectedResponsibleId, setSelectedResponsibleId] = useState<string>("");
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
   const [isCharging, setIsCharging] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   const eventRef = useMemoFirebase(() => {
     if (!firestore || !params.id || !user?.uid) return null;
@@ -91,6 +94,55 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     router.push(`/dashboard/attendance?${params.toString()}`);
   };
 
+  const handleDownloadIcs = () => {
+    if (!event) return;
+
+    const [year, month, day] = event.date.split('-');
+    const [hour, minute] = event.time.split(':');
+    const startStr = `${year.replace(/-/g, '')}${month}${day}T${hour}${minute}00`;
+    
+    // Asumimos 2 horas de duración por defecto
+    const endHour = (parseInt(hour) + 2).toString().padStart(2, '0');
+    const endStr = `${year.replace(/-/g, '')}${month}${day}T${endHour}${minute}00`;
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Zygos//NONSGML v1.0//EN',
+      'BEGIN:VEVENT',
+      `DTSTART:${startStr}`,
+      `DTEND:${endStr}`,
+      `SUMMARY:${event.title}`,
+      `LOCATION:${event.location || 'Presencial'}`,
+      `DESCRIPTION:${event.costConcept || 'Costo compartido en Zygos'}`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `${event.title.replace(/\s+/g, '_')}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: "Calendario generado", description: "El archivo .ics se ha descargado." });
+  };
+
+  const handleJoin = async () => {
+    if (!user || !event) return;
+    setIsJoining(true);
+    try {
+      await addParticipantToEvent(event.id, user.uid);
+      toast({ title: "¡Te has unido!", description: "Ya eres parte de este evento." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error al unirse", description: e.message });
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   if (eventLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
@@ -114,12 +166,14 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     );
   }
 
+  const isParticipant = event.participantIds?.includes(user?.uid || '');
+  const isAdmin = event.creatorId === user?.uid;
+  const showManagement = isParticipant || isAdmin;
+
   const totalParticipants = event.participantIds?.length || 0;
   const totalGuests = event.externalGuests?.length || 0;
   const totalHeads = totalParticipants + totalGuests;
   const costPerPerson = totalHeads > 0 ? event.totalCost / totalHeads : 0;
-  
-  const isAdmin = event.creatorId === user?.uid;
 
   const handleRemoveUser = async (uid: string) => {
     if (event.isCharged) return;
@@ -165,10 +219,13 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20 px-2 sm:px-4">
-      <div className="bg-primary p-6 sm:p-8 rounded-[2rem] text-primary-foreground shadow-xl">
-        <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center">
+      <div className="bg-primary p-6 sm:p-8 rounded-[2rem] text-primary-foreground shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-6 opacity-10">
+           <Zap className="h-32 w-32" />
+        </div>
+        <div className="flex flex-col md:flex-row justify-between gap-6 items-start md:items-center relative z-10">
           <div className="space-y-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-accent text-white px-3 font-bold">{event.date}</Badge>
               <Button 
                 variant="ghost" 
@@ -176,17 +233,25 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                 className="h-7 rounded-lg bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white uppercase tracking-tighter"
                 onClick={handleDuplicate}
               >
-                <Copy className="h-3 w-3 mr-1" /> Duplicar Evento
+                <Copy className="h-3 w-3 mr-1" /> Duplicar
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 rounded-lg bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white uppercase tracking-tighter"
+                onClick={handleDownloadIcs}
+              >
+                <CalendarPlus className="h-3 w-3 mr-1" /> Calendario
               </Button>
             </div>
             <h1 className="text-3xl font-headline font-bold">{event.title}</h1>
-            <p className="text-sm opacity-80 font-medium">Concepto del Costo: <span className="underline font-bold">{event.costConcept || "No especificado"}</span></p>
+            <p className="text-sm opacity-80 font-medium">Concepto: <span className="underline font-bold">{event.costConcept || "No especificado"}</span></p>
             <div className="flex gap-4 text-xs opacity-60 pt-2">
               <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {event.location || "Presencial"}</span>
               <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {event.time}</span>
             </div>
           </div>
-          <div className="bg-white/10 p-5 rounded-2xl text-center min-w-[160px]">
+          <div className="bg-white/10 p-5 rounded-2xl text-center min-w-[160px] border border-white/5 backdrop-blur-sm">
             <p className="text-[10px] uppercase font-black opacity-70 tracking-widest">Cuota p/p (Fija)</p>
             <p className="text-4xl font-headline font-bold text-accent">${costPerPerson.toFixed(2)}</p>
             <p className="text-[9px] mt-1 font-bold uppercase tracking-tight text-white/90">Dividido en {totalHeads} Cabezas</p>
@@ -194,44 +259,156 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[2rem]">
-          <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
-            <div>
-              <CardTitle className="text-lg font-headline">Lista de Control</CardTitle>
-              <CardDescription className="text-xs">Todos los anotados entran en la división del costo.</CardDescription>
+      {!showManagement ? (
+        <Card className="shadow-2xl border-none bg-white rounded-[2rem] overflow-hidden">
+          <CardHeader className="text-center py-10 space-y-4">
+            <div className="mx-auto bg-primary/10 p-6 rounded-full w-fit">
+              <Calendar className="h-12 w-12 text-primary" />
             </div>
-            {isAdmin && !event.isCharged && (
-              <Button variant="outline" size="sm" className="rounded-xl h-10 border-2" onClick={() => setShowQr(true)}>
-                <QrCode className="h-4 w-4 mr-2" /> Mostrar QR
-              </Button>
-            )}
+            <div>
+              <CardTitle className="text-2xl font-headline font-bold">¿Te anotas al evento?</CardTitle>
+              <CardDescription className="max-w-sm mx-auto pt-2">
+                Como miembro del grupo, puedes unirte a esta fecha. Al hacerlo, entrarás en la división del costo automáticamente.
+              </CardDescription>
+            </div>
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="space-y-8">
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-accent pl-2">Usuarios Registrados</h3>
-                {event.participantIds.map(uid => {
-                  const profile = profilesMap[uid];
-                  const isPresent = event.presentIds?.includes(uid);
+          <CardContent className="pb-12 text-center">
+            <Button 
+              className="w-full max-w-sm h-14 rounded-2xl bg-accent hover:bg-accent/90 text-lg font-bold shadow-xl shadow-accent/20"
+              onClick={handleJoin}
+              disabled={isJoining}
+            >
+              {isJoining ? <Loader2 className="animate-spin" /> : "Confirmar mi asistencia (RSVP)"}
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-3">
+          <Card className="md:col-span-2 shadow-sm border-none bg-white rounded-[2rem]">
+            <CardHeader className="flex flex-row items-center justify-between border-b pb-6">
+              <div>
+                <CardTitle className="text-lg font-headline">Lista de Control</CardTitle>
+                <CardDescription className="text-xs">Todos los anotados entran en la división del costo.</CardDescription>
+              </div>
+              {isAdmin && !event.isCharged && (
+                <Button variant="outline" size="sm" className="rounded-xl h-10 border-2" onClick={() => setShowQr(true)}>
+                  <QrCode className="h-4 w-4 mr-2" /> Mostrar QR
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="space-y-8">
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-accent pl-2">Usuarios Registrados</h3>
+                  {event.participantIds.map(uid => {
+                    const profile = profilesMap[uid];
+                    const isPresent = event.presentIds?.includes(uid);
+                    
+                    return (
+                      <div key={uid} className={cn(
+                        "flex items-center justify-between p-4 rounded-2xl border transition-all",
+                        isPresent ? "bg-emerald-50/60 border-emerald-100" : "bg-muted/10 border-transparent"
+                      )}>
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
+                            {profile?.displayName?.[0] || profile?.email?.[0] || "U"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold truncate pr-2">{profile?.displayName || profile?.email || `Usuario (${uid.substring(0, 5)})`}</p>
+                            <span className={cn(
+                              "text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter inline-block mt-0.5", 
+                              isPresent ? "bg-emerald-500 text-white" : "bg-muted/60 text-muted-foreground"
+                            )}>
+                              {isPresent ? "Presente" : "Confirmado"}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {isAdmin && !event.isCharged && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-xl"
+                              onClick={() => handleRemoveUser(uid)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                          
+                          {!event.isCharged && (
+                            <Button 
+                              variant={isPresent ? "default" : "outline"} 
+                              size="sm"
+                              className={cn(
+                                "rounded-xl text-[10px] font-black h-9 px-3", 
+                                isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none text-white" : "border-primary/20 text-primary"
+                              )}
+                              onClick={() => toggleAttendance(event.id, uid, !isPresent)}
+                            >
+                              {isPresent ? "Quitar Asistencia" : "Marcar Llegada"}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-secondary pl-2">Invitados (+1)</h3>
                   
-                  return (
-                    <div key={uid} className={cn(
+                  {isAdmin && !event.isCharged && (
+                    <div className="flex flex-col sm:flex-row gap-2 p-3 bg-muted/20 rounded-2xl space-y-2 sm:space-y-0">
+                      <div className="flex-1">
+                        <Label className="text-[9px] uppercase font-black mb-1 block px-1">Nombre del Invitado</Label>
+                        <Input 
+                          placeholder="Nombre del invitado" 
+                          value={newGuestName}
+                          onChange={(e) => setNewGuestName(e.target.value)}
+                          className="h-10 rounded-xl bg-white text-xs"
+                        />
+                      </div>
+                      <div className="w-full sm:w-48">
+                        <Label className="text-[9px] uppercase font-black mb-1 block px-1">Responsable del Pago</Label>
+                        <Select value={selectedResponsibleId} onValueChange={setSelectedResponsibleId}>
+                          <SelectTrigger className="h-10 rounded-xl bg-white text-xs">
+                            <SelectValue placeholder="Seleccionar responsable" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {event.participantIds.map(uid => {
+                              const p = profilesMap[uid];
+                              return (
+                                <SelectItem key={uid} value={uid} className="text-xs">
+                                  {p?.displayName || p?.email || `Usuario (${uid.substring(0, 5)})`}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex items-end">
+                        <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 w-full sm:w-auto px-4">
+                          <Plus className="h-4 w-4 mr-1" /> Agregar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {event.externalGuests?.map((guest, idx) => (
+                    <div key={`${guest.name}-${idx}`} className={cn(
                       "flex items-center justify-between p-4 rounded-2xl border transition-all",
-                      isPresent ? "bg-emerald-50/60 border-emerald-100" : "bg-muted/10 border-transparent"
+                      guest.present ? "bg-secondary/10 border-secondary/20" : "bg-muted/10 border-transparent"
                     )}>
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary text-sm">
-                          {profile?.displayName?.[0] || profile?.email?.[0] || "U"}
+                        <div className="h-9 w-9 rounded-full bg-secondary/10 flex items-center justify-center font-bold text-secondary text-sm">
+                          {guest.name[0]}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-bold truncate pr-2">{profile?.displayName || profile?.email || `Usuario (${uid.substring(0, 5)})`}</p>
-                          <span className={cn(
-                            "text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter inline-block mt-0.5", 
-                            isPresent ? "bg-emerald-500 text-white" : "bg-muted/60 text-muted-foreground"
-                          )}>
-                            {isPresent ? "Presente" : "Confirmado"}
-                          </span>
+                          <p className="text-sm font-bold truncate pr-2">{guest.name}</p>
+                          <p className="text-[8px] text-muted-foreground uppercase font-black">
+                            Responsable: {profilesMap[guest.addedBy]?.displayName || profilesMap[guest.addedBy]?.email || `Usuario (${guest.addedBy.substring(0, 5)})`}
+                          </p>
                         </div>
                       </div>
                       
@@ -241,7 +418,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                             variant="ghost" 
                             size="icon" 
                             className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-xl"
-                            onClick={() => handleRemoveUser(uid)}
+                            onClick={() => removeExternalGuest(event.id, guest)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -249,186 +426,99 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                         
                         {!event.isCharged && (
                           <Button 
-                            variant={isPresent ? "default" : "outline"} 
+                            variant={guest.present ? "secondary" : "outline"} 
                             size="sm"
                             className={cn(
                               "rounded-xl text-[10px] font-black h-9 px-3", 
-                              isPresent ? "bg-emerald-500 hover:bg-emerald-600 border-none text-white" : "border-primary/20 text-primary"
+                              guest.present ? "bg-secondary text-white hover:bg-secondary/90 border-none" : "border-secondary/20 text-secondary"
                             )}
-                            onClick={() => toggleAttendance(event.id, uid, !isPresent)}
+                            onClick={() => toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present)}
                           >
-                            {isPresent ? "Quitar Asistencia" : "Marcar Llegada"}
+                            {guest.present ? "Presente" : "Confirmado"}
                           </Button>
                         )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground border-l-2 border-secondary pl-2">Invitados (+1)</h3>
-                
-                {isAdmin && !event.isCharged && (
-                  <div className="flex flex-col sm:flex-row gap-2 p-3 bg-muted/20 rounded-2xl space-y-2 sm:space-y-0">
-                    <div className="flex-1">
-                      <Label className="text-[9px] uppercase font-black mb-1 block px-1">Nombre del Invitado</Label>
-                      <Input 
-                        placeholder="Nombre del invitado" 
-                        value={newGuestName}
-                        onChange={(e) => setNewGuestName(e.target.value)}
-                        className="h-10 rounded-xl bg-white text-xs"
-                      />
-                    </div>
-                    <div className="w-full sm:w-48">
-                      <Label className="text-[9px] uppercase font-black mb-1 block px-1">Responsable del Pago</Label>
-                      <Select value={selectedResponsibleId} onValueChange={setSelectedResponsibleId}>
-                        <SelectTrigger className="h-10 rounded-xl bg-white text-xs">
-                          <SelectValue placeholder="Seleccionar responsable" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {event.participantIds.map(uid => {
-                            const p = profilesMap[uid];
-                            return (
-                              <SelectItem key={uid} value={uid} className="text-xs">
-                                {p?.displayName || p?.email || `Usuario (${uid.substring(0, 5)})`}
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-end">
-                      <Button size="sm" onClick={handleAddGuest} className="rounded-xl h-10 w-full sm:w-auto px-4">
-                        <Plus className="h-4 w-4 mr-1" /> Agregar
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {event.externalGuests?.map((guest, idx) => (
-                  <div key={`${guest.name}-${idx}`} className={cn(
-                    "flex items-center justify-between p-4 rounded-2xl border transition-all",
-                    guest.present ? "bg-secondary/10 border-secondary/20" : "bg-muted/10 border-transparent"
-                  )}>
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-secondary/10 flex items-center justify-center font-bold text-secondary text-sm">
-                        {guest.name[0]}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-bold truncate pr-2">{guest.name}</p>
-                        <p className="text-[8px] text-muted-foreground uppercase font-black">
-                          Responsable: {profilesMap[guest.addedBy]?.displayName || profilesMap[guest.addedBy]?.email || `Usuario (${guest.addedBy.substring(0, 5)})`}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      {isAdmin && !event.isCharged && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-destructive hover:bg-destructive/10 rounded-xl"
-                          onClick={() => removeExternalGuest(event.id, guest)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                      
-                      {!event.isCharged && (
-                        <Button 
-                          variant={guest.present ? "secondary" : "outline"} 
-                          size="sm"
-                          className={cn(
-                            "rounded-xl text-[10px] font-black h-9 px-3", 
-                            guest.present ? "bg-secondary text-white hover:bg-secondary/90 border-none" : "border-secondary/20 text-secondary"
-                          )}
-                          onClick={() => toggleGuestPresence(event.id, guest.name, guest.addedBy, !guest.present)}
-                        >
-                          {guest.present ? "Presente" : "Confirmado"}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6">
-          <Card className="border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
-            <CardHeader className="border-b bg-muted/10">
-              <CardTitle className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                <Zap className="h-4 w-4 text-accent" /> Resumen de Cobro
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4 space-y-4">
-              <div className="bg-primary/5 p-4 rounded-2xl flex items-start gap-3">
-                <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">
-                  En Zygos el costo se divide entre todos los anotados. La única forma de no pagar es ser eliminado de la lista por el administrador.
-                </p>
-              </div>
-
-              <div className="pt-2 border-t space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground font-medium">Miembros Anotados:</span>
-                  <span className="font-bold text-primary">{totalParticipants}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground font-medium">Invitados Totales:</span>
-                  <span className="font-bold text-secondary">{totalGuests}</span>
-                </div>
-                <div className="flex justify-between border-t pt-2 font-bold">
-                  <span>Costo Total:</span>
-                  <span className="text-primary font-headline">${event.totalCost.toFixed(2)}</span>
+                  ))}
                 </div>
               </div>
             </CardContent>
-            {isAdmin && (
-              <CardFooter className="bg-muted/5 pt-4 flex flex-col gap-2">
-                <Button 
-                  disabled={event.isCharged || isCharging}
-                  className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
-                  onClick={handleOneClickCharge}
-                >
-                  {isCharging ? <Loader2 className="animate-spin" /> : (event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar</>)}
-                </Button>
-                
-                {!event.isCharged && (
-                  <Button 
-                    variant="ghost" 
-                    className="w-full h-10 text-[9px] font-black uppercase tracking-widest gap-2 text-muted-foreground hover:text-primary" 
-                    onClick={handleGoToAdjustments}
-                  >
-                    <Settings2 className="h-3 w-3" /> Ajustar antes de cobrar
-                  </Button>
-                )}
-              </CardFooter>
-            )}
           </Card>
-          
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-3 border">
-             <div className="flex items-center gap-2 text-primary font-bold">
-               <Share2 className="h-4 w-4 text-accent" />
-               <span className="text-xs font-black uppercase tracking-widest">Enlace Invitación</span>
-             </div>
-             <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">Comparte este link. Los que se anoten pagarán su parte por igual al liquidar.</p>
-             <Button 
-               variant="outline" 
-               className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
-               onClick={() => { 
-                 const shareText = `⚽ ¡Partido armado! ${event.title}, el ${event.date} a las ${event.time}. Confirma tu asistencia acá: ${event.shareLink}`;
-                 navigator.clipboard.writeText(shareText); 
-                 toast({ title: "Link copiado" }); 
-               }}
-             >
-               Copiar Enlace
-             </Button>
+
+          <div className="space-y-6">
+            <Card className="border-none shadow-sm rounded-[2rem] overflow-hidden bg-white">
+              <CardHeader className="border-b bg-muted/10">
+                <CardTitle className="text-xs font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-accent" /> Resumen de Cobro
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div className="bg-primary/5 p-4 rounded-2xl flex items-start gap-3">
+                  <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">
+                    En Zygos el costo se divide entre todos los anotados. La única forma de no pagar es ser eliminado de la lista por el administrador.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-medium">Miembros Anotados:</span>
+                    <span className="font-bold text-primary">{totalParticipants}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-medium">Invitados Totales:</span>
+                    <span className="font-bold text-secondary">{totalGuests}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 font-bold">
+                    <span>Costo Total:</span>
+                    <span className="text-primary font-headline">${event.totalCost.toFixed(2)}</span>
+                  </div>
+                </div>
+              </CardContent>
+              {isAdmin && (
+                <CardFooter className="bg-muted/5 pt-4 flex flex-col gap-2">
+                  <Button 
+                    disabled={event.isCharged || isCharging}
+                    className="w-full h-12 rounded-2xl bg-accent hover:bg-accent/90 text-[11px] font-black uppercase tracking-widest gap-2 shadow-lg text-white" 
+                    onClick={handleOneClickCharge}
+                  >
+                    {isCharging ? <Loader2 className="animate-spin" /> : (event.isCharged ? "Evento Ya Liquidado" : <><Coins className="h-4 w-4" /> Finalizar y Cobrar</>)}
+                  </Button>
+                  
+                  {!event.isCharged && (
+                    <Button 
+                      variant="ghost" 
+                      className="w-full h-10 text-[9px] font-black uppercase tracking-widest gap-2 text-muted-foreground hover:text-primary" 
+                      onClick={handleGoToAdjustments}
+                    >
+                      <Settings2 className="h-3 w-3" /> Ajustar antes de cobrar
+                    </Button>
+                  )}
+                </CardFooter>
+              )}
+            </Card>
+            
+            <div className="bg-white p-6 rounded-[2rem] shadow-sm space-y-3 border">
+               <div className="flex items-center gap-2 text-primary font-bold">
+                 <Share2 className="h-4 w-4 text-accent" />
+                 <span className="text-xs font-black uppercase tracking-widest">Enlace Invitación</span>
+               </div>
+               <p className="text-[10px] text-muted-foreground leading-relaxed font-medium">Comparte este link. Los que se anoten pagarán su parte por igual al liquidar.</p>
+               <Button 
+                 variant="outline" 
+                 className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
+                 onClick={() => { 
+                   const shareText = `⚽ ¡Partido armado! ${event.title}, el ${event.date} a las ${event.time}. Confirma tu asistencia acá: ${event.shareLink}`;
+                   navigator.clipboard.writeText(shareText); 
+                   toast({ title: "Link copiado" }); 
+                 }}
+               >
+                 Copiar Enlace
+               </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <Dialog open={showQr} onOpenChange={setShowQr}>
         <DialogContent className="max-w-md rounded-[2.5rem] p-8 text-center border-none">
