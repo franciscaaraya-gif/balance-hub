@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from "react";
@@ -14,13 +13,14 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   PlusCircle, Calendar, Users, ChevronRight, 
-  Loader2, User, Clock, MapPin, Archive
+  Loader2, User, Clock, MapPin, Archive, ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where } from "firebase/firestore";
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useSearchParams } from "next/navigation";
+
+const INITIAL_VISIBLE_COUNT = 4;
 
 function AttendanceContent() {
   const { user, isUserLoading } = useUser();
@@ -31,7 +31,8 @@ function AttendanceContent() {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [groupMembers, setGroupMembers] = useState<UserProfile[]>([]);
-  
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
+
   const [formData, setFormData] = useState({ 
     title: "", 
     date: "", 
@@ -95,8 +96,6 @@ function AttendanceContent() {
     }
   }, [formData.groupId, groups]);
 
-  // ESTABILIZACIÓN CRÍTICA: Ordenamos los IDs alfabéticamente para que groupIdsKey sea estable
-  // aunque Firestore devuelva los grupos en distinto orden (previniendo reinicios de listener).
   const groupIds = useMemo(() => {
     if (!groups) return [];
     return groups.map(g => g.id).sort();
@@ -121,11 +120,16 @@ function AttendanceContent() {
       .sort((a, b) => {
         const timeA = a.createdAt || 0;
         const timeB = b.createdAt || 0;
-        // Si tienen el mismo timestamp, usar el ID como desempate estable
         if (timeB === timeA) return b.id.localeCompare(a.id);
         return timeB - timeA;
       });
   }, [rawEvents]);
+
+  const hasMoreEvents = activeEvents.length > visibleCount;
+
+  const handleLoadMore = () => {
+    setVisibleCount(prev => prev + 4);
+  };
 
   const handleCreate = async () => {
     if (!formData.title || !formData.date || !formData.totalCost || !formData.costConcept || !formData.groupId || !formData.creditorId || !user) {
@@ -296,24 +300,27 @@ function AttendanceContent() {
              <Calendar className="h-12 w-12 mb-4 text-primary" />
              <p className="font-bold text-[10px] uppercase tracking-widest">Sin eventos activos</p>
           </div>
-        ) : activeEvents.length <= 4 ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {activeEvents.map(event => <EventCard key={event.id} event={event} />)}
-          </div>
         ) : (
-          <Carousel opts={{ align: "start" }} className="w-full">
-            <CarouselContent className="-ml-4">
-              {activeEvents.map((event) => (
-                <CarouselItem key={event.id} className="pl-4 sm:basis-1/2 lg:basis-1/4">
-                  <EventCard event={event} />
-                </CarouselItem>
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {activeEvents.slice(0, visibleCount).map(event => (
+                <EventCard key={event.id} event={event} />
               ))}
-            </CarouselContent>
-            <div className="hidden sm:block">
-              <CarouselPrevious className="-left-6 rounded-xl h-10 w-10 border-2" />
-              <CarouselNext className="-right-6 rounded-xl h-10 w-10 border-2" />
             </div>
-          </Carousel>
+
+            {hasMoreEvents && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  onClick={handleLoadMore}
+                  variant="outline"
+                  className="rounded-full px-6 py-5 text-xs font-bold uppercase tracking-wider border-2 hover:bg-accent hover:text-white transition-all flex items-center gap-2"
+                >
+                  <span>Cargar más ({activeEvents.length - visibleCount})</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
