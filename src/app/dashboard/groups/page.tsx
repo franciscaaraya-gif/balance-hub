@@ -1,19 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
-import { createGroup } from "@/lib/firebase/store";
-import { Group } from "@/lib/types";
+import { useUser, useFirestore, useCollection, useDoc, useMemoFirebase } from "@/firebase";
+import { createGroup, togglePinGroup } from "@/lib/firebase/store";
+import { Group, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Users, ChevronRight, Loader2 } from "lucide-react";
+import { PlusCircle, Users, ChevronRight, Loader2, Pin, PinOff } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where } from "firebase/firestore";
+import { collection, query, where, doc } from "firebase/firestore";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
+import { cn } from "@/lib/utils";
 
 export default function GroupsPage() {
   const { user, isUserLoading } = useUser();
@@ -22,6 +23,12 @@ export default function GroupsPage() {
 
   const [newGroupName, setNewGroupName] = useState("");
   const [open, setOpen] = useState(false);
+
+  const profileRef = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return doc(firestore, 'userProfiles', user.uid);
+  }, [firestore, user?.uid]);
+  const { data: profile } = useDoc<UserProfile>(profileRef);
 
   const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -38,6 +45,22 @@ export default function GroupsPage() {
       setOpen(false);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
+    }
+  };
+
+  const handleTogglePin = async (e: React.MouseEvent, groupId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!user) return;
+    try {
+      await togglePinGroup(user.uid, groupId);
+      const isCurrentlyPinned = profile?.pinnedGroupIds?.includes(groupId);
+      toast({ 
+        title: isCurrentlyPinned ? "Atajo eliminado" : "Atajo fijado", 
+        description: isCurrentlyPinned ? "El grupo ya no aparecerá en accesos rápidos." : "Este grupo aparecerá en tu pantalla principal." 
+      });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Límite alcanzado", description: err.message });
     }
   };
 
@@ -82,14 +105,25 @@ export default function GroupsPage() {
           </div>
         ) : myGroups && myGroups.length <= 4 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {myGroups.map(g => <GroupCard key={g.id} g={g} />)}
+            {myGroups.map(g => (
+              <GroupCard 
+                key={g.id} 
+                g={g} 
+                isPinned={profile?.pinnedGroupIds?.includes(g.id) || false} 
+                onTogglePin={(e) => handleTogglePin(e, g.id)}
+              />
+            ))}
           </div>
         ) : (
           <Carousel opts={{ align: "start" }} className="w-full">
             <CarouselContent className="-ml-4">
               {myGroups?.map((g) => (
                 <CarouselItem key={g.id} className="pl-4 sm:basis-1/2 lg:basis-1/4">
-                  <GroupCard g={g} />
+                  <GroupCard 
+                    g={g} 
+                    isPinned={profile?.pinnedGroupIds?.includes(g.id) || false} 
+                    onTogglePin={(e) => handleTogglePin(e, g.id)}
+                  />
                 </CarouselItem>
               ))}
             </CarouselContent>
@@ -104,14 +138,25 @@ export default function GroupsPage() {
   );
 }
 
-function GroupCard({ g }: { g: Group }) {
+function GroupCard({ g, isPinned, onTogglePin }: { g: Group; isPinned: boolean; onTogglePin: (e: React.MouseEvent) => void }) {
   return (
     <Link href={`/dashboard/groups/${g.id}`}>
-      <Card className="hover:shadow-lg transition-all border-none bg-white rounded-[2rem] overflow-hidden group shadow-sm border border-primary/5 h-full flex flex-col justify-between">
+      <Card className="hover:shadow-lg transition-all border-none bg-white rounded-[2rem] overflow-hidden group shadow-sm border border-primary/5 h-full flex flex-col justify-between relative">
         <div>
-          <div className="h-1.5 bg-primary w-full" />
-          <CardHeader className="pb-4">
-            <CardTitle className="mt-2 text-lg font-headline group-hover:text-primary transition-colors truncate">{g.name}</CardTitle>
+          <div className={cn("h-1.5 w-full", isPinned ? "bg-accent" : "bg-primary")} />
+          <CardHeader className="pb-4 flex flex-row items-start justify-between">
+            <CardTitle className="mt-2 text-lg font-headline group-hover:text-primary transition-colors truncate pr-8">{g.name}</CardTitle>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className={cn(
+                "h-8 w-8 rounded-full transition-all shrink-0", 
+                isPinned ? "text-accent bg-accent/10" : "text-muted-foreground hover:bg-muted"
+              )}
+              onClick={onTogglePin}
+            >
+              {isPinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+            </Button>
           </CardHeader>
         </div>
         <CardContent>

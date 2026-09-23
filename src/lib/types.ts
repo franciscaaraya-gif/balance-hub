@@ -6,6 +6,7 @@ export interface UserProfile {
   displayName: string | null;
   role: UserRole;
   transferDetails?: string;
+  pinnedGroupIds?: string[];
   createdAt: number;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { useUser, useFirestore, useCollection, useDoc, useMemoFirebase } from "@/firebase";
 import { 
   getGroupMembersDetails, 
   reportPayment, 
@@ -17,11 +17,11 @@ import {
   Users, ChevronRight, Loader2, 
   AlertCircle, Clock, CheckCircle2, 
   CreditCard, User, Send, ArrowUpRight, ArrowDownLeft, Calendar,
-  ChevronDown, ChevronUp, Zap, Sparkles
+  ChevronDown, ChevronUp, Zap, Sparkles, Pin
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where, collectionGroup, orderBy } from "firebase/firestore";
+import { collection, query, where, collectionGroup, orderBy, doc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
@@ -34,11 +34,22 @@ export default function Dashboard() {
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const profileRef = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return doc(firestore, 'userProfiles', user.uid);
+  }, [firestore, user?.uid]);
+  const { data: profile } = useDoc<UserProfile>(profileRef);
+
   const myGroupsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
     return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
   const { data: myGroups } = useCollection<Group>(myGroupsQuery);
+
+  const pinnedGroups = useMemo(() => {
+    if (!myGroups || !profile?.pinnedGroupIds) return [];
+    return myGroups.filter(g => profile.pinnedGroupIds?.includes(g.id));
+  }, [myGroups, profile?.pinnedGroupIds]);
 
   const groupIds = myGroups?.map(g => g.id) || [];
   const groupIdsKey = groupIds.join(',');
@@ -189,19 +200,39 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
-            <Link href="/dashboard/groups">
-              <Users className="h-4 w-4 text-primary" />
-              <span className="text-[10px] font-black uppercase tracking-tight text-primary">Mis grupos</span>
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
-            <Link href="/dashboard/attendance">
-              <Calendar className="h-4 w-4 text-accent" />
-              <span className="text-[10px] font-black uppercase tracking-tight text-primary">Eventos</span>
-            </Link>
-          </Button>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
+              <Link href="/dashboard/groups">
+                <Users className="h-4 w-4 text-primary" />
+                <span className="text-[10px] font-black uppercase tracking-tight text-primary">Mis grupos</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
+              <Link href="/dashboard/attendance">
+                <Calendar className="h-4 w-4 text-accent" />
+                <span className="text-[10px] font-black uppercase tracking-tight text-primary">Eventos</span>
+              </Link>
+            </Button>
+          </div>
+
+          {pinnedGroups.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2 px-1">
+                <Pin className="h-3 w-3 text-accent" /> Accesos Rápidos
+              </h2>
+              <div className="grid grid-cols-2 gap-3">
+                {pinnedGroups.map(g => (
+                  <Link key={g.id} href={`/dashboard/groups/${g.id}`} className="bg-white p-4 rounded-2xl border border-primary/5 shadow-sm active:scale-[0.98] transition-all">
+                    <p className="text-xs font-bold text-primary truncate">{g.name}</p>
+                    <p className="text-[9px] text-muted-foreground mt-1 flex items-center gap-1 uppercase font-black">
+                      Ir <ChevronRight className="h-2 w-2" />
+                    </p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -223,6 +254,24 @@ export default function Dashboard() {
         </div>
 
         <div className="space-y-6">
+          {pinnedGroups.length > 0 && (
+            <Card className="border-accent/20 border-2 shadow-sm bg-white rounded-[2rem] overflow-hidden">
+              <CardHeader className="pb-3 border-b bg-accent/5">
+                <CardTitle className="text-sm font-black uppercase tracking-widest text-accent flex items-center gap-2">
+                  <Pin className="h-4 w-4" /> Accesos Rápidos
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-3">
+                {pinnedGroups.map(g => (
+                  <Link key={g.id} href={`/dashboard/groups/${g.id}`} className="flex items-center justify-between p-3 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
+                    <span className="text-xs font-bold text-primary truncate pr-2">{g.name}</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-none shadow-md bg-white rounded-[2rem] overflow-hidden">
             <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
@@ -545,7 +594,7 @@ function WalletSection({
                     <div className="space-y-2 pl-2 border-l-2 border-accent/20">
                       {group.debts.map((debt: any) => (
                         <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
-                           <div className="min-w-0 pr-2">
+                           <div className="min-0 pr-2">
                              <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
                              <p className="font-bold truncate">{debt.description}</p>
                            </div>

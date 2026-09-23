@@ -25,6 +25,7 @@ export const createUserProfile = async (uid: string, email: string, displayName:
     email,
     displayName,
     role: 'user',
+    pinnedGroupIds: [],
     createdAt: Date.now(),
   };
   
@@ -50,6 +51,25 @@ export const updateUserProfile = async (uid: string, data: Partial<UserProfile>)
   });
 };
 
+export const togglePinGroup = async (userId: string, groupId: string) => {
+  const userRef = doc(db, "userProfiles", userId);
+  const userSnap = await getDoc(userRef);
+  if (!userSnap.exists()) return;
+  const userData = userSnap.data() as UserProfile;
+  let pinned = userData.pinnedGroupIds || [];
+  
+  if (pinned.includes(groupId)) {
+    pinned = pinned.filter(id => id !== groupId);
+  } else {
+    if (pinned.length >= 2) {
+      throw new Error("Límite de 2 accesos rápidos alcanzado. Desfija un grupo primero.");
+    }
+    pinned.push(groupId);
+  }
+  
+  return updateDoc(userRef, { pinnedGroupIds: pinned });
+};
+
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   const userRef = doc(db, "userProfiles", uid);
   try {
@@ -62,6 +82,7 @@ export const getUserProfile = async (uid: string): Promise<UserProfile | null> =
         displayName: data.displayName || "Usuario",
         role: data.role || "user",
         transferDetails: data.transferDetails || "",
+        pinnedGroupIds: data.pinnedGroupIds || [],
         createdAt: data.createdAt || Date.now()
       };
     }
