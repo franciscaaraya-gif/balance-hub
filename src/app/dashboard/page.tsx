@@ -702,7 +702,20 @@ function WalletSection({
                                 <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0"><User className="h-3.5 w-3.5" /></div>
                                 <span className="text-[10px] font-black uppercase text-primary truncate">{debtor?.displayName || '...'} te debe</span>
                               </div>
-                              <span className="text-xs sm:text-sm font-black text-primary font-headline shrink-0">{formatCurrency(group.total)}</span>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="text-xs sm:text-sm font-black text-primary font-headline">{formatCurrency(group.total)}</span>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline"
+                                  className="h-7 px-2 rounded-lg text-[8px] font-black uppercase border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedValidationGroup({ ...group, name: debtor?.displayName || 'Usuario' });
+                                  }}
+                                >
+                                  Recibí Pago
+                                </Button>
+                              </div>
                             </div>
                             <div className="space-y-2 pl-2 border-l-2 border-muted">
                               {group.debts.map((debt: any) => (
