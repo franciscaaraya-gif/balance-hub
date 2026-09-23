@@ -58,7 +58,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
   const [expenseAmount, setExpenseAmount] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
-  // Estados para búsqueda de miembros
   const [memberSearchTerm, setMemberSearchTerm] = useState("");
   const [receiptSearchTerm, setReceiptSearchTerm] = useState("");
 
@@ -94,8 +93,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     if (!firestore || !params.id || !user?.uid) return null;
     return query(
       collection(firestore, 'events'), 
-      where('groupId', '==', params.id), 
-      orderBy('createdAt', 'desc')
+      where('groupId', '==', params.id)
     );
   }, [firestore, params.id, user?.uid]);
   const { data: events } = useCollection<Event>(eventsQuery);
@@ -117,13 +115,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
       setExpenseAmount("");
       setCreditorId(event.creditorId || event.creatorId);
 
-      const absentIds = event.participantIds.filter(id => !event.presentIds.includes(id));
-      const candidates = [...(event.presentIds || [])];
-      if (event.chargeAbsentees) {
-        absentIds.forEach(id => {
-          if (!candidates.includes(id)) candidates.push(id);
-        });
-      }
+      const candidates = [...(event.participantIds || [])];
       setSelectedMembers(candidates);
       setManualAmounts({});
     }
@@ -181,7 +173,6 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
     return totalTarget - manualSum;
   }, [totalTarget, manualSum]);
 
-  // Filtrado de miembros en el modal de gasto
   const filteredMembers = useMemo(() => {
     if (!memberSearchTerm) return members;
     return members.filter(m => 
@@ -350,7 +341,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
     const today = new Date().toISOString().split("T")[0];
     
     XLSX.writeFile(wb, `cobros-${sanitizedName}-${today}.xlsx`);
-    toast({ title: "Excel Descargado", description: "El historial de deudas se ha exportado correctamente." });
+    toast({ title: "Excel Descargado" });
   };
 
   const handleSelectAll = () => {
@@ -364,7 +355,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
   const handleArchive = async () => {
     try {
       await archiveGroup(params.id, true);
-      toast({ title: "Grupo Archivado", description: "El grupo se ha movido a la sección de archivados." });
+      toast({ title: "Grupo Archivado" });
       router.push("/dashboard/groups");
     } catch (e) {
       toast({ variant: "destructive", title: "Error al archivar" });
@@ -375,7 +366,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
     setIsActionLoading(true);
     try {
       await deleteGroup(params.id);
-      toast({ title: "Grupo Eliminado", description: "El grupo se ha borrado definitivamente." });
+      toast({ title: "Grupo Eliminado" });
       router.push("/dashboard/groups");
     } catch (e: any) {
       toast({ variant: "destructive", title: "No se puede eliminar", description: e.message });
@@ -389,7 +380,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
   if (!group) return <div className="p-8 text-center"><AlertCircle className="mx-auto h-12 w-12 opacity-50 mb-4" /><p>Grupo no encontrado.</p></div>;
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-20 px-0 sm:px-4">
+    <div className="space-y-6 max-w-5xl mx-auto pb-20 px-1 sm:px-4">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-4 sm:px-0">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary truncate">{group.name}</h1>
@@ -414,7 +405,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+        <div className="lg:col-span-2 space-y-4 sm:space-y-6 px-2 sm:px-0">
           <Card className="border-none shadow-sm rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
             <CardHeader className="border-b pb-6 px-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
@@ -426,7 +417,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                   variant="outline" 
                   size="sm" 
                   onClick={handleExportExcel} 
-                  className="rounded-xl h-10 border-2 font-bold text-xs gap-2 w-full sm:w-auto"
+                  className="rounded-xl h-10 border-2 font-bold text-[10px] sm:text-xs gap-2 w-full sm:w-auto"
                 >
                   <Download className="h-4 w-4" /> Descargar Excel
                 </Button>
@@ -468,38 +459,38 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                     </div>
                     
                     {expandedGastoId === expense.id && (
-                      <div className="bg-muted/10 p-4 space-y-3 border-t">
+                      <div className="bg-muted/10 p-3 sm:p-4 space-y-3 border-t">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 px-2 mb-2">
                           <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Desglose Individual</span>
                           <Button 
-                            variant="secondary" 
+                            variant="ghost" 
                             size="sm" 
-                            className="h-9 text-[10px] font-bold text-accent hover:text-accent hover:bg-accent/10 rounded-xl w-full sm:w-auto"
+                            className="h-9 text-[10px] font-bold text-accent bg-accent/5 hover:bg-accent/10 rounded-xl w-full sm:w-auto px-4"
                             onClick={() => showCreditorDetails(expense.creditorId)}
                           >
-                            <CreditCard className="h-3 w-3 mr-2" /> Datos de Pago Acreedor
+                            <CreditCard className="h-3.5 w-3.5 mr-2" /> Datos Pago Acreedor
                           </Button>
                         </div>
                         <div className="space-y-2">
                           {expense.debts.map(debt => (
                             <div key={debt.id} className="flex items-center justify-between bg-white p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-primary/5 shadow-sm">
-                              <div className="flex items-center gap-3 min-w-0">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
                                 <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-[10px] font-bold shrink-0">
                                   {members.find(m => m.uid === debt.debtorId)?.displayName?.[0] || '?'}
                                 </div>
-                                <span className="text-xs font-bold truncate pr-2">{members.find(m => m.uid === debt.debtorId)?.displayName || 'Usuario'}</span>
+                                <span className="text-[11px] sm:text-xs font-bold truncate">{members.find(m => m.uid === debt.debtorId)?.displayName || 'Usuario'}</span>
                               </div>
-                              <div className="flex items-center gap-3 shrink-0">
-                                <span className="text-xs font-black text-primary">{formatCurrency(debt.amount)}</span>
+                              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                <span className="text-[11px] sm:text-xs font-black text-primary">{formatCurrency(debt.amount)}</span>
                                 {debt.status === 'paid' ? (
                                   <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                                 ) : (
                                   <div className="flex items-center gap-1.5">
                                     <Badge variant="outline" className={cn(
-                                      "text-[8px] font-bold px-1.5 py-0.5",
+                                      "text-[8px] font-bold px-1.5 py-0.5 whitespace-nowrap",
                                       debt.status === 'under_review' ? "border-blue-200 text-blue-600 bg-blue-50 animate-pulse" : "border-orange-200 text-orange-600 bg-orange-50"
                                     )}>
-                                      {debt.status === 'under_review' ? 'En Revisión' : 'Pendiente'}
+                                      {debt.status === 'under_review' ? 'Revisión' : 'Pend.'}
                                     </Badge>
                                     {(isAdmin || expense.creditorId === user?.uid) && (
                                       <Button 
@@ -538,7 +529,6 @@ nombre_item;cantidad;precio_unitario;precio_total`;
 
         <div className="space-y-4 sm:space-y-6 px-4 sm:px-0">
            {receipts?.filter(r => r.status === 'active').map(receipt => {
-             // Filtrado de miembros en la boleta activa
              const filteredMembersForReceipt = members.filter(m => 
                m.displayName?.toLowerCase().includes(receiptSearchTerm.toLowerCase())
              );
@@ -550,15 +540,14 @@ nombre_item;cantidad;precio_unitario;precio_total`;
               <Card key={receipt.id} className="border-accent/30 shadow-lg rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden bg-white">
                 <CardHeader className="bg-accent/5 pb-3 border-b px-4">
                   <CardTitle className="text-[10px] font-black uppercase tracking-widest text-accent flex items-center gap-2">
-                    <ScanLine className="h-4 w-4" /> Boleta Colaborativa {receipt.includeTip && " + 10% Propina"}
+                    <ScanLine className="h-4 w-4" /> Boleta Inteligente {receipt.includeTip && " + Propina"}
                   </CardTitle>
-                  <p className="text-[9px] text-muted-foreground font-medium">Marca lo que consumiste.</p>
+                  <p className="text-[9px] text-muted-foreground font-medium">Marca tus consumos.</p>
                   
-                  {/* Buscador en la boleta */}
                   <div className="relative mt-3">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                     <Input 
-                      placeholder="Filtrar por nombre..." 
+                      placeholder="Filtrar nombres..." 
                       value={receiptSearchTerm}
                       onChange={e => setReceiptSearchTerm(e.target.value)}
                       className="h-8 pl-8 rounded-lg text-[10px] bg-white border-accent/20"
@@ -603,7 +592,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
 
                           {filteredGuestsForReceipt.map((guest, gIdx) => {
                             const guestId = `guest_${gIdx}`;
-                            const claimKey = `${item.id}_${guestId}`;
+                            const claimKey = `${item.id}_guest_${gIdx}`;
                             const currentPercentage = receipt.claims?.[claimKey] || 0;
                             const isClaimed = currentPercentage > 0;
                             const responsibleName = members.find(m => m.uid === guest.addedBy)?.displayName?.split(' ')[0] || '...';
@@ -680,23 +669,23 @@ nombre_item;cantidad;precio_unitario;precio_total`;
       </div>
 
       <Dialog open={addingExpense} onOpenChange={setAddingExpense}>
-        <DialogContent className="w-[95vw] sm:max-w-xl rounded-[2rem] p-6 sm:p-8 border-none overflow-y-auto max-h-[90vh] mx-auto">
+        <DialogContent className="w-[95vw] sm:max-w-xl rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-8 border-none overflow-y-auto max-h-[90vh] mx-auto">
           <DialogHeader>
             <DialogTitle className="text-xl sm:text-2xl font-headline font-bold text-primary">Registrar Gasto</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-6 py-4">
-            <div className="grid grid-cols-3 gap-2 bg-muted/30 p-1.5 rounded-2xl">
-              <Button variant={expenseMode === 'manual' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('manual')}>Manual</Button>
-              <Button variant={expenseMode === 'event' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('event')}>Evento</Button>
-              <Button variant={expenseMode === 'item' ? 'default' : 'ghost'} className="rounded-xl h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('item')}>Boleta IA</Button>
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-muted/30 p-1 rounded-2xl">
+              <Button variant={expenseMode === 'manual' ? 'default' : 'ghost'} className="rounded-xl h-9 sm:h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('manual')}>Manual</Button>
+              <Button variant={expenseMode === 'event' ? 'default' : 'ghost'} className="rounded-xl h-9 sm:h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('event')}>Evento</Button>
+              <Button variant={expenseMode === 'item' ? 'default' : 'ghost'} className="rounded-xl h-9 sm:h-10 text-[9px] sm:text-[11px] font-bold uppercase tracking-tighter" onClick={() => setExpenseMode('item')}>Boleta IA</Button>
             </div>
 
             {expenseMode === 'event' && (
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Vincular a Evento</Label>
                 <Select onValueChange={handleEventSelect} value={selectedEventId || ""}>
-                  <SelectTrigger className="h-12 rounded-xl text-xs">
+                  <SelectTrigger className="h-11 sm:h-12 rounded-xl text-xs">
                     <SelectValue placeholder="Elegir evento..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -713,7 +702,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">¿Quién pagó?</Label>
               <Select value={creditorId} onValueChange={setCreditorId}>
-                <SelectTrigger className="h-12 rounded-xl text-xs">
+                <SelectTrigger className="h-11 sm:h-12 rounded-xl text-xs">
                   <SelectValue placeholder="Seleccionar acreedor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -729,18 +718,18 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Concepto</Label>
-                    <Input placeholder="Ej: Pizza" value={expenseTitle} onChange={e => setExpenseTitle(e.target.value)} className="h-12 rounded-xl text-sm" />
+                    <Input placeholder="Ej: Pizza" value={expenseTitle} onChange={e => setExpenseTitle(e.target.value)} className="h-11 sm:h-12 rounded-xl text-sm" />
                   </div>
                   <div className="space-y-2">
                     <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">Monto Total</Label>
                     <div className="relative">
                       <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input type="number" placeholder="0.00" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} className="h-12 pl-9 rounded-xl font-bold text-sm" />
+                      <Input type="number" placeholder="0" value={expenseAmount} onChange={e => setExpenseAmount(e.target.value)} className="h-11 sm:h-12 pl-9 rounded-xl font-bold text-sm" />
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-muted/40 rounded-2xl border">
+                <div className="flex items-center justify-between p-3 sm:p-4 bg-muted/40 rounded-2xl border">
                   <div className="space-y-0.5"><Label className="text-xs font-bold">Dividir en partes iguales</Label></div>
                   <Switch checked={divideEqually} onCheckedChange={(val) => { setDivideEqually(val); }} />
                 </div>
@@ -748,16 +737,15 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                 <div className="space-y-3">
                   <div className="flex items-center justify-between px-1">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                      {divideEqually ? "¿Quiénes entran en la división?" : "Montos Manuales"}
+                      {divideEqually ? "¿Quiénes pagan?" : "Montos Manuales"}
                     </Label>
                     {divideEqually && (
                       <Button variant="ghost" size="sm" className="h-6 text-[9px] font-black uppercase text-accent hover:bg-accent/5" onClick={handleSelectAll}>
-                        {selectedMembers.length === members.length ? "Desmarcar todos" : "Marcar todos"}
+                        {selectedMembers.length === members.length ? "Ninguno" : "Todos"}
                       </Button>
                     )}
                   </div>
                   
-                  {/* Buscador de miembros en el modal */}
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input 
@@ -769,9 +757,9 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                   </div>
 
                   {divideEqually ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-muted/10 p-4 rounded-2xl max-h-48 overflow-y-auto border">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-muted/10 p-3 sm:p-4 rounded-2xl max-h-48 overflow-y-auto border">
                       {filteredMembers.map(m => (
-                        <div key={m.uid} className={cn("flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98]", selectedMembers.includes(m.uid) ? "bg-white border-primary/20 shadow-sm" : "bg-transparent border-transparent")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
+                        <div key={m.uid} className={cn("flex items-center gap-2 p-2 rounded-xl border transition-all cursor-pointer active:scale-[0.98]", selectedMembers.includes(m.uid) ? "bg-white border-primary/20 shadow-sm" : "bg-transparent border-transparent")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
                           <Checkbox checked={selectedMembers.includes(m.uid)} className="h-4 w-4 rounded-md pointer-events-none" />
                           <span className="text-[11px] font-bold truncate">{m.displayName}</span>
                         </div>
@@ -780,16 +768,16 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <div className="space-y-2 bg-muted/10 p-3 sm:p-4 rounded-2xl max-h-60 overflow-y-auto border border-dashed">
+                      <div className="space-y-2 bg-muted/10 p-2 sm:p-4 rounded-2xl max-h-60 overflow-y-auto border border-dashed">
                         {filteredMembers.map(m => (
-                          <div key={m.uid} className="flex items-center justify-between bg-white p-3 rounded-xl border shadow-sm">
-                            <span className="text-[11px] font-bold truncate pr-2">{m.displayName?.split(' ')[0]}</span>
-                            <Input type="number" placeholder="0.00" className="h-9 w-24 sm:w-32 font-bold text-xs" value={manualAmounts[m.uid] || ""} onChange={(e) => setManualAmounts({ ...manualAmounts, [m.uid]: e.target.value })} />
+                          <div key={m.uid} className="flex items-center justify-between bg-white p-2.5 rounded-xl border shadow-sm">
+                            <span className="text-[11px] font-bold truncate pr-2 flex-1">{m.displayName?.split(' ')[0]}</span>
+                            <Input type="number" placeholder="0" className="h-8 w-24 sm:w-32 font-bold text-xs" value={manualAmounts[m.uid] || ""} onChange={(e) => setManualAmounts({ ...manualAmounts, [m.uid]: e.target.value })} />
                           </div>
                         ))}
                         {filteredMembers.length === 0 && <p className="text-[10px] text-muted-foreground text-center py-2">Sin coincidencias.</p>}
                       </div>
-                      <div className={cn("p-4 rounded-xl text-[10px] font-bold flex justify-between items-center shadow-inner", Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")}>
+                      <div className={cn("p-3 sm:p-4 rounded-xl text-[10px] font-bold flex justify-between items-center shadow-inner", Math.abs(difference) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-orange-50 text-orange-700")}>
                         <span>Asignado: {formatCurrency(manualSum)}</span>
                         <span>{Math.abs(difference) < 0.01 ? <CheckCircle2 className="h-4 w-4" /> : `Falta: ${formatCurrency(difference)}`}</span>
                       </div>
@@ -799,78 +787,43 @@ nombre_item;cantidad;precio_unitario;precio_total`;
               </>
             ) : (
               <div className="space-y-4">
-                <div className="bg-primary/5 p-5 rounded-2xl border border-primary/10 space-y-3 text-center">
-                  <p className="text-[10px] text-muted-foreground font-medium">Copia el prompt, procésalo en una IA externa y pega aquí el resultado.</p>
-                  <Button type="button" onClick={copyAiPrompt} variant="outline" className="w-full h-11 text-[10px] font-black uppercase rounded-xl gap-2">
+                <div className="bg-primary/5 p-4 sm:p-5 rounded-2xl border border-primary/10 space-y-3 text-center">
+                  <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">Copia el prompt, procésalo en una IA externa y pega aquí el resultado.</p>
+                  <Button type="button" onClick={copyAiPrompt} variant="outline" className="w-full h-10 sm:h-11 text-[10px] font-black uppercase rounded-xl gap-2">
                     <Copy className="h-4 w-4" /> Copiar Prompt
                   </Button>
                 </div>
-                <Textarea placeholder="nombre;cantidad;precio_unitario;precio_total" className="min-h-[150px] rounded-xl text-[11px] font-mono p-4" value={pastedText} onChange={(e) => setPastedText(e.target.value)} />
-                <Button type="button" className="w-full h-12 rounded-xl text-[11px] font-black uppercase" onClick={handleParseItems}>Procesar Texto</Button>
+                <Textarea placeholder="nombre;cantidad;precio_unitario;precio_total" className="min-h-[120px] rounded-xl text-[11px] font-mono p-4" value={pastedText} onChange={(e) => setPastedText(e.target.value)} />
+                <Button type="button" className="w-full h-11 rounded-xl text-[11px] font-black uppercase" onClick={handleParseItems}>Procesar Texto</Button>
                 
                 {parsedItems.length > 0 && (
                   <div className="space-y-4 mt-4 border-t pt-4">
                     <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Revisar ítems</Label>
-                    <div className="space-y-2 max-h-48 overflow-y-auto bg-muted/10 p-2 rounded-xl border">
+                    <div className="space-y-2 max-h-40 overflow-y-auto bg-muted/10 p-2 rounded-xl border">
                       {parsedItems.map((item, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-white p-2 rounded-lg border shadow-sm">
+                        <div key={idx} className="grid grid-cols-12 gap-1 items-center bg-white p-2 rounded-lg border shadow-sm">
                           <div className="col-span-6">
-                            <Input 
-                              value={item.name} 
-                              onChange={(e) => {
-                                const updated = [...parsedItems];
-                                updated[idx].name = e.target.value;
-                                setParsedItems(updated);
-                              }}
-                              className="h-8 text-xs rounded-lg"
-                            />
+                            <Input value={item.name} onChange={(e) => { const updated = [...parsedItems]; updated[idx].name = e.target.value; setParsedItems(updated); }} className="h-7 text-[10px] rounded-md" />
                           </div>
                           <div className="col-span-2">
-                            <Input 
-                              type="number"
-                              value={item.quantity || ""} 
-                              onChange={(e) => {
-                                const updated = [...parsedItems];
-                                updated[idx].quantity = parseInt(e.target.value) || 0;
-                                updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice;
-                                setParsedItems(updated);
-                                setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString());
-                              }}
-                              className="h-8 text-xs p-1 text-center rounded-lg"
-                            />
+                            <Input type="number" value={item.quantity || ""} onChange={(e) => { const updated = [...parsedItems]; updated[idx].quantity = parseInt(e.target.value) || 0; updated[idx].totalPrice = updated[idx].quantity * updated[idx].unitPrice; setParsedItems(updated); setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString()); }} className="h-7 text-[10px] p-1 text-center rounded-md" />
                           </div>
                           <div className="col-span-4">
-                            <Input 
-                              type="number"
-                              value={item.totalPrice || ""} 
-                              onChange={(e) => {
-                                const updated = [...parsedItems];
-                                updated[idx].totalPrice = parseFloat(e.target.value) || 0;
-                                setParsedItems(updated);
-                                setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString());
-                              }}
-                              className="h-8 text-xs font-bold text-right rounded-lg"
-                            />
+                            <Input type="number" value={item.totalPrice || ""} onChange={(e) => { const updated = [...parsedItems]; updated[idx].totalPrice = parseFloat(e.target.value) || 0; setParsedItems(updated); setExpenseAmount(updated.reduce((acc, it) => acc + (it.totalPrice || 0), 0).toString()); }} className="h-7 text-[10px] font-bold text-right rounded-md" />
                           </div>
                         </div>
                       ))}
                     </div>
 
                     <div className="flex justify-between items-center bg-muted/30 p-3 rounded-xl font-bold text-sm">
-                      <span className="text-muted-foreground text-xs uppercase tracking-wider">Total:</span>
+                      <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Total:</span>
                       <span className="text-primary">{formatCurrency(aggregatedItemsTotal)}</span>
                     </div>
 
-                    <div className="flex items-center justify-between p-4 bg-muted/40 rounded-xl border">
+                    <div className="flex items-center justify-between p-3 sm:p-4 bg-muted/40 rounded-xl border">
                       <div className="space-y-0.5"><Label className="text-xs font-bold">¿Propina 10%?</Label></div>
                       <Switch checked={includeTip} onCheckedChange={setIncludeTip} />
                     </div>
-
-                    {includeTip && (
-                      <p className="text-[11px] text-accent font-medium leading-relaxed bg-accent/5 p-3 rounded-xl border border-accent/20">
-                        Total + Propina: {formatCurrency(aggregatedItemsTotal * 1.10)} (Proporcional).
-                      </p>
-                    )}
                   </div>
                 )}
               </div>
@@ -878,8 +831,8 @@ nombre_item;cantidad;precio_unitario;precio_total`;
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-3">
-            <Button variant="ghost" className="rounded-xl h-12 w-full sm:w-auto" onClick={() => setAddingExpense(false)}>Cancelar</Button>
-            <Button className="rounded-xl px-10 h-12 w-full sm:w-auto font-bold shadow-lg" onClick={handleRegisterExpense} disabled={isActionLoading || (!divideEqually && expenseMode !== 'item' && Math.abs(difference) > 0.01)}>
+            <Button variant="ghost" className="rounded-xl h-11 sm:h-12 w-full sm:w-auto" onClick={() => setAddingExpense(false)}>Cancelar</Button>
+            <Button className="rounded-xl px-10 h-11 sm:h-12 w-full sm:w-auto font-bold shadow-lg" onClick={handleRegisterExpense} disabled={isActionLoading || (!divideEqually && expenseMode !== 'item' && Math.abs(difference) > 0.01)}>
               {isActionLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar"}
             </Button>
           </DialogFooter>
@@ -887,41 +840,41 @@ nombre_item;cantidad;precio_unitario;precio_total`;
       </Dialog>
 
       <Dialog open={!!creditorProfile} onOpenChange={() => setCreditorProfile(null)}>
-        <DialogContent className="w-[90vw] max-w-md rounded-[2rem] p-6 sm:p-8 border-none text-center mx-auto">
+        <DialogContent className="w-[90vw] max-w-md rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 border-none text-center mx-auto">
           <DialogHeader>
             <DialogTitle className="text-xl sm:text-2xl font-headline font-bold text-primary">Datos de Transferencia</DialogTitle>
             <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{creditorProfile?.displayName}</p>
           </DialogHeader>
-          <div className="bg-muted/30 p-6 rounded-[1.5rem] font-mono text-xs sm:text-sm text-left whitespace-pre-wrap border border-dashed mt-4 leading-relaxed">
+          <div className="bg-muted/30 p-4 sm:p-6 rounded-[1.2rem] sm:rounded-[1.5rem] font-mono text-xs sm:text-sm text-left whitespace-pre-wrap border border-dashed mt-4 leading-relaxed break-words">
             {creditorProfile?.transferDetails || "Sin datos configurados."}
           </div>
-          <Button className="w-full h-12 rounded-xl mt-6 font-bold" onClick={() => setCreditorProfile(null)}>Entendido</Button>
+          <Button className="w-full h-11 sm:h-12 rounded-xl mt-6 font-bold" onClick={() => setCreditorProfile(null)}>Entendido</Button>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
-        <DialogContent className="w-[90vw] max-w-sm rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
+        <DialogContent className="w-[90vw] max-w-sm rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
           <DialogHeader className="pb-4"><DialogTitle className="text-xl font-headline">Invitación</DialogTitle></DialogHeader>
           <div className="space-y-6">
             <div className="p-4 bg-muted/30 rounded-2xl border-2 border-dashed text-xs font-mono break-all leading-relaxed">
               {group.inviteLink}
             </div>
             <Button 
-              className="w-full h-12 rounded-xl font-bold gap-2" 
+              className="w-full h-11 sm:h-12 rounded-xl font-bold gap-2" 
               onClick={() => { 
                 const shareText = `¡Hola! Te invito a unirte a nuestro grupo '${group.name}' en Zygos, para llevar la cuenta de los gastos compartidos 💰\n\n${group.inviteLink}`;
                 navigator.clipboard.writeText(shareText); 
-                toast({ title: "Copiado" }); 
+                toast({ title: "Mensaje copiado" }); 
               }}
             >
-              <Copy className="h-4 w-4" /> Copiar Enlace
+              <Copy className="h-4 w-4" /> Copiar Mensaje
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-        <DialogContent className="w-[95vw] sm:max-w-md rounded-[2rem] p-6 sm:p-8 border-none mx-auto">
+        <DialogContent className="w-[95vw] sm:max-w-md rounded-[1.5rem] sm:rounded-[2rem] p-5 sm:p-8 border-none mx-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-headline font-bold">Gestión del Grupo</DialogTitle>
             <DialogDescription className="text-xs">Opciones de administración para el grupo.</DialogDescription>
@@ -931,7 +884,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
                <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground px-1">Archivar</Label>
                <div className="bg-muted/20 p-4 rounded-2xl space-y-3">
                  <p className="text-[11px] text-muted-foreground leading-relaxed">El grupo dejará de aparecer en tu lista principal, pero no se borrará ningún dato.</p>
-                 <Button variant="outline" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleArchive}>
+                 <Button variant="outline" className="w-full h-10 sm:h-11 rounded-xl gap-2 font-bold" onClick={handleArchive}>
                     <Archive className="h-4 w-4" /> Archivar Grupo
                  </Button>
                </div>
@@ -940,8 +893,8 @@ nombre_item;cantidad;precio_unitario;precio_total`;
             <div className="space-y-3">
                <Label className="text-[10px] uppercase font-black tracking-widest text-destructive px-1">Eliminar</Label>
                <div className="bg-destructive/5 p-4 rounded-2xl space-y-3 border border-destructive/10">
-                 <p className="text-[11px] text-muted-foreground leading-relaxed">Esta acción es irreversible y borrará todo permanentemente. Solo permitido si no hay historial financiero.</p>
-                 <Button variant="destructive" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleDelete} disabled={isActionLoading}>
+                 <p className="text-[11px] text-muted-foreground leading-relaxed">Esta acción es irreversible. Solo permitido si no hay historial financiero.</p>
+                 <Button variant="destructive" className="w-full h-10 sm:h-11 rounded-xl gap-2 font-bold" onClick={handleDelete} disabled={isActionLoading}>
                     {isActionLoading ? <Loader2 className="animate-spin" /> : <><Trash2 className="h-4 w-4" /> Eliminar Definitivamente</>}
                  </Button>
                </div>
@@ -951,7 +904,7 @@ nombre_item;cantidad;precio_unitario;precio_total`;
       </Dialog>
 
       <Dialog open={!!confirmingDebt} onOpenChange={() => setConfirmingDebt(null)}>
-        <DialogContent className="w-[90vw] max-w-sm rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
+        <DialogContent className="w-[90vw] max-w-sm rounded-[1.5rem] sm:rounded-[2rem] p-6 sm:p-8 text-center border-none mx-auto">
           <DialogHeader className="pb-4">
             <div className="mx-auto bg-emerald-100 p-4 rounded-full w-fit mb-4">
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />

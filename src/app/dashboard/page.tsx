@@ -56,10 +56,21 @@ export default function Dashboard() {
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid || groupIds.length === 0) return null;
-    return query(collection(firestore, 'events'), where('groupId', 'in', groupIds), orderBy('createdAt', 'desc'));
+    return query(collection(firestore, 'events'), where('groupId', 'in', groupIds));
   }, [firestore, user?.uid, groupIdsKey]);
   const { data: allEvents } = useCollection<Event>(eventsQuery);
-  const activeEvents = allEvents?.filter(e => !e.isCharged) || [];
+  
+  const activeEvents = useMemo(() => {
+    if (!allEvents) return [];
+    return allEvents
+      .filter(e => !e.isCharged && !e.isArchived)
+      .sort((a, b) => {
+        const timeA = a.createdAt || 0;
+        const timeB = b.createdAt || 0;
+        if (timeB === timeA) return b.id.localeCompare(a.id);
+        return timeB - timeA;
+      });
+  }, [allEvents]);
 
   const myDebtsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid) return null;
@@ -178,8 +189,8 @@ export default function Dashboard() {
   if (isUserLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto pb-10 px-2 sm:px-4">
-      <div>
+    <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto pb-10 px-1 sm:px-4">
+      <div className="px-2 sm:px-0">
         <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName?.split(' ')[0]}!</h1>
         <p className="text-sm text-muted-foreground">Bienvenido a Zygos — cuentas claras con tu grupo.</p>
       </div>
@@ -200,7 +211,7 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 px-2 sm:px-0">
           <div className="grid grid-cols-2 gap-3">
             <Button asChild variant="outline" className="h-16 rounded-2xl flex flex-col items-center justify-center gap-1 bg-white border-primary/10 shadow-sm active:scale-[0.98] transition-all">
               <Link href="/dashboard/groups">
@@ -322,10 +333,10 @@ export default function Dashboard() {
       </div>
 
       <Dialog open={!!selectedDebtGroup} onOpenChange={val => !val && setSelectedDebtGroup(null)}>
-        <DialogContent className="rounded-[2.5rem] border-none p-8 max-w-sm text-center mx-auto">
+        <DialogContent className="rounded-[2.5rem] border-none p-8 w-[95vw] max-w-sm text-center mx-auto">
           <DialogHeader>
             <div className="mx-auto bg-accent/10 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-accent"><Send className="h-8 w-8" /></div>
-            <DialogTitle className="text-2xl font-headline font-bold">Reportar Transferencia</DialogTitle>
+            <DialogTitle className="text-2xl font-headline font-bold text-primary">Reportar Transferencia</DialogTitle>
             <DialogDescription className="text-xs pt-2">
               ¿Confirmas que transferiste <strong>{formatCurrency(selectedDebtGroup?.total || 0)}</strong> a <strong>{selectedDebtGroup?.name}</strong>?
             </DialogDescription>
@@ -333,7 +344,7 @@ export default function Dashboard() {
           <div className="py-6">
              <div className="bg-primary/5 p-4 rounded-xl text-left space-y-2 border border-primary/10">
                 <Label className="text-[9px] uppercase font-black text-muted-foreground">Cuentas de {selectedDebtGroup?.name}</Label>
-                <div className="font-mono text-[10px] whitespace-pre-wrap leading-relaxed">
+                <div className="font-mono text-[10px] whitespace-pre-wrap leading-relaxed break-words">
                   {profilesMap[selectedDebtGroup?.creditorId || '']?.transferDetails || "Sin datos."}
                 </div>
              </div>
@@ -348,10 +359,10 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={!!selectedValidationGroup} onOpenChange={val => !val && setSelectedValidationGroup(null)}>
-        <DialogContent className="rounded-[2.5rem] border-none p-8 max-w-sm text-center mx-auto">
+        <DialogContent className="rounded-[2.5rem] border-none p-8 w-[95vw] max-w-sm text-center mx-auto">
           <DialogHeader>
             <div className="mx-auto bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mb-4 text-emerald-600"><CheckCircle2 className="h-8 w-8" /></div>
-            <DialogTitle className="text-2xl font-headline font-bold">Validar Cobro</DialogTitle>
+            <DialogTitle className="text-2xl font-headline font-bold text-primary">Validar Cobro</DialogTitle>
             <DialogDescription className="text-xs pt-2">
               ¿Confirmas que recibiste <strong>{formatCurrency(selectedValidationGroup?.total || 0)}</strong> de <strong>{selectedValidationGroup?.name}</strong> en tu cuenta?
             </DialogDescription>
@@ -412,7 +423,6 @@ function WalletSection({
   const totalIncomingCount = incomingResult.review.reduce((sum: number, g: any) => sum + g.debts.length, 0) +
                              incomingResult.pending.reduce((sum: number, g: any) => sum + g.debts.length, 0);
 
-  // Lógica Aditiva: Cálculo del Neteo Inteligente Cruzado entre dos personas sin alterar los arreglos originales
   const smartNettings = useMemo(() => {
     const netMap: Record<string, { owesMe: number; iOweThem: number; myDebtsList: Debt[]; theirDebtsList: Debt[] }> = {};
 
@@ -449,18 +459,17 @@ function WalletSection({
 
   return (
     <div className="space-y-4">
-      {/* Sección Nueva 100% Aditiva: Pago Inteligente / Neteo Cruzado */}
       {smartNettings.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-primary ml-2">
-            <Zap className="h-4 w-4 text-accent animate-bounce" /> Pago Inteligente (Neteo Cruzado)
+        <section className="space-y-2 px-2 sm:px-0">
+          <h2 className="text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center gap-2 text-primary ml-2">
+            <Zap className="h-4 w-4 text-accent animate-bounce" /> Pago Inteligente (Neteo)
           </h2>
           <Card className="border-2 border-accent/20 bg-amber-50/20 shadow-sm rounded-[2rem] overflow-hidden">
             <CardContent className="p-4 sm:p-5 space-y-3">
               <div className="flex items-start gap-2.5 text-xs text-muted-foreground px-1 pb-2 border-b border-dashed">
                 <Sparkles className="h-4 w-4 text-accent shrink-0 mt-0.5" />
-                <p className="font-medium text-[11px] leading-snug">
-                  Zygos detectó deudas cruzadas. Sugerimos resolver el saldo neto en una única transferencia para ahorrar movimientos bancarios.
+                <p className="font-medium text-[10px] sm:text-[11px] leading-snug">
+                  Zygos detectó deudas cruzadas. Sugerimos resolver el saldo neto en una transferencia.
                 </p>
               </div>
               <div className="space-y-2">
@@ -476,14 +485,14 @@ function WalletSection({
                         onClick={() => setExpandedNettingPersonId(isExpanded ? null : netItem.personId)}
                       >
                         <div className="min-w-0 pr-2">
-                          <p className="text-xs font-bold text-primary">
+                          <p className="text-[11px] sm:text-xs font-bold text-primary">
                             {netItem.netValue > 0 
-                              ? `Si le pagas ${formatCurrency(netItem.netValue)} a ${personName}`
-                              : `Si ${personName} te paga ${formatCurrency(Math.abs(netItem.netValue))}`
+                              ? `Pagas ${formatCurrency(netItem.netValue)} a ${personName}`
+                              : `${personName} te paga ${formatCurrency(Math.abs(netItem.netValue))}`
                             }
                           </p>
-                          <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                            Resuelven {netItem.totalInvolvedDebts} cuentas cruzadas de forma inmediata.
+                          <p className="text-[9px] sm:text-[10px] text-muted-foreground font-medium mt-0.5">
+                            Resuelven {netItem.totalInvolvedDebts} cuentas.
                           </p>
                         </div>
                         <div className="shrink-0 flex items-center gap-1 bg-accent/10 px-2 py-1 rounded-xl text-accent font-black text-[9px] uppercase">
@@ -495,35 +504,24 @@ function WalletSection({
                       {isExpanded && (
                         <div className="bg-muted/10 p-3 border-t space-y-2 text-xs">
                           <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest px-1">Cuentas Involucradas:</p>
-                          
-                          {/* Deudas que yo le debo a esa persona */}
                           {netItem.myDebtsList.map(debt => (
                             <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-red-100 shadow-inner">
                               <div className="min-w-0 pr-2">
-                                <span className="text-[8px] bg-red-50 text-red-700 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5">Tú debes</span>
-                                <span className="font-medium text-[11px] text-primary truncate">{debt.description}</span>
-                                <span className="block text-[8px] text-muted-foreground uppercase">{debt.groupName}</span>
+                                <span className="text-[8px] bg-red-50 text-red-700 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5">Debes</span>
+                                <span className="font-medium text-[10px] sm:text-[11px] text-primary truncate">{debt.description}</span>
                               </div>
-                              <span className="font-bold text-red-600 shrink-0">{formatCurrency(debt.amount)}</span>
+                              <span className="font-bold text-red-600 shrink-0 text-[10px] sm:text-[11px]">{formatCurrency(debt.amount)}</span>
                             </div>
                           ))}
-
-                          {/* Deudas que esa persona me debe a mí */}
                           {netItem.theirDebtsList.map(debt => (
                             <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-emerald-100 shadow-inner">
                               <div className="min-w-0 pr-2">
                                 <span className="text-[8px] bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5">Te debe</span>
-                                <span className="font-medium text-[11px] text-primary truncate">{debt.description}</span>
-                                <span className="block text-[8px] text-muted-foreground uppercase">{debt.groupName}</span>
+                                <span className="font-medium text-[10px] sm:text-[11px] text-primary truncate">{debt.description}</span>
                               </div>
-                              <span className="font-bold text-emerald-600 shrink-0">{formatCurrency(debt.amount)}</span>
+                              <span className="font-bold text-emerald-600 shrink-0 text-[10px] sm:text-[11px]">{formatCurrency(debt.amount)}</span>
                             </div>
                           ))}
-
-                          <div className="pt-2 border-t border-dashed flex justify-between text-[10px] font-bold text-muted-foreground px-1">
-                            <span>Total que le debes: {formatCurrency(netItem.iOweThem)}</span>
-                            <span>Total que te debe: {formatCurrency(netItem.owesMe)}</span>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -535,13 +533,12 @@ function WalletSection({
         </section>
       )}
 
-      {/* El resto de componentes de cobros y pagos individuales permanecen intactos e inalterados */}
       <section className="space-y-2">
-        <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-orange-600 ml-2">
+        <h2 className="text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center gap-2 text-orange-600 ml-2">
           <ArrowUpRight className="h-4 w-4" /> Billetera: Pagos
         </h2>
         <Card className={cn(
-          "border-none shadow-md bg-white rounded-[2rem] overflow-hidden transition-all duration-300",
+          "border-none shadow-md bg-white rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden transition-all duration-300",
           !isDebesExpanded && "cursor-pointer hover:shadow-lg active:scale-[0.99]"
         )} onClick={() => !isDebesExpanded && setIsDebesExpanded(true)}>
           <div className={cn(
@@ -550,12 +547,12 @@ function WalletSection({
           )}>
              <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-1">Debes</p>
              <div className="flex flex-col items-center">
-               <p className={cn("font-headline font-bold transition-all", !isDebesExpanded ? "text-2xl" : "text-4xl sm:text-5xl")}>
+               <p className={cn("font-headline font-bold transition-all", !isDebesExpanded ? "text-2xl" : "text-3xl sm:text-5xl")}>
                  {formatCurrency(totalOutgoingAmount)}
                </p>
                {!isDebesExpanded && (
                  <p className="text-[9px] font-bold opacity-70 mt-0.5">
-                   {totalOutgoingCount} {totalOutgoingCount === 1 ? 'deuda pendiente' : 'deudas pendientes'}
+                   {totalOutgoingCount} {totalOutgoingCount === 1 ? 'pendiente' : 'pendientes'}
                  </p>
                )}
              </div>
@@ -563,7 +560,7 @@ function WalletSection({
                <Button 
                  variant="ghost" 
                  size="icon" 
-                 className="absolute top-4 right-4 text-white/50 hover:text-white hover:bg-white/10"
+                 className="absolute top-2 right-2 sm:top-4 sm:right-4 text-white/50 hover:text-white hover:bg-white/10"
                  onClick={(e) => { e.stopPropagation(); setIsDebesExpanded(false); }}
                >
                  <ChevronUp className="h-5 w-5" />
@@ -571,7 +568,7 @@ function WalletSection({
              )}
           </div>
           {isDebesExpanded && (
-            <CardContent className="p-4 sm:p-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
+            <CardContent className="p-3 sm:p-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
               {myDebtsLoading ? <div className="flex justify-center"><Loader2 className="animate-spin text-primary" /></div> : outgoingGroups.length === 0 ? (
                 <div className="py-6 text-center opacity-30"><CheckCircle2 className="h-8 w-8 mx-auto text-emerald-500 mb-2" /><p className="text-[10px] font-bold uppercase">Al día</p></div>
               ) : outgoingGroups.map(group => {
@@ -579,27 +576,27 @@ function WalletSection({
                 return (
                   <div key={group.creditorId} className="space-y-3">
                     <div className="flex items-center justify-between px-1">
-                      <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center text-accent"><User className="h-3.5 w-3.5" /></div>
-                        <span className="text-[10px] font-black uppercase text-primary">A {creditor?.displayName || '...'}</span>
+                      <div className="flex items-center gap-2 min-w-0 pr-2">
+                        <div className="h-7 w-7 rounded-full bg-accent/10 flex items-center justify-center text-accent shrink-0"><User className="h-3.5 w-3.5" /></div>
+                        <span className="text-[10px] font-black uppercase text-primary truncate">A {creditor?.displayName || '...'}</span>
                       </div>
                       <Button 
                         size="sm" 
-                        className="h-8 rounded-xl text-[9px] font-black uppercase bg-accent text-white"
+                        className="h-8 rounded-xl text-[9px] font-black uppercase bg-accent text-white shrink-0"
                         onClick={() => setSelectedDebtGroup({ ...group, name: creditor?.displayName || 'Acreedor' })}
                       >
-                        <CreditCard className="h-3 w-3 mr-1" /> Pagar {formatCurrency(group.total)}
+                        Pagar
                       </Button>
                     </div>
                     <div className="space-y-2 pl-2 border-l-2 border-accent/20">
                       {group.debts.map((debt: any) => (
-                        <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
-                           <div className="min-0 pr-2">
-                             <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
-                             <p className="font-bold truncate">{debt.description}</p>
+                        <div key={debt.id} className="flex justify-between items-center p-2.5 sm:p-3 bg-muted/20 rounded-xl text-xs">
+                           <div className="min-w-0 pr-2">
+                             <p className="text-[8px] font-black opacity-50 uppercase truncate">{debt.groupName}</p>
+                             <p className="font-bold truncate text-[10px] sm:text-xs">{debt.description}</p>
                            </div>
                            <div className="text-right shrink-0">
-                             <p className="font-bold text-accent">{formatCurrency(debt.amount)}</p>
+                             <p className="font-bold text-accent text-[10px] sm:text-xs">{formatCurrency(debt.amount)}</p>
                              {getStatusBadge(debt.status)}
                            </div>
                         </div>
@@ -614,11 +611,11 @@ function WalletSection({
       </section>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-emerald-600 ml-2">
+        <h2 className="text-[10px] sm:text-xs font-black uppercase tracking-widest flex items-center gap-2 text-emerald-600 ml-2">
           <ArrowDownLeft className="h-4 w-4" /> Billetera: Cobros
         </h2>
         <Card className={cn(
-          "border-none shadow-md bg-white rounded-[2rem] overflow-hidden transition-all duration-300",
+          "border-none shadow-md bg-white rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden transition-all duration-300",
           !isTeDebenExpanded && "cursor-pointer hover:shadow-lg active:scale-[0.99]"
         )} onClick={() => !isTeDebenExpanded && setIsTeDebenExpanded(true)}>
           <div className={cn(
@@ -627,12 +624,12 @@ function WalletSection({
           )}>
              <p className="text-[10px] uppercase font-black tracking-widest opacity-60 mb-1">Te Deben</p>
              <div className="flex flex-col items-center">
-               <p className={cn("font-headline font-bold transition-all", !isTeDebenExpanded ? "text-2xl" : "text-4xl sm:text-5xl")}>
+               <p className={cn("font-headline font-bold transition-all", !isTeDebenExpanded ? "text-2xl" : "text-3xl sm:text-5xl")}>
                  {formatCurrency(totalTeDebenConsolidado)}
                </p>
                {!isTeDebenExpanded && (
                  <p className="text-[9px] font-bold opacity-70 mt-0.5">
-                   {totalIncomingCount} {totalIncomingCount === 1 ? 'cobro pendiente' : 'cobros pendientes'}
+                   {totalIncomingCount} {totalIncomingCount === 1 ? 'cobro' : 'cobros'}
                  </p>
                )}
              </div>
@@ -640,7 +637,7 @@ function WalletSection({
                <Button 
                  variant="ghost" 
                  size="icon" 
-                 className="absolute top-4 right-4 text-white/50 hover:text-white hover:bg-white/10"
+                 className="absolute top-2 right-2 sm:top-4 sm:right-4 text-white/50 hover:text-white hover:bg-white/10"
                  onClick={(e) => { e.stopPropagation(); setIsTeDebenExpanded(false); }}
                >
                  <ChevronUp className="h-5 w-5" />
@@ -648,39 +645,39 @@ function WalletSection({
              )}
           </div>
           {isTeDebenExpanded && (
-            <CardContent className="p-4 sm:p-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
+            <CardContent className="p-3 sm:p-6 space-y-6 animate-in slide-in-from-top-2 duration-300">
               {myIncomingLoading ? <div className="flex justify-center"><Loader2 className="animate-spin text-primary" /></div> : totalTeDebenConsolidado === 0 ? (
-                <div className="py-6 text-center opacity-30 font-bold uppercase text-[10px]">No tienes cobros pendientes</div>
+                <div className="py-6 text-center opacity-30 font-bold uppercase text-[10px]">Sin cobros pendientes</div>
               ) : (
                 <>
                   {incomingResult.review.length > 0 && (
                     <div className="space-y-4">
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded">Pendientes de Validación</h3>
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 w-fit px-2 py-1 rounded">Por Validar</h3>
                       {incomingResult.review.map((group: any) => {
                         const debtor = profilesMap[group.debtorId];
                         return (
                           <div key={group.id} className="space-y-3 p-3 border rounded-2xl bg-blue-50/10 border-blue-100">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="h-7 w-7 rounded-full bg-secondary/10 flex items-center justify-center text-secondary"><User className="h-3.5 w-3.5" /></div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0 pr-2">
+                                <div className="h-7 w-7 rounded-full bg-secondary/10 flex items-center justify-center text-secondary shrink-0"><User className="h-3.5 w-3.5" /></div>
                                 <div className="min-w-0">
-                                  <span className="text-[11px] font-black uppercase text-primary block">{debtor?.displayName || '...'} reportó pago</span>
+                                  <span className="text-[10px] font-black uppercase text-primary block truncate">{debtor?.displayName || '...'} reportó</span>
                                   <span className="text-[7px] text-muted-foreground uppercase">{new Date(group.updatedAt).toLocaleDateString()}</span>
                                 </div>
                               </div>
                               <Button 
                                 size="sm" 
-                                className="h-8 rounded-xl text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                                className="h-8 rounded-xl text-[9px] font-black uppercase bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shrink-0"
                                 onClick={() => setSelectedValidationGroup({ ...group, name: debtor?.displayName || 'Usuario' })}
                               >
-                                <CheckCircle2 className="h-3 w-3 mr-1" /> Validar {formatCurrency(group.total)}
+                                Validar
                               </Button>
                             </div>
                             <div className="space-y-2 pl-2 border-l-2 border-secondary/20">
                               {group.debts.map((debt: any) => (
-                                <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl text-xs shadow-inner">
+                                <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl text-[10px] sm:text-xs shadow-inner">
                                    <div className="min-w-0 pr-2">
-                                     <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
+                                     <p className="text-[8px] font-black opacity-50 uppercase truncate">{debt.groupName}</p>
                                      <p className="font-bold truncate">{debt.description}</p>
                                    </div>
                                    <span className="font-bold text-secondary shrink-0">{formatCurrency(debt.amount)}</span>
@@ -695,23 +692,23 @@ function WalletSection({
 
                   {incomingResult.pending.length > 0 && (
                     <div className="space-y-4 pt-2 border-t border-dashed">
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded">Deudas Pendientes</h3>
+                      <h3 className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 w-fit px-2 py-1 rounded">Pendientes</h3>
                       {incomingResult.pending.map((group: any) => {
                         const debtor = profilesMap[group.debtorId];
                         return (
                           <div key={group.debtorId} className="space-y-3">
                             <div className="flex items-center justify-between px-1">
-                              <div className="flex items-center gap-2">
-                                <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground"><User className="h-3.5 w-3.5" /></div>
-                                <span className="text-[11px] font-black uppercase text-primary">{debtor?.displayName || '...'} te debe</span>
+                              <div className="flex items-center gap-2 min-w-0 pr-2">
+                                <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center text-muted-foreground shrink-0"><User className="h-3.5 w-3.5" /></div>
+                                <span className="text-[10px] font-black uppercase text-primary truncate">{debtor?.displayName || '...'} te debe</span>
                               </div>
-                              <span className="text-sm font-black text-primary font-headline">{formatCurrency(group.total)}</span>
+                              <span className="text-xs sm:text-sm font-black text-primary font-headline shrink-0">{formatCurrency(group.total)}</span>
                             </div>
                             <div className="space-y-2 pl-2 border-l-2 border-muted">
                               {group.debts.map((debt: any) => (
-                                <div key={debt.id} className="flex justify-between items-center p-3 bg-muted/20 rounded-xl text-xs">
+                                <div key={debt.id} className="flex justify-between items-center p-2.5 sm:p-3 bg-muted/20 rounded-xl text-[10px] sm:text-xs">
                                    <div className="min-w-0 pr-2">
-                                     <p className="text-[8px] font-black opacity-50 uppercase">{debt.groupName}</p>
+                                     <p className="text-[8px] font-black opacity-50 uppercase truncate">{debt.groupName}</p>
                                      <p className="font-bold truncate">{debt.description}</p>
                                    </div>
                                    <span className="font-bold text-muted-foreground shrink-0">{formatCurrency(debt.amount)}</span>
