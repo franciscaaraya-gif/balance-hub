@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, Suspense, useMemo } from "react";
@@ -94,13 +95,17 @@ function AttendanceContent() {
     }
   }, [formData.groupId, groups]);
 
-  const groupIds = groups?.map(g => g.id) || [];
-  const groupIdsKey = groupIds.join(',');
+  // ESTABILIZACIÓN CRÍTICA: Ordenamos los IDs alfabéticamente para que groupIdsKey sea estable
+  // aunque Firestore devuelva los grupos en distinto orden (previniendo reinicios de listener).
+  const groupIds = useMemo(() => {
+    if (!groups) return [];
+    return groups.map(g => g.id).sort();
+  }, [groups]);
+
+  const groupIdsKey = useMemo(() => groupIds.join(','), [groupIds]);
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid || groupIds.length === 0) return null;
-    // FIX: Eliminamos el 'orderBy' para asegurar que eventos sin el campo 'createdAt' (datos viejos)
-    // no sean excluidos automáticamente por el motor de Firestore. El orden se hará en memoria.
     return query(
       collection(firestore, 'events'), 
       where('groupId', 'in', groupIds)
@@ -109,12 +114,17 @@ function AttendanceContent() {
 
   const { data: rawEvents, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
-  // FIX: Ordenamiento en memoria y filtrado para asegurar visibilidad total
   const activeEvents = useMemo(() => {
     if (!rawEvents) return [];
     return rawEvents
       .filter(e => !e.isCharged)
-      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      .sort((a, b) => {
+        const timeA = a.createdAt || 0;
+        const timeB = b.createdAt || 0;
+        // Si tienen el mismo timestamp, usar el ID como desempate estable
+        if (timeB === timeA) return b.id.localeCompare(a.id);
+        return timeB - timeA;
+      });
   }, [rawEvents]);
 
   const handleCreate = async () => {
@@ -277,7 +287,7 @@ function AttendanceContent() {
 
       <div className="px-1 relative">
         <h2 className="text-[10px] uppercase font-black tracking-widest text-muted-foreground mb-4 border-l-2 border-accent pl-2">Eventos Activos</h2>
-        {eventsLoading ? (
+        {eventsLoading && !rawEvents ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map(i => <div key={i} className="h-48 rounded-[2rem] bg-muted animate-pulse" />)}
           </div>
