@@ -105,7 +105,9 @@ function AttendanceContent() {
       orderBy('createdAt', 'desc')
     );
   }, [firestore, user?.uid, groupIdsKey]);
-  const { data: events } = useCollection<Event>(eventsQuery);
+
+  // FIX: Destructurar isLoading como eventsLoading para resolver el ReferenceError
+  const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
   const activeEvents = events?.filter(e => !e.isCharged) || [];
 
