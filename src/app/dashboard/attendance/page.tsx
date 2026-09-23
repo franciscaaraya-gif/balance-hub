@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useMemo } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { createEvent, getGroupMembersDetails } from "@/lib/firebase/store";
 import { Event, Group, UserProfile } from "@/lib/types";
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useSearchParams } from "next/navigation";
 
@@ -99,17 +99,23 @@ function AttendanceContent() {
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid || groupIds.length === 0) return null;
+    // FIX: Eliminamos el 'orderBy' para asegurar que eventos sin el campo 'createdAt' (datos viejos)
+    // no sean excluidos automáticamente por el motor de Firestore. El orden se hará en memoria.
     return query(
       collection(firestore, 'events'), 
-      where('groupId', 'in', groupIds),
-      orderBy('createdAt', 'desc')
+      where('groupId', 'in', groupIds)
     );
   }, [firestore, user?.uid, groupIdsKey]);
 
-  // FIX: Destructurar isLoading como eventsLoading para resolver el ReferenceError
-  const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
+  const { data: rawEvents, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
-  const activeEvents = events?.filter(e => !e.isCharged) || [];
+  // FIX: Ordenamiento en memoria y filtrado para asegurar visibilidad total
+  const activeEvents = useMemo(() => {
+    if (!rawEvents) return [];
+    return rawEvents
+      .filter(e => !e.isCharged)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [rawEvents]);
 
   const handleCreate = async () => {
     if (!formData.title || !formData.date || !formData.totalCost || !formData.costConcept || !formData.groupId || !formData.creditorId || !user) {

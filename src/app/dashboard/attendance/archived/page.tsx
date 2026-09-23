@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { Event, Group } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Calendar, Users, ChevronRight, User, Clock, MapPin, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { collection, query, where, orderBy } from "firebase/firestore";
+import { collection, query, where } from "firebase/firestore";
 
 export default function ArchivedEventsPage() {
   const { user, isUserLoading } = useUser();
@@ -24,15 +25,23 @@ export default function ArchivedEventsPage() {
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid || groupIds.length === 0) return null;
+    // FIX: Eliminamos el 'orderBy' de servidor para permitir que eventos antiguos
+    // sin el campo 'createdAt' se recuperen correctamente.
     return query(
       collection(firestore, 'events'), 
-      where('groupId', 'in', groupIds),
-      orderBy('createdAt', 'desc')
+      where('groupId', 'in', groupIds)
     );
   }, [firestore, user?.uid, groupIdsKey]);
-  const { data: events, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
-  const archivedEvents = events?.filter(e => e.isCharged) || [];
+  const { data: rawEvents, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
+
+  // FIX: Ordenamiento en memoria para mayor robustez ante datos parciales
+  const archivedEvents = useMemo(() => {
+    if (!rawEvents) return [];
+    return rawEvents
+      .filter(e => e.isCharged)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }, [rawEvents]);
 
   if (isUserLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary" /></div>;
 

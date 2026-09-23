@@ -402,11 +402,14 @@ export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantI
   const eventCollection = collection(db, "events");
   const eventRef = doc(eventCollection);
   const checkInToken = Math.random().toString(36).substring(7);
+  
+  // FIX DEFINITIVO: Sobrescribir explícitamente participantIds y presentIds como vacíos
+  // para evitar que cualquier dato previo en 'data' los auto-rellene.
   const eventData = {
     ...data,
     id: eventRef.id,
-    participantIds: [],
-    presentIds: [],
+    participantIds: [], 
+    presentIds: [],    
     externalGuests: [],
     shareLink: `${window.location.origin}/attendance/join/${eventRef.id}`,
     checkInToken,
