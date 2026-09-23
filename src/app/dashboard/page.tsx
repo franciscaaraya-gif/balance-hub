@@ -17,7 +17,7 @@ import {
   Users, ChevronRight, Loader2, 
   AlertCircle, Clock, CheckCircle2, 
   CreditCard, User, Send, ArrowUpRight, ArrowDownLeft, Calendar,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Zap, Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
@@ -184,6 +184,8 @@ export default function Dashboard() {
             getStatusBadge={getStatusBadge} 
             setSelectedDebtGroup={setSelectedDebtGroup} 
             setSelectedValidationGroup={setSelectedValidationGroup} 
+            myDebts={myDebts || []}
+            myIncomingDebts={myIncomingDebts || []}
           />
         </div>
 
@@ -214,6 +216,8 @@ export default function Dashboard() {
             getStatusBadge={getStatusBadge} 
             setSelectedDebtGroup={setSelectedDebtGroup} 
             setSelectedValidationGroup={setSelectedValidationGroup} 
+            myDebts={myDebts || []}
+            myIncomingDebts={myIncomingDebts || []}
             defaultExpanded={true}
           />
         </div>
@@ -327,6 +331,8 @@ interface WalletSectionProps {
   getStatusBadge: (status: string) => React.ReactNode;
   setSelectedDebtGroup: (val: any) => void;
   setSelectedValidationGroup: (val: any) => void;
+  myDebts: Debt[];
+  myIncomingDebts: Debt[];
   defaultExpanded?: boolean;
 }
 
@@ -339,10 +345,13 @@ function WalletSection({
   getStatusBadge,
   setSelectedDebtGroup,
   setSelectedValidationGroup,
+  myDebts,
+  myIncomingDebts,
   defaultExpanded = false
 }: WalletSectionProps) {
   const [isDebesExpanded, setIsDebesExpanded] = useState(defaultExpanded);
   const [isTeDebenExpanded, setIsTeDebenExpanded] = useState(defaultExpanded);
+  const [expandedNettingPersonId, setExpandedNettingPersonId] = useState<string | null>(null);
 
   const pendingReviewTotal = incomingResult.review.reduce((sum: number, r: any) => sum + r.total, 0);
   const pendingNormalTotal = incomingResult.pending.reduce((sum: number, p: any) => sum + p.total, 0);
@@ -354,8 +363,130 @@ function WalletSection({
   const totalIncomingCount = incomingResult.review.reduce((sum: number, g: any) => sum + g.debts.length, 0) +
                              incomingResult.pending.reduce((sum: number, g: any) => sum + g.debts.length, 0);
 
+  // Lógica Aditiva: Cálculo del Neteo Inteligente Cruzado entre dos personas sin alterar los arreglos originales
+  const smartNettings = useMemo(() => {
+    const netMap: Record<string, { owesMe: number; iOweThem: number; myDebtsList: Debt[]; theirDebtsList: Debt[] }> = {};
+
+    myDebts.filter(d => d.status !== 'paid' && d.debtorId !== d.creditorId).forEach(debt => {
+      const cid = debt.creditorId;
+      if (!netMap[cid]) {
+        netMap[cid] = { owesMe: 0, iOweThem: 0, myDebtsList: [], theirDebtsList: [] };
+      }
+      netMap[cid].iOweThem += debt.amount;
+      netMap[cid].myDebtsList.push(debt);
+    });
+
+    myIncomingDebts.filter(d => d.status !== 'paid' && d.debtorId !== d.creditorId).forEach(debt => {
+      const did = debt.debtorId;
+      if (!netMap[did]) {
+        netMap[did] = { owesMe: 0, iOweThem: 0, myDebtsList: [], theirDebtsList: [] };
+      }
+      netMap[did].owesMe += debt.amount;
+      netMap[did].theirDebtsList.push(debt);
+    });
+
+    return Object.entries(netMap)
+      .map(([personId, data]) => {
+        const netValue = data.iOweThem - data.owesMe;
+        return {
+          personId,
+          netValue,
+          totalInvolvedDebts: data.myDebtsList.length + data.theirDebtsList.length,
+          ...data
+        };
+      })
+      .filter(item => item.iOweThem > 0 && item.owesMe > 0 && Math.abs(item.netValue) > 0.01);
+  }, [myDebts, myIncomingDebts]);
+
   return (
     <div className="space-y-4">
+      {/* Sección Nueva 100% Aditiva: Pago Inteligente / Neteo Cruzado */}
+      {smartNettings.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-primary ml-2">
+            <Zap className="h-4 w-4 text-accent animate-bounce" /> Pago Inteligente (Neteo Cruzado)
+          </h2>
+          <Card className="border-2 border-accent/20 bg-amber-50/20 shadow-sm rounded-[2rem] overflow-hidden">
+            <CardContent className="p-4 sm:p-5 space-y-3">
+              <div className="flex items-start gap-2.5 text-xs text-muted-foreground px-1 pb-2 border-b border-dashed">
+                <Sparkles className="h-4 w-4 text-accent shrink-0 mt-0.5" />
+                <p className="font-medium text-[11px] leading-snug">
+                  Zygos detectó deudas cruzadas. Sugerimos resolver el saldo neto en una única transferencia para ahorrar movimientos bancarios.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {smartNettings.map(netItem => {
+                  const personProfile = profilesMap[netItem.personId];
+                  const personName = personProfile?.displayName || "Miembro";
+                  const isExpanded = expandedNettingPersonId === netItem.personId;
+
+                  return (
+                    <div key={netItem.personId} className="border bg-white rounded-2xl overflow-hidden shadow-sm transition-all">
+                      <div 
+                        className="p-3.5 flex items-center justify-between cursor-pointer hover:bg-muted/10 active:bg-muted/20"
+                        onClick={() => setExpandedNettingPersonId(isExpanded ? null : netItem.personId)}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <p className="text-xs font-bold text-primary">
+                            {netItem.netValue > 0 
+                              ? `Si le pagas $${netItem.netValue.toFixed(2)} a ${personName}`
+                              : `Si ${personName} te paga $${Math.abs(netItem.netValue).toFixed(2)}`
+                            }
+                          </p>
+                          <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                            Resuelven {netItem.totalInvolvedDebts} cuentas cruzadas de forma inmediata.
+                          </p>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-1 bg-accent/10 px-2 py-1 rounded-xl text-accent font-black text-[9px] uppercase">
+                          <span>Ver</span>
+                          {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="bg-muted/10 p-3 border-t space-y-2 text-xs">
+                          <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest px-1">Cuentas Involucradas:</p>
+                          
+                          {/* Deudas que yo le debo a esa persona */}
+                          {netItem.myDebtsList.map(debt => (
+                            <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-red-100 shadow-inner">
+                              <div className="min-w-0 pr-2">
+                                <span className="text-[8px] bg-red-50 text-red-700 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5">Tú debes</span>
+                                <span className="font-medium text-[11px] text-primary truncate">{debt.description}</span>
+                                <span className="block text-[8px] text-muted-foreground uppercase">{debt.groupName}</span>
+                              </div>
+                              <span className="font-bold text-red-600 shrink-0">${debt.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+
+                          {/* Deudas que esa persona me debe a mí */}
+                          {netItem.theirDebtsList.map(debt => (
+                            <div key={debt.id} className="flex justify-between items-center bg-white p-2.5 rounded-xl border border-emerald-100 shadow-inner">
+                              <div className="min-w-0 pr-2">
+                                <span className="text-[8px] bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded font-bold uppercase tracking-tight mr-1.5">Te debe</span>
+                                <span className="font-medium text-[11px] text-primary truncate">{debt.description}</span>
+                                <span className="block text-[8px] text-muted-foreground uppercase">{debt.groupName}</span>
+                              </div>
+                              <span className="font-bold text-emerald-600 shrink-0">${debt.amount.toFixed(2)}</span>
+                            </div>
+                          ))}
+
+                          <div className="pt-2 border-t border-dashed flex justify-between text-[10px] font-bold text-muted-foreground px-1">
+                            <span>Total que le debes: ${netItem.iOweThem.toFixed(2)}</span>
+                            <span>Total que te debe: ${netItem.owesMe.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {/* El resto de componentes de cobros y pagos individuales permanecen intactos e inalterados */}
       <section className="space-y-2">
         <h2 className="text-xs font-black uppercase tracking-widest flex items-center gap-2 text-orange-600 ml-2">
           <ArrowUpRight className="h-4 w-4" /> Billetera: Pagos
