@@ -25,8 +25,6 @@ export default function ArchivedEventsPage() {
 
   const eventsQuery = useMemoFirebase(() => {
     if (!firestore || !user?.uid || groupIds.length === 0) return null;
-    // FIX: Eliminamos el 'orderBy' de servidor para permitir que eventos antiguos
-    // sin el campo 'createdAt' se recuperen correctamente.
     return query(
       collection(firestore, 'events'), 
       where('groupId', 'in', groupIds)
@@ -35,11 +33,10 @@ export default function ArchivedEventsPage() {
 
   const { data: rawEvents, isLoading: eventsLoading } = useCollection<Event>(eventsQuery);
 
-  // FIX: Ordenamiento en memoria para mayor robustez ante datos parciales
   const archivedEvents = useMemo(() => {
     if (!rawEvents) return [];
     return rawEvents
-      .filter(e => e.isCharged)
+      .filter(e => e.isCharged || e.isArchived)
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [rawEvents]);
 
@@ -53,7 +50,7 @@ export default function ArchivedEventsPage() {
         </Button>
         <div>
           <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">Eventos Archivados</h1>
-          <p className="text-sm text-muted-foreground">Historial de fechas ya liquidadas y cobradas.</p>
+          <p className="text-sm text-muted-foreground">Historial de fechas ya liquidadas o archivadas manualmente.</p>
         </div>
       </div>
 
@@ -69,7 +66,9 @@ export default function ArchivedEventsPage() {
           archivedEvents.map(event => (
             <Link key={event.id} href={`/dashboard/attendance/${event.id}`}>
               <Card className="hover:shadow-lg transition-all border-l-4 border-l-slate-400 rounded-[2rem] group relative overflow-hidden bg-white shadow-sm opacity-80 hover:opacity-100">
-                <div className="absolute top-0 right-0 p-1 bg-emerald-500 text-white rounded-bl-lg text-[9px] font-bold px-2 uppercase tracking-tighter">Liquidado</div>
+                <div className="absolute top-0 right-0 p-1 bg-emerald-500 text-white rounded-bl-lg text-[9px] font-bold px-2 uppercase tracking-tighter">
+                  {event.isCharged ? "Liquidado" : "Archivado"}
+                </div>
                 <CardHeader className="pb-3 px-5">
                   <div className="flex justify-between items-start gap-2">
                     <div className="min-w-0">

@@ -116,7 +116,7 @@ function AttendanceContent() {
   const activeEvents = useMemo(() => {
     if (!rawEvents) return [];
     return rawEvents
-      .filter(e => !e.isCharged)
+      .filter(e => !e.isCharged && !e.isArchived)
       .sort((a, b) => {
         const timeA = a.createdAt || 0;
         const timeB = b.createdAt || 0;

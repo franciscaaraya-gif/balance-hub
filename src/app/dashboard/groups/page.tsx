@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useUser, useFirestore, useCollection, useDoc, useMemoFirebase } from "@/firebase";
 import { createGroup, togglePinGroup } from "@/lib/firebase/store";
 import { Group, UserProfile } from "@/lib/types";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Users, ChevronRight, Loader2, Pin, PinOff } from "lucide-react";
+import { PlusCircle, Users, ChevronRight, Loader2, Pin, PinOff, Archive } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, doc } from "firebase/firestore";
@@ -34,7 +34,11 @@ export default function GroupsPage() {
     if (!firestore || !user?.uid) return null;
     return query(collection(firestore, 'groups'), where('memberIds', 'array-contains', user.uid));
   }, [firestore, user?.uid]);
-  const { data: myGroups, isLoading: myGroupsLoading } = useCollection<Group>(myGroupsQuery);
+  const { data: rawGroups, isLoading: myGroupsLoading } = useCollection<Group>(myGroupsQuery);
+
+  const activeGroups = useMemo(() => {
+    return rawGroups?.filter(g => !g.isArchived) || [];
+  }, [rawGroups]);
 
   const handleCreateGroup = async () => {
     if (!newGroupName || !user) return;
@@ -68,30 +72,37 @@ export default function GroupsPage() {
 
   return (
     <div className="space-y-6 sm:space-y-10 max-w-6xl mx-auto pb-10 px-2 sm:px-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">Mis Grupos de Pago</h1>
           <p className="text-sm text-muted-foreground">Administra y organiza tus cuentas grupales de forma transparente.</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-accent h-12 px-6 shadow-lg rounded-2xl font-bold text-white">
-              <PlusCircle className="h-5 w-5 mr-2" /> Nuevo Grupo
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="rounded-[2rem] border-none p-8">
-            <DialogHeader><DialogTitle className="text-2xl font-headline font-bold">Crear Grupo</DialogTitle></DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-1">
-                <Label className="text-[10px] uppercase font-black px-1">Nombre del Grupo</Label>
-                <Input placeholder="Ej: Amigos Padel" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} className="rounded-xl h-12" />
+        <div className="flex gap-2">
+          <Button variant="outline" asChild className="h-12 rounded-2xl font-bold gap-2">
+            <Link href="/dashboard/groups/archived">
+              <Archive className="h-5 w-5" /> Archivados
+            </Link>
+          </Button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-accent h-12 px-6 shadow-lg rounded-2xl font-bold text-white">
+                <PlusCircle className="h-5 w-5 mr-2" /> Nuevo Grupo
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="rounded-[2rem] border-none p-8">
+              <DialogHeader><DialogTitle className="text-2xl font-headline font-bold">Crear Grupo</DialogTitle></DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase font-black px-1">Nombre del Grupo</Label>
+                  <Input placeholder="Ej: Amigos Padel" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} className="rounded-xl h-12" />
+                </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button onClick={handleCreateGroup} className="w-full h-12 rounded-xl font-bold">Crear Grupo</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button onClick={handleCreateGroup} className="w-full h-12 rounded-xl font-bold">Crear Grupo</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="px-1">
@@ -99,13 +110,13 @@ export default function GroupsPage() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map(i => <div key={i} className="h-40 rounded-[2rem] bg-muted animate-pulse" />)}
           </div>
-        ) : myGroups?.length === 0 ? (
+        ) : activeGroups.length === 0 ? (
           <div className="py-20 text-center border-2 border-dashed rounded-[2rem] opacity-30 font-bold uppercase text-[10px]">
             No tienes grupos activos. Crea uno para empezar a dividir gastos.
           </div>
-        ) : myGroups && myGroups.length <= 4 ? (
+        ) : activeGroups.length <= 4 ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {myGroups.map(g => (
+            {activeGroups.map(g => (
               <GroupCard 
                 key={g.id} 
                 g={g} 
@@ -117,7 +128,7 @@ export default function GroupsPage() {
         ) : (
           <Carousel opts={{ align: "start" }} className="w-full">
             <CarouselContent className="-ml-4">
-              {myGroups?.map((g) => (
+              {activeGroups.map((g) => (
                 <CarouselItem key={g.id} className="pl-4 sm:basis-1/2 lg:basis-1/4">
                   <GroupCard 
                     g={g} 

@@ -9,10 +9,12 @@ import {
   where, 
   addDoc, 
   updateDoc,
+  deleteDoc,
   arrayUnion,
   arrayRemove,
   limit,
-  writeBatch
+  writeBatch,
+  collectionGroup
 } from "firebase/firestore";
 import { Group, UserProfile, DebtStatus, ReceiptItem, Event, ExternalGuest, Debt } from "../types";
 import { errorEmitter } from '@/firebase/error-emitter';
@@ -117,6 +119,7 @@ export const createGroup = async (name: string, adminId: string) => {
     },
     inviteToken,
     inviteLink,
+    isArchived: false,
     createdAt: Date.now(),
   };
 
@@ -128,6 +131,24 @@ export const createGroup = async (name: string, adminId: string) => {
     }));
     throw error;
   });
+};
+
+export const archiveGroup = (groupId: string, isArchived: boolean = true) => {
+  const docRef = doc(db, "groups", groupId);
+  return updateDoc(docRef, { isArchived });
+};
+
+export const deleteGroup = async (groupId: string) => {
+  // Verificar si tiene deudas
+  const debtsRef = collection(db, "groups", groupId, "debts");
+  const debtsSnap = await getDocs(query(debtsRef, limit(1)));
+  
+  if (!debtsSnap.empty) {
+    throw new Error("No se puede eliminar un grupo con historial financiero. Por favor, utiliza la opción 'Archivar'.");
+  }
+
+  const docRef = doc(db, "groups", groupId);
+  return deleteDoc(docRef);
 };
 
 export const updateGroupTransferDetails = (groupId: string, transferDetails: string) => {
@@ -403,8 +424,6 @@ export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantI
   const eventRef = doc(eventCollection);
   const checkInToken = Math.random().toString(36).substring(7);
   
-  // FIX DEFINITIVO: Sobrescribir explícitamente participantIds y presentIds como vacíos
-  // para evitar que cualquier dato previo en 'data' los auto-rellene.
   const eventData = {
     ...data,
     id: eventRef.id,
@@ -414,6 +433,7 @@ export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantI
     shareLink: `${window.location.origin}/attendance/join/${eventRef.id}`,
     checkInToken,
     isCharged: false,
+    isArchived: false,
     createdAt: Date.now(),
   };
 
@@ -426,6 +446,33 @@ export const createEvent = (data: Omit<Event, 'id' | 'createdAt' | 'participantI
   });
   
   return eventRef;
+};
+
+export const archiveEvent = (eventId: string, isArchived: boolean = true) => {
+  const docRef = doc(db, "events", eventId);
+  return updateDoc(docRef, { isArchived });
+};
+
+export const deleteEvent = async (eventId: string) => {
+  const eventRef = doc(db, "events", eventId);
+  const eventSnap = await getDoc(eventRef);
+  if (!eventSnap.exists()) throw new Error("Evento no encontrado");
+  const event = eventSnap.data() as Event;
+
+  // 1. Verificar isCharged
+  if (event.isCharged) {
+    throw new Error("No se puede eliminar un evento ya liquidado. Por favor, utiliza la opción 'Archivar'.");
+  }
+
+  // 2. Verificar deudas manuales vinculadas
+  const debtsQuery = query(collectionGroup(db, "debts"), where("eventId", "==", eventId), limit(1));
+  const debtsSnap = await getDocs(debtsQuery);
+  
+  if (!debtsSnap.empty) {
+    throw new Error("No se puede eliminar un evento con deudas vinculadas. Por favor, utiliza la opción 'Archivar'.");
+  }
+
+  return deleteDoc(eventRef);
 };
 
 export const updateEventSettings = (eventId: string, chargeAbsentees: boolean) => {
@@ -453,10 +500,9 @@ export const chargeEventToGroup = async (eventId: string) => {
   const creditorId = event.creditorId || event.creatorId;
 
   for (const uid of event.participantIds) {
-    const isPresent = event.presentIds.includes(uid);
     const myGuests = event.externalGuests?.filter(g => g.addedBy === uid) || [];
 
-    let multiplier = 1; // El participante siempre paga
+    let multiplier = 1; 
     multiplier += myGuests.length;
 
     const finalAmount = costPerHead * multiplier;

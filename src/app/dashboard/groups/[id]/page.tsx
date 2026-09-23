@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, use, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { 
   getGroupMembersDetails, 
@@ -10,7 +11,9 @@ import {
   claimReceiptItem, 
   finalizeReceipt, 
   updateDebtStatusInGroup, 
-  getUserProfile
+  getUserProfile,
+  archiveGroup,
+  deleteGroup
 } from "@/lib/firebase/store";
 import { Group, Debt, UserProfile, Receipt, ReceiptItem, Event } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -25,7 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { 
   Plus, Share2, AlertCircle, CheckCircle2, QrCode, 
   UserPlus, ScanLine, Loader2, DollarSign, Users, 
-  CreditCard, Copy, ReceiptText, ChevronRight, User, Info, Settings2, Download
+  CreditCard, Copy, ReceiptText, ChevronRight, User, Info, Settings2, Download, Archive, Trash2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc, collection, query, orderBy, where, updateDoc } from "firebase/firestore";
@@ -35,6 +38,7 @@ import * as XLSX from "xlsx";
 
 export default function GroupDetails({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
+  const router = useRouter();
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -56,6 +60,7 @@ export default function GroupDetails({ params: paramsPromise }: { params: Promis
 
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [expandedGastoId, setExpandedGastoId] = useState<string | null>(null);
 
   const [members, setMembers] = useState<UserProfile[]>([]);
@@ -340,6 +345,38 @@ nombre_item;cantidad;precio_unitario;precio_total`;
     toast({ title: "Excel Descargado", description: "El historial de deudas se ha exportado correctamente." });
   };
 
+  const handleSelectAll = () => {
+    if (selectedMembers.length === members.length) {
+      setSelectedMembers([]);
+    } else {
+      setSelectedMembers(members.map(m => m.uid));
+    }
+  };
+
+  const handleArchive = async () => {
+    try {
+      await archiveGroup(params.id, true);
+      toast({ title: "Grupo Archivado", description: "El grupo se ha movido a la sección de archivados." });
+      router.push("/dashboard/groups");
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al archivar" });
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsActionLoading(true);
+    try {
+      await deleteGroup(params.id);
+      toast({ title: "Grupo Eliminado", description: "El grupo se ha borrado definitivamente." });
+      router.push("/dashboard/groups");
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "No se puede eliminar", description: e.message });
+    } finally {
+      setIsActionLoading(false);
+      setShowSettingsModal(false);
+    }
+  };
+
   if (groupLoading) return <div className="h-full flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   if (!group) return <div className="p-8 text-center"><AlertCircle className="mx-auto h-12 w-12 opacity-50 mb-4" /><p>Grupo no encontrado.</p></div>;
 
@@ -349,11 +386,16 @@ nombre_item;cantidad;precio_unitario;precio_total`;
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary truncate">{group.name}</h1>
           <div className="flex items-center gap-2 text-[10px] sm:text-sm text-muted-foreground font-medium mt-1">
-            <Badge variant="secondary" className="rounded-lg text-[9px] uppercase font-black">Activo</Badge>
+            <Badge variant="secondary" className="rounded-lg text-[9px] uppercase font-black">{group.isArchived ? "Archivado" : "Activo"}</Badge>
             <span>• {group.memberIds.length} Miembros</span>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          {isAdmin && (
+            <Button variant="outline" size="sm" className="flex-1 md:flex-none gap-2 rounded-xl h-10 text-[10px] font-black uppercase" onClick={() => setShowSettingsModal(true)}>
+              <Settings2 className="h-4 w-4" /> Gestión
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="flex-1 md:flex-none gap-2 rounded-xl h-10 text-[10px] font-black uppercase" onClick={() => setShowInviteModal(true)}>
             <UserPlus className="h-4 w-4" /> Invitar
           </Button>
@@ -676,7 +718,12 @@ nombre_item;cantidad;precio_unitario;precio_total`;
 
                 {divideEqually ? (
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-widest px-1 text-muted-foreground">¿Quiénes entran en la división?</Label>
+                    <div className="flex items-center justify-between px-1">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">¿Quiénes entran en la división?</Label>
+                      <Button variant="ghost" size="sm" className="h-6 text-[9px] font-black uppercase text-accent hover:bg-accent/5" onClick={handleSelectAll}>
+                        {selectedMembers.length === members.length ? "Desmarcar todos" : "Marcar todos"}
+                      </Button>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-muted/20 p-4 rounded-2xl max-h-48 overflow-y-auto">
                       {members.map(m => (
                         <div key={m.uid} className={cn("flex items-center gap-2 p-2.5 rounded-xl border transition-all cursor-pointer active:scale-[0.98]", selectedMembers.includes(m.uid) ? "bg-white border-primary/20 shadow-sm" : "bg-transparent border-transparent")} onClick={() => setSelectedMembers(prev => prev.includes(m.uid) ? prev.filter(id => id !== m.uid) : [...prev, m.uid])}>
@@ -823,6 +870,36 @@ nombre_item;cantidad;precio_unitario;precio_total`;
             >
               <Copy className="h-4 w-4" /> Copiar Enlace
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
+        <DialogContent className="w-[95vw] sm:max-w-md rounded-[2rem] p-6 sm:p-8 border-none mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-headline font-bold">Gestión del Grupo</DialogTitle>
+            <DialogDescription className="text-xs">Opciones de administración para el grupo.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="space-y-3">
+               <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground px-1">Archivar</Label>
+               <div className="bg-muted/20 p-4 rounded-2xl space-y-3">
+                 <p className="text-[11px] text-muted-foreground leading-relaxed">El grupo dejará de aparecer en tu lista principal, pero no se borrará ningún dato.</p>
+                 <Button variant="outline" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleArchive}>
+                    <Archive className="h-4 w-4" /> Archivar Grupo
+                 </Button>
+               </div>
+            </div>
+
+            <div className="space-y-3">
+               <Label className="text-[10px] uppercase font-black tracking-widest text-destructive px-1">Eliminar</Label>
+               <div className="bg-destructive/5 p-4 rounded-2xl space-y-3 border border-destructive/10">
+                 <p className="text-[11px] text-muted-foreground leading-relaxed">Esta acción es irreversible y borrará todo permanentemente. Solo permitido si no hay historial financiero.</p>
+                 <Button variant="destructive" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleDelete} disabled={isActionLoading}>
+                    {isActionLoading ? <Loader2 className="animate-spin" /> : <><Trash2 className="h-4 w-4" /> Eliminar Definitivamente</>}
+                 </Button>
+               </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

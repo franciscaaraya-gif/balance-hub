@@ -11,7 +11,9 @@ import {
   addExternalGuest, 
   removeParticipantFromEvent,
   chargeEventToGroup,
-  addParticipantToEvent
+  addParticipantToEvent,
+  archiveEvent,
+  deleteEvent
 } from "@/lib/firebase/store";
 import { Event, UserProfile } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -19,12 +21,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Calendar, MapPin, Clock, QrCode, CheckCircle2, 
   Loader2, Zap, AlertCircle, Share2, Coins, 
-  ArrowLeft, Trash2, Plus, Settings2, Info, Copy, CalendarPlus
+  ArrowLeft, Trash2, Plus, Settings2, Info, Copy, CalendarPlus, Archive
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { doc } from "firebase/firestore";
@@ -38,10 +40,12 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
   const { toast } = useToast();
 
   const [showQr, setShowQr] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [newGuestName, setNewGuestName] = useState("");
   const [selectedResponsibleId, setSelectedResponsibleId] = useState<string>("");
   const [profilesMap, setProfilesMap] = useState<Record<string, UserProfile>>({});
   const [isCharging, setIsCharging] = useState(false);
+  const [isActionLoading, setIsActionLoading] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
 
   const eventRef = useMemoFirebase(() => {
@@ -141,6 +145,30 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
     }
   };
 
+  const handleArchive = async () => {
+    try {
+      await archiveEvent(event!.id, true);
+      toast({ title: "Evento Archivado" });
+      router.push("/dashboard/attendance");
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error al archivar" });
+    }
+  };
+
+  const handleDelete = async () => {
+    setIsActionLoading(true);
+    try {
+      await deleteEvent(event!.id);
+      toast({ title: "Evento Eliminado" });
+      router.push("/dashboard/attendance");
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "No se puede eliminar", description: e.message });
+    } finally {
+      setIsActionLoading(false);
+      setShowSettings(false);
+    }
+  };
+
   if (eventLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
@@ -166,7 +194,6 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
 
   const isParticipant = event.participantIds?.includes(user?.uid || '');
   const isAdmin = event.creatorId === user?.uid;
-  // Un administrador debe ver las herramientas de gestión incluso si no asiste.
   const showManagement = isParticipant || isAdmin;
 
   const totalParticipants = event.participantIds?.length || 0;
@@ -226,6 +253,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-accent text-white px-3 font-bold">{event.date}</Badge>
+              {event.isArchived && <Badge variant="secondary" className="bg-white/20 text-white border-none uppercase font-black text-[9px]">Archivado</Badge>}
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -242,6 +270,16 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
               >
                 <CalendarPlus className="h-3 w-3 mr-1" /> Calendario
               </Button>
+              {isAdmin && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-7 rounded-lg bg-white/10 hover:bg-white/20 text-[9px] font-bold text-white uppercase tracking-tighter"
+                  onClick={() => setShowSettings(true)}
+                >
+                  <Settings2 className="h-3 w-3 mr-1" /> Gestión
+                </Button>
+              )}
             </div>
             <h1 className="text-3xl font-headline font-bold">{event.title}</h1>
             <p className="text-sm opacity-80 font-medium">Concepto: <span className="underline font-bold">{event.costConcept || "No especificado"}</span></p>
@@ -515,7 +553,7 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
                  variant="outline" 
                  className="w-full h-11 rounded-xl text-[10px] font-black uppercase tracking-widest border-2" 
                  onClick={() => { 
-                   const shareText = `¡Te invito a este evento! ${event.title}, el ${event.date} a las ${event.time}. Confirma tu asistencia acá: ${event.shareLink}`;
+                   const shareText = `⚽ ¡Partido armado! ${event.title}, el ${event.date} a las ${event.time}. Confirma tu asistencia acá: ${event.shareLink}`;
                    navigator.clipboard.writeText(shareText); 
                    toast({ title: "Link copiado" }); 
                  }}
@@ -539,6 +577,36 @@ export default function EventAttendanceDetails({ params: paramsPromise }: { para
             </p>
           </div>
           <Button className="w-full h-12 rounded-2xl" onClick={() => setShowQr(false)}>Cerrar</Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="w-[95vw] sm:max-w-md rounded-[2rem] p-6 sm:p-8 border-none mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-headline font-bold">Gestión del Evento</DialogTitle>
+            <DialogDescription className="text-xs">Opciones de administración para esta fecha.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            <div className="space-y-3">
+               <Label className="text-[10px] uppercase font-black tracking-widest text-muted-foreground px-1">Archivar</Label>
+               <div className="bg-muted/20 p-4 rounded-2xl space-y-3">
+                 <p className="text-[11px] text-muted-foreground leading-relaxed">El evento dejará de aparecer en tu lista principal, pero no se borrará ningún dato.</p>
+                 <Button variant="outline" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleArchive}>
+                    <Archive className="h-4 w-4" /> Archivar Evento
+                 </Button>
+               </div>
+            </div>
+
+            <div className="space-y-3">
+               <Label className="text-[10px] uppercase font-black tracking-widest text-destructive px-1">Eliminar</Label>
+               <div className="bg-destructive/5 p-4 rounded-2xl space-y-3 border border-destructive/10">
+                 <p className="text-[11px] text-muted-foreground leading-relaxed">Esta acción borrará el evento definitivamente. Solo permitido si no hay deudas generadas.</p>
+                 <Button variant="destructive" className="w-full h-11 rounded-xl gap-2 font-bold" onClick={handleDelete} disabled={isActionLoading}>
+                    {isActionLoading ? <Loader2 className="animate-spin" /> : <><Trash2 className="h-4 w-4" /> Eliminar Definitivamente</>}
+                 </Button>
+               </div>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

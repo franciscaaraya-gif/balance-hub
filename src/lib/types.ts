@@ -25,6 +25,7 @@ export interface Group {
   inviteToken: string;
   inviteLink: string;
   transferDetails?: string;
+  isArchived?: boolean;
   createdAt: number;
 }
 
@@ -101,5 +102,6 @@ export interface Event {
   shareLink: string;
   checkInToken?: string;
   isCharged: boolean;
+  isArchived?: boolean;
   createdAt: number;
 }
