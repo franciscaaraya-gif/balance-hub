@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
@@ -17,12 +18,13 @@ import {
   Users, ChevronRight, Loader2, 
   AlertCircle, Clock, CheckCircle2, 
   CreditCard, User, Send, ArrowUpRight, ArrowDownLeft, Calendar,
-  ChevronDown, ChevronUp, Zap, Sparkles, Pin
+  ChevronDown, ChevronUp, Zap, Sparkles, Pin, Download
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { collection, query, where, collectionGroup, orderBy, doc } from "firebase/firestore";
 import { cn, formatCurrency } from "@/lib/utils";
+import * as XLSX from "xlsx";
 
 export default function Dashboard() {
   const { user, isUserLoading } = useUser();
@@ -178,6 +180,128 @@ export default function Dashboard() {
     }
   };
 
+  const handleDownloadFullExcel = () => {
+    if (!myDebts || !myIncomingDebts) return;
+
+    const wb = XLSX.utils.book_new();
+
+    const getStatusLabel = (status: string) => {
+      if (status === 'under_review') return "En Revisión";
+      if (status === 'paid') return "Pagado";
+      return "Pendiente";
+    };
+
+    // --- HOJA 1: ME DEBEN ---
+    const incomingData: any[] = [];
+    const sortedIncoming = [...myIncomingDebts].sort((a, b) => {
+      const nameA = profilesMap[a.debtorId]?.displayName || a.debtorId;
+      const nameB = profilesMap[b.debtorId]?.displayName || b.debtorId;
+      if (nameA !== nameB) return nameA.localeCompare(nameB);
+      return b.createdAt - a.createdAt;
+    });
+
+    let currentDebtorId = "";
+    let debtorPendingSubtotal = 0;
+
+    sortedIncoming.forEach((debt, idx) => {
+      if (idx > 0 && debt.debtorId !== currentDebtorId) {
+        incomingData.push({
+          "Deudor": `SUBTOTAL PENDIENTE (${profilesMap[currentDebtorId]?.displayName || "Usuario"})`,
+          "Grupo": "",
+          "Concepto/Gasto": "",
+          "Monto": debtorPendingSubtotal,
+          "Estado": "",
+          "Fecha de creación": ""
+        });
+        incomingData.push({});
+        debtorPendingSubtotal = 0;
+      }
+      
+      currentDebtorId = debt.debtorId;
+      if (debt.status !== 'paid') debtorPendingSubtotal += debt.amount;
+      
+      incomingData.push({
+        "Deudor": profilesMap[debt.debtorId]?.displayName || debt.debtorId,
+        "Grupo": debt.groupName || "General",
+        "Concepto/Gasto": debt.description,
+        "Monto": debt.amount,
+        "Estado": getStatusLabel(debt.status),
+        "Fecha de creación": new Date(debt.createdAt).toLocaleDateString("es-ES")
+      });
+
+      if (idx === sortedIncoming.length - 1) {
+        incomingData.push({
+          "Deudor": `SUBTOTAL PENDIENTE (${profilesMap[currentDebtorId]?.displayName || "Usuario"})`,
+          "Grupo": "",
+          "Concepto/Gasto": "",
+          "Monto": debtorPendingSubtotal,
+          "Estado": "",
+          "Fecha de creación": ""
+        });
+      }
+    });
+
+    const wsIncoming = XLSX.utils.json_to_sheet(incomingData);
+    XLSX.utils.book_append_sheet(wb, wsIncoming, "Me deben");
+
+    // --- HOJA 2: DEBO ---
+    const outgoingData: any[] = [];
+    const sortedOutgoing = [...myDebts].sort((a, b) => {
+      const nameA = profilesMap[a.creditorId]?.displayName || a.creditorId;
+      const nameB = profilesMap[b.creditorId]?.displayName || b.creditorId;
+      if (nameA !== nameB) return nameA.localeCompare(nameB);
+      return b.createdAt - a.createdAt;
+    });
+
+    let currentCreditorId = "";
+    let creditorPendingSubtotal = 0;
+
+    sortedOutgoing.forEach((debt, idx) => {
+      if (idx > 0 && debt.creditorId !== currentCreditorId) {
+        outgoingData.push({
+          "Acreedor": `SUBTOTAL PENDIENTE (${profilesMap[currentCreditorId]?.displayName || "Usuario"})`,
+          "Grupo": "",
+          "Concepto/Gasto": "",
+          "Monto": creditorPendingSubtotal,
+          "Estado": "",
+          "Fecha de creación": ""
+        });
+        outgoingData.push({});
+        creditorPendingSubtotal = 0;
+      }
+      
+      currentCreditorId = debt.creditorId;
+      if (debt.status !== 'paid') creditorPendingSubtotal += debt.amount;
+
+      outgoingData.push({
+        "Acreedor": profilesMap[debt.creditorId]?.displayName || debt.creditorId,
+        "Grupo": debt.groupName || "General",
+        "Concepto/Gasto": debt.description,
+        "Monto": debt.amount,
+        "Estado": getStatusLabel(debt.status),
+        "Fecha de creación": new Date(debt.createdAt).toLocaleDateString("es-ES")
+      });
+
+      if (idx === sortedOutgoing.length - 1) {
+        outgoingData.push({
+          "Acreedor": `SUBTOTAL PENDIENTE (${profilesMap[currentCreditorId]?.displayName || "Usuario"})`,
+          "Grupo": "",
+          "Concepto/Gasto": "",
+          "Monto": creditorPendingSubtotal,
+          "Estado": "",
+          "Fecha de creación": ""
+        });
+      }
+    });
+
+    const wsOutgoing = XLSX.utils.json_to_sheet(outgoingData);
+    XLSX.utils.book_append_sheet(wb, wsOutgoing, "Debo");
+
+    const today = new Date().toISOString().split("T")[0];
+    XLSX.writeFile(wb, `mis-cuentas-${today}.xlsx`);
+    toast({ title: "Excel Descargado", description: "Tus cuentas se han exportado correctamente." });
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending': return <Badge variant="outline" className="text-orange-600 bg-orange-50 text-[9px] font-bold border-orange-200"><AlertCircle className="h-2.5 w-2.5 mr-1" /> Pendiente</Badge>;
@@ -190,9 +314,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto pb-10 px-1 sm:px-4">
-      <div className="px-2 sm:px-0">
-        <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName?.split(' ')[0]}!</h1>
-        <p className="text-sm text-muted-foreground">Bienvenido a Zygos — cuentas claras con tu grupo.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2 sm:px-0">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-headline font-bold text-primary">¡Hola, {user?.displayName?.split(' ')[0]}!</h1>
+          <p className="text-sm text-muted-foreground">Bienvenido a Zygos — cuentas claras con tu grupo.</p>
+        </div>
+        <Button 
+          variant="outline" 
+          onClick={handleDownloadFullExcel}
+          className="rounded-xl font-bold h-11 px-4 gap-2 border-primary/20 hover:bg-primary/5 text-primary text-xs w-fit"
+        >
+          <Download className="h-4 w-4" /> Descargar Excel
+        </Button>
       </div>
 
       <div className="block md:hidden space-y-6">
